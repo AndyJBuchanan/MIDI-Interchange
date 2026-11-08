@@ -5,6 +5,11 @@ It is not a DAW: there's no playback, no instruments and no note editing.
 
 Status: **Milestone 1** (functional vertical slice), plus a few cheap pieces of later milestones: multiple ranges, rebase/concatenate/separate export, whole-output trim, undo/redo, file-URL drag-out and Alt-drag clip moves.
 
+Documentation:
+
+- [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
+- [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) covers how the spec was interpreted: status for each milestone, deviations, decisions, risks and known gaps.
+
 ## Run (macOS / Windows)
 
 ```bash
@@ -71,6 +76,7 @@ The main design decisions:
 - **Drag-out** currently offers file URLs to temp files. They stay in `$TMPDIR/MIDI Interchange Drag` and are pruned after 24 h. That covers Finder/Explorer and DAWs that accept file drops. Native file promises are a Milestone 2 item.
 - SMPTE-division files are rejected with a clear message.
 - Clip moves are whole-clip offsets; there's no splitting.
+- Not built yet: per-track auto-trim (`Track.auto_trim` exists but the exporter ignores it), drag handles for individual ranges, and workspace persistence.
 
 ## Interoperability test checklist
 
