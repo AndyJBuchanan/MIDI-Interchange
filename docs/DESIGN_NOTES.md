@@ -9,7 +9,7 @@ Companion to [DESIGN_BRIEF.md](DESIGN_BRIEF.md), the original spec, kept verbati
 | M1 Functional vertical slice | **Done.** Every M1 bullet works in the GUI, and the brief's success criterion is covered by a headless GUI test (`tests/test_ui.py::test_full_workflow`). |
 | M2 Interchange | **Partly done.** Drag-in accepts file URLs and raw MThd data; drag-out offers file URLs to temp files; individual-track export and source provenance are done. Native file promises and virtual files are **not** done (see Risks). |
 | M3 Advanced ranges | **Mostly done.** Multiple named ranges, resize and move, concatenation, separate-range export, the boundary policy and whole-output trim are done. Per-track trim and per-range drag handles are **not** done. |
-| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. PyInstaller spec and build scripts exist but **have never been run**. Workspace persistence is **not** done. |
+| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, ad-hoc signed). The Windows build **has never been run**. Workspace persistence is **not** done. |
 
 User priority, given with the brief: the timeline is the primary UI element and must work early and well. It was built in M1, not deferred.
 
@@ -100,7 +100,7 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 4. **Per-track auto-trim.** `Track.auto_trim` exists in the model but the exporter ignores it.
 5. **Per-range drag handles.** Not built; the drag tile exports the current mode and selection.
 6. **Workspace persistence.** Not built. QSettings stores only window and splitter state.
-7. **Packaging has never been run.**
+7. **Packaging.** The macOS DMG builds and launches, but it isn't code-signed or notarised, has no app icon, and runs on arm64 only. The Windows build has never been run.
 8. **Clip moves** apply to whole clips only; there's no splitting.
 
 ## Issues found and fixed during development

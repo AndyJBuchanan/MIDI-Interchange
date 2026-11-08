@@ -99,10 +99,10 @@ For each target check: does the drop import at all (if not, note the formats lis
 ## Packaging
 
 ```bash
-scripts/build_macos.sh            # → dist/MIDI Interchange.app
+scripts/build_macos.sh            # → dist/MIDI Interchange.app + dist/MIDI-Interchange-<ver>-macOS-<arch>.dmg
 ```
 ```bash
 powershell scripts/build_windows.ps1   # → dist\MIDI Interchange\MIDI Interchange.exe
 ```
 
-These use PyInstaller with `midi_interchange.spec` (unused Qt modules such as WebEngine are excluded). The builds haven't been run yet.
+These use PyInstaller with `midi_interchange.spec` (unused Qt modules such as WebEngine are excluded). The macOS build and DMG have been built and launch tested on Apple silicon. They're unsigned (ad-hoc signature only), so on another Mac you need right-click ▸ Open the first time. The Windows build hasn't been run yet. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#building-standalone-apps).

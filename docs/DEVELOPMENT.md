@@ -88,7 +88,7 @@ PowerShell doesn't expand `*.mid` for the program, so either list the files or s
 | Run all tests | `.venv/bin/python -m pytest -q` |
 | Run one test | `.venv/bin/python -m pytest -q tests/test_export.py::test_concatenate_in_user_order` |
 | Regenerate `samples/` | `.venv/bin/python tools/make_demo_midi.py` |
-| Build a standalone macOS app | `scripts/build_macos.sh` → `dist/MIDI Interchange.app` |
+| Build a standalone macOS app | `scripts/build_macos.sh` → `dist/MIDI Interchange.app` and `dist/MIDI-Interchange-<version>-macOS-<arch>.dmg` |
 | Build a standalone Windows app | `powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1` → `dist\MIDI Interchange\MIDI Interchange.exe` |
 
 The tests need no display. `tests/conftest.py` sets `QT_QPA_PLATFORM=offscreen`, so the GUI tests also run over SSH and in CI. `samples/` is committed because `tests/test_ui.py` loads those files.
@@ -149,11 +149,13 @@ From `.vscode/tasks.json`. Each one picks the macOS/Linux or Windows command aut
 
 ## Building standalone apps
 
-`scripts/build_macos.sh` and `scripts/build_windows.ps1` create a separate `.venv-build/`, install the requirements, and run PyInstaller with `midi_interchange.spec`. The spec leaves out unused Qt modules (WebEngine, QML/Quick, Multimedia and so on). On macOS it also produces a `.app` bundle that registers `.mid`, `.midi` and `.smf` document types.
+`scripts/build_macos.sh` and `scripts/build_windows.ps1` create a separate `.venv-build/`, install the requirements, and run PyInstaller with `midi_interchange.spec`. The spec leaves out unused Qt modules (WebEngine, QML/Quick, Multimedia and so on). On macOS it also produces a `.app` bundle that registers `.mid`, `.midi` and `.smf` document types. The macOS script then packages that bundle into a compressed DMG with an Applications shortcut (drag to install) and prints the DMG's SHA-256. The version comes from `CFBundleShortVersionString` in `midi_interchange.spec`. Set `PYTHON=python3.13` to build with a different interpreter.
 
 - Build on the platform you're targeting. PyInstaller doesn't cross-compile, so build the Windows exe on Windows and the macOS app on a Mac.
 - A macOS build runs on the CPU architecture it was built on (arm64 on Apple silicon). The bundle isn't code-signed or notarised. On another Mac, Gatekeeper blocks it until you right-click ▸ Open, or until signing is added.
-- **These builds haven't been run yet**, so expect some first-run fixes (hidden imports, the icon, signing).
+- **macOS build status (2026-11-08):** built on Apple silicon, Python 3.12 and PyInstaller 6.x, giving `MIDI-Interchange-0.1.0-macOS-arm64.dmg` (about 43 MB; the app is about 100 MB). The app was launched both from `dist/` and from the mounted DMG, and it starts and loads files without errors. The bundle has an ad-hoc signature only and no icon.
+- `hdiutil create` sometimes fails with "Resource busy" while macOS scans the newly built bundle. The script retries up to five times.
+- **The Windows build hasn't been run yet**, so expect some first-run fixes.
 
 ## Project layout and conventions
 
