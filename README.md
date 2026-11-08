@@ -8,6 +8,7 @@ Status: **Milestone 1** (functional vertical slice), plus a few cheap pieces of 
 Documentation:
 
 - [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code (extensions, launch configurations and tasks in `.vscode/`).
 - [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) covers how the spec was interpreted: status for each milestone, deviations, decisions, risks and known gaps.
 
 ## Run (macOS / Windows)
@@ -20,6 +21,7 @@ python3.12 -m venv .venv
 ```
 
 Run the tests with `.venv/bin/python -m pytest -q`. The GUI tests use Qt's offscreen platform.
+For Windows commands, a new machine, VS Code setup or troubleshooting, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Using it
 
