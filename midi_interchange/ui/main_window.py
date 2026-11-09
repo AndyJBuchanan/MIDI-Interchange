@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMen
                                QSplitter, QToolBar, QVBoxLayout, QWidget)
 
 from ..core.import_smf import ImportError_, import_smf_bytes
-from ..core.placement import Placement, names_match
+from ..core.placement import Placement, match_track, target_matches
 from ..core.timing import ZERO
 from ..interchange.drag_import import extract_payloads
 from ..interchange.payload import Payload
@@ -324,16 +324,18 @@ class MainWindow(QMainWindow):
         if pl.target_track_id:
             tgt = self.ctl.ws.track(pl.target_track_id)
             if names is None:
-                label = f"Onto “{tgt.name}” at {bbt} if the names match, else new track(s)"
+                label = f"Onto “{tgt.name}” (and other tracks) at {bbt} if the names match, else new track(s)"
+            elif not target_matches(tgt, names):
+                label = f"New track(s) at {bbt}: names differ from “{tgt.name}”"
+                lane = None
             else:
-                hits = [n for n in names if names_match(tgt, n)]
-                if hits and len(hits) == len(names):
-                    label = f"Onto “{tgt.name}” at {bbt}"
-                elif hits:
-                    label = f"{len(hits)} onto “{tgt.name}”, {len(names) - len(hits)} new track(s) at {bbt}"
-                else:
-                    label = f"New track(s) at {bbt}: names differ from “{tgt.name}”"
-                    lane = None
+                dests = [match_track(self.ctl.ws.tracks, tgt, n) for n in names]
+                hit_names = list(dict.fromkeys(d.name for d in dests if d is not None))
+                n_new = sum(d is None for d in dests)
+                shown = ", ".join(f"“{n}”" for n in hit_names[:3]) + (" …" if len(hit_names) > 3 else "")
+                label = f"Onto {shown} at {bbt}"
+                if n_new:
+                    label += f", {n_new} new track(s)"
         else:
             label = f"New track(s) at {bbt}"
             lane = None

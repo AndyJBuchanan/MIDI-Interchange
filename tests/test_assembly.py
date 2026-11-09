@@ -39,7 +39,7 @@ def test_drop_on_matching_track_adds_clip_there():
     ws = load(part("Bass"), "a.mid")
     target = ws.tracks[0]
     _, stats = place_imports(ws, parse((part("  bass ", pitch=40), "b.mid")), Placement(F(32), target.id))
-    assert len(ws.tracks) == 1 and stats == {"new_tracks": 0, "onto_target": 1}
+    assert len(ws.tracks) == 1 and stats["new_tracks"] == 0 and stats["onto_existing"] == 1
     assert [c.start for c in target.clips] == [0, 32]
     # both sources survive and export covers both clips on one track
     assert len(ws.sources) == 2
@@ -53,6 +53,100 @@ def test_drop_on_other_named_track_makes_new_track():
     place_imports(ws, parse((part("Keys"), "k.mid")), Placement(F(8), ws.tracks[0].id))
     assert [t.name for t in ws.tracks] == ["Bass", "Keys"]
     assert ws.tracks[1].clips[0].start == 8
+
+
+def multi(*names_pitches, ppq=480) -> bytes:
+    """A multi-track file (e.g. a Staccato round trip): one named track per entry."""
+    trs = [conductor(ppq)]
+    for name, pitch in names_pitches:
+        trs.append(track([*note(0, pitch, 0, ppq)], name=name))
+    return smf(trs, ppq=ppq)
+
+
+def test_multi_track_drop_on_matching_track_matches_every_track_by_name():
+    ws = load(multi(("Bass", 40), ("Keys", 60), ("Drums", 36)), "song.mid")
+    bass, keys, drums = ws.tracks
+    # round trip: same tracks plus one new one, dropped on the Keys lane at beat 16
+    _, stats = place_imports(ws, parse((multi(("drums", 36), ("Bass", 41), ("Keys", 61), ("Pad", 72)), "rt.mid")),
+                             Placement(F(16), keys.id))
+    assert [t.name for t in ws.tracks] == ["Bass", "Keys", "Drums", "Pad"]
+    assert [c.start for c in bass.clips] == [0, 16]
+    assert [c.start for c in keys.clips] == [0, 16]
+    assert [c.start for c in drums.clips] == [0, 16]
+    assert ws.tracks[3].clips[0].start == 16
+    assert stats["onto_existing"] == 3 and stats["new_tracks"] == 1
+    assert stats["onto_names"] == ["Drums", "Bass", "Keys"]
+
+
+def test_exact_overlap_replaces_existing_clip():
+    ws = load(multi(("Bass", 40), ("Keys", 60)), "song.mid")
+    bass, keys = ws.tracks
+    old_source = ws.sources[0].id
+    rt = multi(("Bass", 41), ("Keys", 61))
+    _, stats = place_imports(ws, parse((rt, "rt.mid")), Placement(F(0), bass.id))
+    assert stats["replaced"] == 2
+    assert len(bass.clips) == 1 and len(keys.clips) == 1
+    assert bass.clips[0].source_id != old_source
+    # the old source lost its last clip; kept only because it is the tempo source
+    assert {s.id for s in ws.sources} >= {bass.clips[0].source_id}
+    assert all(any(c.source_id == s.id for t in ws.tracks for c in t.clips) or s.id == ws.tempo_source_id
+               for s in ws.sources)
+
+
+def test_replaced_clip_source_is_pruned():
+    ws = load(multi(("Keys", 60)), "song.mid")             # tempo source
+    keys = ws.tracks[0]
+    place_imports(ws, parse((part("Bass", 40), "b1.mid")), Placement(F(8)))
+    first_bass_src = ws.sources[1].id
+    bass = ws.tracks[1]
+    place_imports(ws, parse((part("Bass", 41), "b2.mid")), Placement(F(8), bass.id))
+    assert len(bass.clips) == 1 and bass.clips[0].source_id != first_bass_src
+    assert first_bass_src not in {s.id for s in ws.sources} and len(ws.sources) == 2
+    assert len(keys.clips) == 1
+
+
+def test_partial_overlap_is_kept():
+    ws = load(multi(("Bass", 40)), "song.mid")
+    bass = ws.tracks[0]
+    _, stats = place_imports(ws, parse((multi(("Bass", 41)), "rt.mid")), Placement(F(1, 2), bass.id))
+    assert stats["replaced"] == 0 and len(bass.clips) == 2 and bass.overlaps()
+
+
+def test_clips_from_the_same_drop_are_not_replaced():
+    ws = load(multi(("Bass", 40)), "song.mid")
+    bass = ws.tracks[0]
+    place_imports(ws, parse((multi(("Bass", 41)), "a.mid"), (multi(("Bass", 42)), "b.mid")),
+                  Placement(F(8), bass.id))
+    assert [c.start for c in bass.clips] == [0, 8, 8]
+
+
+def test_drop_on_unmatched_track_matches_nothing():
+    ws = load(multi(("Bass", 40), ("Keys", 60), ("Strings", 70)), "song.mid")
+    strings = ws.tracks[2]
+    place_imports(ws, parse((multi(("Bass", 41), ("Keys", 61)), "rt.mid")), Placement(F(8), strings.id))
+    assert [t.name for t in ws.tracks] == ["Bass", "Keys", "Strings", "Bass", "Keys"]
+    assert all(len(t.clips) == 1 for t in ws.tracks)
+
+
+def test_drop_on_empty_area_never_matches():
+    ws = load(multi(("Bass", 40), ("Keys", 60)), "song.mid")
+    place_imports(ws, parse((multi(("Bass", 41), ("Keys", 61)), "rt.mid")), Placement(F(8)))
+    assert [t.name for t in ws.tracks] == ["Bass", "Keys", "Bass", "Keys"]
+
+
+def test_target_wins_over_other_same_named_tracks():
+    ws = load(multi(("Bass", 40), ("Bass", 45)), "song.mid")
+    first, second = ws.tracks
+    place_imports(ws, parse((part("Bass"), "b.mid")), Placement(F(8), second.id))
+    assert len(first.clips) == 1 and len(second.clips) == 2
+
+
+def test_all_at_cursor_does_not_match_tracks_made_by_the_same_drop():
+    ws = load(multi(("Keys", 60), ("Bass", 40)), "song.mid")
+    keys = ws.tracks[0]
+    place_imports(ws, parse((multi(("Keys", 61), ("Pad", 72)), "1.mid"), (part("Pad"), "2.mid")),
+                  Placement(F(4), keys.id))
+    assert [t.name for t in ws.tracks] == ["Keys", "Bass", "Pad", "Pad"]
 
 
 def test_match_uses_original_name_after_rename():

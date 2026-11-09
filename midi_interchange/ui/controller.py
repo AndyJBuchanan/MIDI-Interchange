@@ -102,9 +102,11 @@ class Controller(QObject):
             parts = []
             if stats["new_tracks"]:
                 parts.append(f"{stats['new_tracks']} new track(s)")
-            if stats["onto_target"]:
-                tgt = self.ws.track(placement.target_track_id) if placement and placement.target_track_id else None
-                parts.append(f"{stats['onto_target']} onto “{tgt.name if tgt else 'track'}”")
+            if stats["onto_existing"]:
+                names = ", ".join(f"“{n}”" for n in stats["onto_names"])
+                parts.append(f"{stats['onto_existing']} onto existing {names}")
+            if stats["replaced"]:
+                parts.append(f"replacing {stats['replaced']} identical clip(s)")
             if placement and placement.time:
                 parts.append(f"at {self.ws.tempo_map.format_bbt(placement.time)}")
             if parts:
