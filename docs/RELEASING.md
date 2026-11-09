@@ -89,7 +89,7 @@ Confirm `gh` is your personal account first. It must print `AndyJBuchanan`:
 gh api user --jq .login
 ```
 
-Create the tag on the release commit and push it:
+Create the tag on the release commit and push it. Or, for a draft you want to check before anyone sees the tag, skip this, pass `--draft --target <commit>` to `gh release create`, and let GitHub create the tag when you publish (a lightweight tag, as for v0.1.0-pre):
 
 ```bash
 git tag -a v<ver>[-label] <commit> -m "MIDI Interchange <ver>[ label]"
@@ -116,4 +116,4 @@ gh release upload v<ver>[-label] -R AndyJBuchanan/MIDI-Interchange --clobber <fi
 
 | Tag | Version | Commit | Notes |
 |---|---|---|---|
-| `v0.1.0-pre` | 0.1.0 | see the tag | First public pre-release. The Windows files were built from the Windows working copy before the commit authors were rewritten. Their code is identical to the tagged commit apart from the macOS-only "⌥-drag" hint text. |
+| `v0.1.0-pre` | 0.1.0 | `9092edb` (published 2026-11-09) | First public pre-release. The Windows files were built from the Windows working copy before the commit authors were rewritten. Their code is identical to the tagged commit apart from the macOS-only "⌥-drag" hint text. |
