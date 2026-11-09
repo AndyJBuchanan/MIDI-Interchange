@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import bisect
 import math
+import sys
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -227,7 +228,8 @@ class Timeline(QAbstractScrollArea):
             f.setPointSizeF(self.font().pointSizeF() + 3)
             p.setFont(f)
             p.drawText(QRectF(0, HEADER_H, w, h - HEADER_H), Qt.AlignCenter,
-                       "Drop MIDI files or clips here\nor use File ▸ Open (⌘O)")
+                       "Drop MIDI files or clips here\nor use File ▸ Open ("
+                       + ("⌘O" if sys.platform == "darwin" else "Ctrl+O") + ")")
         p.end()
 
     def _paint_lanes_bg(self, p: QPainter, w: int) -> None:

@@ -102,10 +102,10 @@ For each target check: does the drop import at all (if not, note the formats lis
 scripts/build_macos.sh            # → dist/MIDI Interchange.app + dist/MIDI-Interchange-<ver>-macOS-<arch>.dmg
 ```
 ```bash
-powershell scripts/build_windows.ps1   # → dist\MIDI Interchange\MIDI Interchange.exe
+powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1   # → dist\MIDI-Interchange-<ver>-Windows-x64-Setup.exe (installer) + portable .zip
 ```
 
 Both scripts use PyInstaller with `midi_interchange.spec`.
 
 - **macOS:** when the git-ignored `scripts/signing.local.env` is set up, the app and DMG are signed with Developer ID and the hardened runtime, notarised by Apple and stapled. Verified on 2026-11-09: Gatekeeper reports "Notarized Developer ID". Without that file the build falls back to ad-hoc signing. Setup is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#macos-signing-and-notarisation).
-- **Windows:** the build hasn't been run yet. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#building-standalone-apps).
+- **Windows:** builds a one-folder app, a portable zip and an installer (Inno Setup: per-user install with no admin prompt, Start-menu shortcut, uninstaller, *Open with* for `.mid`). Verified on 2026-11-09 (Windows 11 x64, Python 3.12.10): the tests pass, and the app runs from the zip and after a silent install, which also uninstalls cleanly. It is **not code-signed** yet, so SmartScreen warns on download. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#windows-build).

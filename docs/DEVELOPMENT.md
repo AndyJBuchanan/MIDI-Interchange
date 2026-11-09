@@ -9,13 +9,13 @@ For what the app is and why it's built this way, see [DESIGN_BRIEF.md](DESIGN_BR
 | Tool | macOS | Windows |
 |---|---|---|
 | Git | `xcode-select --install` or Homebrew `brew install git` | [git-scm.com](https://git-scm.com/download/win) |
-| Python **3.12 or newer**, 64-bit | `brew install python@3.12` or the python.org installer | python.org installer. Tick "Add python.exe to PATH" and keep the `py` launcher. Or `winget install Python.Python.3.12` |
+| Python **3.12 or newer**, 64-bit | `brew install python@3.12` or the python.org installer | python.org installer. Tick "Add python.exe to PATH" and keep the `py` launcher. Or `winget install Python.Python.3.12 --scope user`. **The Microsoft Store Python isn't enough**: it doesn't install the `py` launcher, which the build script and VS Code tasks call. Open a new terminal after installing so `py` is on `PATH`. |
 | Xcode Command Line Tools (macOS release builds) | `xcode-select --install`. Provides `codesign`, `xcrun notarytool` and `stapler`. A Developer ID Application certificate is also needed; see [signing](#macos-signing-and-notarisation) | n/a |
 | VS Code (optional) | [code.visualstudio.com](https://code.visualstudio.com) | same |
 
 Nothing else needs a system-wide install. PySide6 (Qt), mido, pytest and PyInstaller all go into a project-local virtual environment from `requirements*.txt`. There are no C/C++ build tools to install.
 
-Development so far has been on macOS (Apple silicon) with Python 3.12 and PySide6 6.12. Windows is a target, but **the app hasn't been run on Windows yet**. Linux will probably work for development, but nobody has tried it.
+Development so far has been on macOS (Apple silicon) with Python 3.12 and PySide6 6.12. On 2026-11-09 the app was set up, tested and built on Windows 11 x64 with Python 3.12.10, PySide6 6.12 and PyInstaller 6.22; see [Windows build](#windows-build). Linux will probably work for development, but nobody has tried it.
 
 ## Get the code
 
@@ -44,6 +44,13 @@ git clone midi-interchange.bundle MID-Xfr-App
 ```
 
 Don't copy `.venv/`. Virtual environments contain absolute paths and platform-specific binaries, so recreate it on each machine.
+
+If you copy a whole working tree (for example macOS → Windows) instead of cloning, check these too:
+
+- Delete the copied `.venv/`. A macOS venv has `bin/` instead of `Scripts\` and points at a Homebrew Python, so nothing in it runs on Windows. Recreate it as shown below.
+- `build/` and `dist/` hold the other platform's PyInstaller output. They're git-ignored and harmless. The Windows build cleans `build/` and replaces `dist\MIDI Interchange\`, but leaves the macOS `.app` and DMG alone.
+- Windows doesn't keep the executable bit, so Git reports `old mode 100755 / new mode 100644` on `scripts/build_macos.sh`. Run `git config core.filemode false` in that working copy (local config only), and don't commit the mode change.
+- `.gitattributes` keeps `*.sh` at LF and `*.ps1` at CRLF in every checkout, so a tree copied from Windows to a Mac still runs under bash.
 
 ## Terminal workflow
 
@@ -91,7 +98,7 @@ PowerShell doesn't expand `*.mid` for the program, so either list the files or s
 | Regenerate `samples/` | `.venv/bin/python tools/make_demo_midi.py` |
 | Build a standalone macOS app | `scripts/build_macos.sh` → `dist/MIDI Interchange.app` and `dist/MIDI-Interchange-<version>-macOS-<arch>.dmg`. Signed and notarised if `scripts/signing.local.env` exists (a few minutes, waits for Apple) |
 | macOS build, signed but not notarised | `SKIP_NOTARIZE=1 scripts/build_macos.sh` |
-| Build a standalone Windows app | `powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1` → `dist\MIDI Interchange\MIDI Interchange.exe` |
+| Build a standalone Windows app | `powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1` → `dist\MIDI Interchange\MIDI Interchange.exe` and `dist\MIDI-Interchange-<version>-Windows-x64.zip`, plus `...-Windows-x64-Setup.exe` if Inno Setup 6 is installed. Not code-signed |
 
 The tests need no display. `tests/conftest.py` sets `QT_QPA_PLATFORM=offscreen`, so the GUI tests also run over SSH and in CI. `samples/` is committed because `tests/test_ui.py` loads those files.
 
@@ -121,7 +128,7 @@ Optional extras: GitLens or Git Graph for history, and markdownlint for the docs
 
 1. **File ▸ Open Folder…** and choose the repository root.
 2. Create the environment: **Terminal ▸ Run Task… ▸ Setup: create .venv and install deps**. Alternatively, use **Python: Create Environment** (⇧⌘P / Ctrl+Shift+P), choose **Venv**, then Python 3.12, and tick both `requirements.txt` and `requirements-dev.txt`.
-3. **Python: Select Interpreter** and choose `./.venv/bin/python` (macOS) or `.\.venv\Scripts\python.exe` (Windows). The workspace setting points at the macOS/Linux path; Windows needs this one-time choice.
+3. **Python: Select Interpreter** and choose `./.venv/bin/python` (macOS) or `.\.venv\Scripts\python.exe` (Windows). The workspace setting points at the macOS/Linux path; Windows needs this one-time choice. Until you make it, the Python extension may say the default interpreter path is invalid; you can ignore that.
 4. Open the **Testing** panel (the flask icon). The tests are discovered automatically from `tests/`.
 
 ### Running and debugging (Run and Debug panel, F5)
@@ -151,11 +158,48 @@ From `.vscode/tasks.json`. Each one picks the macOS/Linux or Windows command aut
 
 ## Building standalone apps
 
-`scripts/build_macos.sh` and `scripts/build_windows.ps1` create a separate `.venv-build/`, install the requirements, and run PyInstaller with `midi_interchange.spec`. The spec's exclude list keeps out unused Qt modules such as WebEngine and Multimedia. Some Qt plugins still pull in QML/Quick, VirtualKeyboard and Pdf, which is why the app is about 100 MB. On macOS it also produces a `.app` bundle that registers `.mid`, `.midi` and `.smf` document types. The macOS script then packages that bundle into a compressed DMG with an Applications shortcut (drag to install) and prints the DMG's SHA-256. The version comes from `CFBundleShortVersionString` in `midi_interchange.spec`. Set `PYTHON=python3.13` to build with a different interpreter. On macOS the script also signs and notarises; see [macOS signing and notarisation](#macos-signing-and-notarisation).
+`scripts/build_macos.sh` and `scripts/build_windows.ps1` create a separate `.venv-build/`, install the requirements, and run PyInstaller with `midi_interchange.spec`. The spec's exclude list keeps out unused Qt modules such as WebEngine and Multimedia. Some Qt plugins still pull in QML/Quick, VirtualKeyboard and Pdf, which is why the app is about 100 MB. On macOS it also produces a `.app` bundle that registers `.mid`, `.midi` and `.smf` document types. The macOS script then packages that bundle into a compressed DMG with an Applications shortcut (drag to install) and prints the DMG's SHA-256. The version comes from the `VERSION = "x.y.z"` line at the top of `midi_interchange.spec`. It feeds the macOS `CFBundleShortVersionString`/`CFBundleVersion`, the Windows exe version resource and the Windows zip name. Set `PYTHON=python3.13` (macOS) or `$env:PY_VERSION="3.13"` (Windows) to build with a different interpreter. On macOS the script also signs and notarises; see [macOS signing and notarisation](#macos-signing-and-notarisation).
 
 - Build on the platform you're targeting. PyInstaller doesn't cross-compile, so build the Windows exe on Windows and the macOS app on a Mac.
 - A macOS build runs on the CPU architecture it was built on (arm64 on Apple silicon).
-- **The Windows build hasn't been run yet**, so expect some first-run fixes.
+- A Windows build is x64 unless it's built on an ARM64 Python.
+
+### Windows build
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
+```
+
+This takes about 1.5 minutes. It produces:
+
+- `dist\MIDI Interchange\MIDI Interchange.exe` and its `_internal\` folder: a PyInstaller one-folder app (about 125 MB). It's a GUI exe with no console window. The VC++ runtime DLLs are bundled, so users don't need to install a redistributable.
+- `dist\MIDI-Interchange-<version>-Windows-x64.zip` (about 50 MB). It contains the `MIDI Interchange\` folder. This is the portable option: users extract it anywhere and run the exe. The script prints the zip's SHA-256.
+- `dist\MIDI-Interchange-<version>-Windows-x64-Setup.exe` (about 35 MB): **the one to give users.** It's built from `scripts\installer.iss` with [Inno Setup 6](https://jrsoftware.org/isinfo.php), and only if Inno Setup is installed. Otherwise the script warns and stops after the zip. Install Inno Setup once per build machine with `winget install JRSoftware.InnoSetup --scope user`. The script finds `ISCC.exe` in the standard install folders or on `PATH`, or you can set `$env:ISCC` to its path. To skip the installer, set `$env:SKIP_INSTALLER="1"`.
+
+What the installer does:
+
+- **Install location:** by default it installs for the current user only, with no UAC prompt, into `%LOCALAPPDATA%\Programs\MIDI Interchange`. The wizard also offers *Install for all users*, which goes into `C:\Program Files\MIDI Interchange` and needs admin rights.
+- **Shortcuts and uninstaller:** it adds a Start-menu shortcut, an optional desktop shortcut, and an entry in *Settings ▸ Apps*. Uninstalling removes all of these, along with the files and registry keys.
+- **"Open with" for MIDI files:** it adds the app to *Open with* for `.mid`, `.midi` and `.smf` (ProgID `MIDIInterchange.mid`, under `HKCU` or `HKLM`). It deliberately doesn't claim to be the default handler; since Windows 10, users choose that themselves.
+- **Upgrades:** an upgrade installs over the old version and deletes the old `_internal\` first, so no stale DLLs are left behind. Windows recognises upgrades by the `AppId` GUID in `installer.iss`. **Never change it.** The version comes from `VERSION` in the spec.
+- **Silent installs** (for testing or deployment): `Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER`, optionally with `/DIR="..."`. Uninstall silently with `unins000.exe /VERYSILENT` in the install folder.
+
+How the script works:
+
+- It requires the `py` launcher and fails early with an install hint if `py` is missing.
+- It checks `$LASTEXITCODE` after every native command. Windows PowerShell 5.1 doesn't stop on a failing exe even with `$ErrorActionPreference = "Stop"`.
+- The file is ASCII-only, because PowerShell 5.1 reads a BOM-less script as ANSI. Keep it that way.
+- If you redirect the script's output to a file with `*>` or `2>&1`, PyInstaller's INFO log (written to stderr) shows up as `NativeCommandError` records. That's cosmetic; the exit code is what counts.
+
+Not done yet on Windows:
+
+- **No code signing.** Windows SmartScreen shows "Windows protected your PC" for a downloaded zip; users click **More info ▸ Run anyway**, or unblock the zip first (file Properties ▸ Unblock). Signing needs an Authenticode certificate (OV/EV, or Azure Trusted Signing) and `signtool sign /fd sha256 /tr <timestamp-url> /td sha256` on the exe before zipping.
+- **Opening several files from Explorer opens several windows.** Selecting more than one file and using *Open with* starts one app instance per file, because there's no single-instance handoff yet. Command-line paths do load into one window (`"MIDI Interchange.exe" a.mid b.mid`), and so does dropping files onto the window.
+- **The installer isn't signed either.** It needs the same certificate as the exe (sign the exe before running Inno Setup, then sign the Setup exe; Inno's `SignTool` directive can automate both).
+- **No app icon** (same as macOS).
+- Drag-in/drag-out against Windows DAWs hasn't been tested (see the README checklist).
+
+**Windows build status (2026-11-09):** Windows 11 Pro x64, Python 3.12.10 (python.org, per-user), PySide6 6.12.0, PyInstaller 6.22.3. All 55 tests pass. The zip was extracted to a clean folder, and the exe started both empty and with the four `samples/` files on the command line. It rendered correctly at high DPI. PyInstaller's warnings file listed nothing relevant. The installer (Inno Setup 6.7.3) was tested with a silent per-user install. It created the files, the Start-menu shortcut, the *Open with* registry entries and the *Apps* entry. The app started through the registered open command with a sample file. A silent uninstall then removed the folder, shortcut and every registry key. The interactive wizard and the all-users install haven't been tested yet.
 
 ### macOS signing and notarisation
 
@@ -212,7 +256,7 @@ Notes:
 
 - The first signing run triggers a keychain prompt to allow `codesign` to use the private key. Choose **Always Allow**. While the prompt is open, the build waits, and if it waits too long the timestamp request fails with "timestamps differ by N seconds". Rerun after allowing access.
 - Only the DMG is submitted. Its notarisation ticket also covers the app inside, which is why the script can staple the app in `dist/`. The copy *inside* the DMG isn't stapled, so if a user drags it out while offline, Gatekeeper checks it online the first time it opens.
-- Before shipping a new release, bump `CFBundleShortVersionString` and `CFBundleVersion` in `midi_interchange.spec`.
+- Before shipping a new release, bump `VERSION` at the top of `midi_interchange.spec`. It sets `CFBundleShortVersionString`, `CFBundleVersion` and the Windows version.
 
 **macOS build status (2026-11-09):**
 - Built on Apple silicon with Python 3.12 and PyInstaller 6.x. The DMG is about 39 MB and the app about 100 MB.
@@ -230,7 +274,7 @@ midi_interchange/interchange/  drag-in payload extraction, drag-out temp files
 midi_interchange/ui/           PySide6 controller, timeline, track panel, export panel, theme
 tests/                         pytest suite (helpers.py builds synthetic SMFs)
 tools/make_demo_midi.py        regenerates samples/
-scripts/                       build scripts; entitlements.plist; signing.env.example (copy to git-ignored signing.local.env)
+scripts/                       build scripts; installer.iss (Windows installer); entitlements.plist; signing.env.example (copy to git-ignored signing.local.env)
 midi_interchange.spec          PyInstaller spec (bundle metadata, version, signing identity from env)
 .vscode/                       VS Code extensions, launch configs, tasks, settings
 docs/                          brief, design notes, this guide
@@ -246,6 +290,10 @@ docs/                          brief, design notes, this guide
 
 - **`python3.12: command not found`.** Use any Python 3.12 or newer (`python3.13 -m venv .venv`), or install 3.12 as shown above. On Windows use `py -0` to list the installed versions.
 - **PowerShell won't run scripts.** Use `powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1`, or call `.venv\Scripts\python` directly rather than activating the venv.
+- **`py` is not recognised, or `py -0` lists only "Python 3.13 (Store)".** The Microsoft Store Python has no `py` launcher. Install python.org 3.12 (`winget install Python.Python.3.12 --scope user`), then open a **new** terminal. Terminals and VS Code windows that were already open keep the old `PATH`.
+- **`test_separate_files` fails on Windows with a full `C:\...` path.** Tests must compare file names with `os.path.basename`, not `split("/")`. Use `os.path` or `pathlib` for any new path handling.
+- **SmartScreen blocks the built exe.** It's unsigned; see [Windows build](#windows-build).
+- **Git shows `scripts/build_macos.sh` as modified (mode 100755 → 100644).** Run `git config core.filemode false` in the Windows working copy.
 - **Qt "could not load the platform plugin".** Recreate `.venv` on that machine; it was probably copied from another one. On Linux you may also need the system XCB/EGL libraries (`libxcb-cursor0` etc.).
 - **`codesign` fails with "timestamps differ by N seconds".** The keychain prompt asking for access to the signing key was left open too long. Click **Always Allow**, then rerun.
 - **"Signing identity … not found in the keychain".** The certificate or its private key isn't in this Mac's login keychain, or `CODESIGN_IDENTITY` in `scripts/signing.local.env` has a typo. Check with `security find-identity -v -p codesigning`.

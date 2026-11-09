@@ -1,6 +1,8 @@
 """Bottom export panel: range editor, export mode, drag-out tile, save button."""
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import QMimeData, QPoint, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QDrag, QMouseEvent, QPainter, QPixmap
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel,
@@ -128,7 +130,8 @@ class ExportPanel(QFrame):
         self.delete_btn = QToolButton()
         self.delete_btn.setText("Delete")
         self.delete_btn.clicked.connect(lambda: ctl.delete_range())
-        self.hint = QLabel("Drag across the timeline to mark a range · Shift bypasses snap · ⌥-drag moves clips")
+        self.hint = QLabel("Drag across the timeline to mark a range · Shift bypasses snap · "
+                           + ("⌥-" if sys.platform == "darwin" else "Alt+") + "drag moves clips")
         self.hint.setStyleSheet(f"color: {theme.TEXT_FAINT.name()};")
 
         r1 = QHBoxLayout()

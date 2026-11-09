@@ -1,4 +1,5 @@
 """Range export, boundary handling, modes, trim, track selection."""
+import os
 from fractions import Fraction as F
 
 import mido
@@ -154,7 +155,7 @@ def test_separate_files(tmp_path):
                                           ranges=[Range(F(0), F(2), "Intro"), Range(F(4), F(8))]))
     assert [r.label for r in res] == ["Intro", "Range 2"]
     paths = save_exports(res, str(tmp_path / "out.mid"))
-    assert [p.rsplit("/", 1)[-1] for p in paths] == ["out - Intro.mid", "out - Range 2.mid"]
+    assert [os.path.basename(p) for p in paths] == ["out - Intro.mid", "out - Range 2.mid"]
     mf = mido.MidiFile(paths[1])
     assert notes_of(track_by_name(mf, "Keys"), mf.ticks_per_beat)[0] == (F(0), F(2), 0, 62)
 
