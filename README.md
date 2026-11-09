@@ -80,7 +80,7 @@ The main design decisions:
 
 ## Known limitations and risks (for Milestone 2)
 
-- **Drag-in from DAWs**: file URLs and any MIME format whose bytes start with `MThd` are handled. Qt cannot receive **macOS file promises** (`NSFilePromiseReceiver`) or **Windows virtual files** (`CFSTR_FILEDESCRIPTOR`/`FILECONTENTS`). These need native adapters (PyObjC on macOS, `pywin32`/ctypes on Windows). If a drop carries no usable MIDI, the app lists the formats it was offered, which is a useful probe for each app.
+- **Drag-in from DAWs**: file URLs and any MIME format whose bytes start with `MThd` are handled. Qt cannot receive **macOS file promises** (`NSFilePromiseReceiver`) or **Windows virtual files** (`CFSTR_FILEDESCRIPTOR`/`FILECONTENTS`). These need native adapters (PyObjC on macOS, `pywin32`/ctypes on Windows). The apps tested so far on macOS (see the checklist below) didn't need them. If a drop carries no usable MIDI, the app lists the formats it was offered, which is a useful probe for each app.
 - **Drag-out** currently offers file URLs to temp files. They stay in `$TMPDIR/MIDI Interchange Drag` and are pruned after 24 h. That covers Finder/Explorer and DAWs that accept file drops. Native file promises are a Milestone 2 item.
 - SMPTE-division files are rejected with a clear message.
 - Clip moves are whole-clip offsets; there's no splitting.
@@ -88,14 +88,19 @@ The main design decisions:
 
 ## Interoperability test checklist
 
-**None of the targets below have been verified yet.** Fill this in as each one is tested.
+Tested by hand on macOS (2026-11-09). Drag-and-drop works as far as each app allows. Nothing has been tested on Windows yet.
+
+Key: ✓ works · ◐ tested, works within what the app supports · — the app doesn't support it · ☐ not tested
+
+"Drag-in" means dragging from the app into MIDI Interchange; "drag-out" means dragging from MIDI Interchange into the app.
 
 | Target | macOS drag-in | macOS drag-out | Windows drag-in | Windows drag-out |
 |---|---|---|---|---|
-| Cubase | ☐ | ☐ | ☐ | ☐ |
+| Cubase | ✓ | ✓ | ☐ | ☐ |
+| Reason | — (Reason can't drag MIDI out) | ✓ | ☐ | ☐ |
+| Staccato.ai | ◐ | ◐ | ☐ | ☐ |
+| Scaler 3 | ◐ | ◐ | ☐ | ☐ |
 | RapidComposer 6 | ☐ | ☐ | ☐ | ☐ |
-| Staccato.ai | ☐ | ☐ | ☐ | ☐ |
-| Reason | ☐ | ☐ | ☐ | ☐ |
 | Synthesizer V Studio 2 | ☐ | ☐ | ☐ | ☐ |
 | Yamaha Omnivocal | ☐ | ☐ | ☐ | ☐ |
 | Finder / Explorer | ☐ | ☐ | ☐ | ☐ |

@@ -7,7 +7,7 @@ Companion to [DESIGN_BRIEF.md](DESIGN_BRIEF.md), the original spec, kept verbati
 | Milestone | Status |
 |---|---|
 | M1 Functional vertical slice | **Done.** Every M1 bullet works in the GUI, and the brief's success criterion is covered by a headless GUI test (`tests/test_ui.py::test_full_workflow`). |
-| M2 Interchange | **Partly done.** Drag-in accepts file URLs and raw MThd data; drag-out offers file URLs to temp files; individual-track export and source provenance are done. Native file promises and virtual files are **not** done (see Risks). |
+| M2 Interchange | **Partly done.** Drag-in accepts file URLs and raw MThd data; drag-out offers file URLs to temp files; individual-track export and source provenance are done. Native file promises and virtual files are **not** done (see Risks). Even so, drag in and out tested by hand on macOS (2026-11-09) works with Cubase (both ways), Reason (out only; Reason can't drag MIDI out), Staccato.ai and Scaler 3, as far as each app allows. |
 | M3 Advanced ranges | **Mostly done.** Multiple named ranges, resize and move, concatenation, separate-range export, the boundary policy and whole-output trim are done. Per-track trim and per-range drag handles are **not** done. |
 | M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, Developer ID signed, hardened runtime). They're notarised and stapled, and Gatekeeper accepts them. On Windows, the one-folder build, zip and Inno Setup installer build and launch (x64, 2026-11-09), but aren't code-signed. Workspace persistence is **not** done. |
 
@@ -109,7 +109,7 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 
 1. **Native drag-in (M2).** Qt can't receive macOS file promises (`NSFilePromiseReceiver`) or Windows virtual files (`CFSTR_FILEDESCRIPTOR`/`CFSTR_FILECONTENTS`). DAWs that drag clips this way will need PyObjC and pywin32/ctypes adapters. As a probe for now, when a drop has no usable MIDI the app lists the MIME formats it was offered.
 2. **Native drag-out (M2).** Drag-out offers only file URLs, pointing at temp files in `$TMPDIR/MIDI Interchange Drag/<per-drag dir>`. Those files are pruned after 24 h at startup. A destination that needs promises or the data inline won't accept them.
-3. **DAW interop is completely untested.** The README checklist is the place to record results. Don't claim compatibility until each target is ticked.
+3. **DAW interop is only partly tested.** On macOS, file-URL drag in and out works with Cubase, Reason (out only), Staccato.ai and Scaler 3 as far as each app allows; no native promise support was needed for those. RapidComposer 6, Synthesizer V and Omnivocal haven't been tested, and nothing has been tested on Windows. Results go in the README checklist; don't claim compatibility for a target until it's ticked.
 4. **Per-track auto-trim.** `Track.auto_trim` exists in the model but the exporter ignores it.
 5. **Per-range drag handles.** Not built; the drag tile exports the current mode and selection.
 6. **Workspace persistence.** Not built. QSettings stores only window and splitter state.
