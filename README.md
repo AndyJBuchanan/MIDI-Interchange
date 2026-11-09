@@ -11,6 +11,7 @@ Documentation:
 
 - [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code (extensions, launch configurations and tasks in `.vscode/`). **Before committing from a new clone**, read its section on setting each clone's commit identity and GitHub login.
+- [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md) has the DAW drag test results, the clipboard investigation and open interop issues.
 - [docs/RELEASING.md](docs/RELEASING.md) explains the version number (one line in `midi_interchange.spec`), tag naming, and building and publishing a release. Release notes are in [docs/releases/](docs/releases/).
 - [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) covers how the spec was interpreted: status for each milestone, deviations, decisions, risks and known gaps.
 
@@ -80,7 +81,7 @@ The main design decisions:
 
 ## Known limitations and risks (for Milestone 2)
 
-- **Drag-in from DAWs**: file URLs and any MIME format whose bytes start with `MThd` are handled. Qt cannot receive **macOS file promises** (`NSFilePromiseReceiver`) or **Windows virtual files** (`CFSTR_FILEDESCRIPTOR`/`FILECONTENTS`). These need native adapters (PyObjC on macOS, `pywin32`/ctypes on Windows). The apps tested so far on macOS (see the checklist below) didn't need them. If a drop carries no usable MIDI, the app lists the formats it was offered, which is a useful probe for each app.
+- **Drag-in from DAWs**: file URLs and any MIME format whose bytes start with `MThd` are handled. Qt cannot receive **macOS file promises** (`NSFilePromiseReceiver`) or **Windows virtual files** (`CFSTR_FILEDESCRIPTOR`/`FILECONTENTS`). These need native adapters (PyObjC on macOS, `pywin32`/ctypes on Windows). The apps tested so far on macOS (see the checklist below) didn't need them. Cubase exports only one clip per drag, even to the Finder. If a drop carries no usable MIDI, the app lists the formats it was offered, which is a useful probe for each app.
 - **Drag-out** currently offers file URLs to temp files. They stay in `$TMPDIR/MIDI Interchange Drag` and are pruned after 24 h. That covers Finder/Explorer and DAWs that accept file drops. Native file promises are a Milestone 2 item.
 - SMPTE-division files are rejected with a clear message.
 - Clip moves are whole-clip offsets; there's no splitting.
@@ -88,22 +89,25 @@ The main design decisions:
 
 ## Interoperability test checklist
 
-Tested by hand on macOS (2026-11-09). Drag-and-drop works as far as each app allows. Nothing has been tested on Windows yet.
+Tested by hand on macOS (2026-11-09). Drag-and-drop works as far as each app allows. Nothing has been tested on Windows yet. Details, the clipboard investigation and open issues are in [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md).
 
-Key: ✓ works · ◐ tested, works within what the app supports · — the app doesn't support it · ☐ not tested
+Key: ✓ works · ◐ works within limits (see notes) · — the app doesn't support it · ☐ not tested or not yet confirmed
 
 "Drag-in" means dragging from the app into MIDI Interchange; "drag-out" means dragging from MIDI Interchange into the app.
 
-| Target | macOS drag-in | macOS drag-out | Windows drag-in | Windows drag-out |
-|---|---|---|---|---|
-| Cubase | ✓ | ✓ | ☐ | ☐ |
-| Reason | — (Reason can't drag MIDI out) | ✓ | ☐ | ☐ |
-| Staccato.ai | ◐ | ◐ | ☐ | ☐ |
-| Scaler 3 | ◐ | ◐ | ☐ | ☐ |
-| RapidComposer 6 | ☐ | ☐ | ☐ | ☐ |
-| Synthesizer V Studio 2 | ☐ | ☐ | ☐ | ☐ |
-| Yamaha Omnivocal | ☐ | ☐ | ☐ | ☐ |
-| Finder / Explorer | ☐ | ☐ | ☐ | ☐ |
+| Target | macOS drag-in | macOS drag-out | Windows drag-in | Windows drag-out | Notes |
+|---|---|---|---|---|---|
+| Cubase 16 | ◐ | ✓ | ☐ | ☐ | Cubase drags out one clip at a time (a Cubase limitation; also true when dragging to the Finder) |
+| Reason 14 | ✓ | ☐ | ☐ | ☐ | |
+| RapidComposer 6 | ◐ | ☐ | ☐ | ☐ | Single clip/track only |
+| Scaler 3 | ◐ | ◐ | ☐ | ☐ | Where it applies, e.g. the main page |
+| Staccato.ai | ✓ | ✓ | ☐ | ☐ | |
+| Logic Pro | — | ✓ | ☐ | ☐ | Logic doesn't drag MIDI out |
+| Synthesizer V Studio 2 | ☐ | ☐ | ☐ | ☐ | |
+| Yamaha Omnivocal | ☐ | ☐ | ☐ | ☐ | |
+| Finder / Explorer | ☐ | ☐ | ☐ | ☐ | |
+
+**Clipboard:** Cubase, Reason and Logic Pro don't put usable MIDI on the system clipboard, so copy and paste between them and MIDI Interchange isn't possible. Pro Tools and Sibelius use `public.midi-audio`, a possible future route; see the findings page.
 
 For each target check: does the drop import at all (if not, note the formats listed in the error); are track names, channels, lyrics and tempo intact; does a rebased range land at the drop position with the correct length; and are there no stuck notes at range edges.
 
