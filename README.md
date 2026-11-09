@@ -111,8 +111,9 @@ Key: ✓ works · ◐ works within limits (see notes) · — the app doesn't sup
 | Staccato.ai | ✓ | ✓ | ☐ | ☐ | |
 | Logic Pro | — | ✓ | ☐ | ☐ | Logic doesn't drag MIDI out |
 | Synthesizer V Studio 2 | ☐ | ☐ | ☐ | ☐ | |
-| Yamaha Omnivocal | ☐ | ☐ | ☐ | ☐ | |
 | Finder / Explorer | ☐ | ☐ | ☐ | ☐ | |
+
+Yamaha Omnivocal isn't listed: no MIDI is dragged to or from it. It takes its MIDI from Cubase.
 
 **Clipboard:** Cubase, Reason and Logic Pro don't put usable MIDI on the system clipboard, so copy and paste between them and MIDI Interchange isn't possible. Pro Tools and Sibelius use `public.midi-audio`, a possible future route; see the findings page.
 
