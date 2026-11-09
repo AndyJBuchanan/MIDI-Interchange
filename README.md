@@ -3,12 +3,15 @@
 A small desktop workspace for collecting, trimming and re-exporting MIDI between applications.
 It is not a DAW: there's no playback, no instruments and no note editing.
 
+**Download:** ready-to-run builds for macOS (Apple silicon, macOS 15+) and Windows 10/11 are on the [Releases page](https://github.com/AndyJBuchanan/MIDI-Interchange/releases). You don't need to build anything.
+
 Status: **Milestone 1** (functional vertical slice), plus a few cheap pieces of later milestones: multiple ranges, rebase/concatenate/separate export, whole-output trim, undo/redo, file-URL drag-out and Alt-drag clip moves.
 
 Documentation:
 
 - [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code (extensions, launch configurations and tasks in `.vscode/`). **Before committing from a new clone**, read its section on setting each clone's commit identity and GitHub login.
+- [docs/RELEASING.md](docs/RELEASING.md) explains the version number (one line in `midi_interchange.spec`), tag naming, and building and publishing a release. Release notes are in [docs/releases/](docs/releases/).
 - [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) covers how the spec was interpreted: status for each milestone, deviations, decisions, risks and known gaps.
 
 ## Run (macOS / Windows)

@@ -3,9 +3,18 @@
 import os
 import sys
 
-# Single source of the app version: macOS Info.plist and the Windows exe version resource.
-# scripts/build_windows.ps1 reads this line to name the zip, so keep it a plain "x.y.z" literal.
+# Single source of the app version. See docs/RELEASING.md before changing it.
+# Feeds the macOS Info.plist, the Windows exe version resource, the Windows installer and every
+# artifact file name (build_macos.sh reads it back from Info.plist; build_windows.ps1 reads this line
+# with a regex, so keep it a plain "MAJOR.MINOR.PATCH" literal).
+# Numbers only: macOS and Windows both reject suffixes such as "-pre". Pre-release labels go on the
+# git tag / GitHub release instead (e.g. VERSION "0.1.0" is released as tag v0.1.0-pre).
 VERSION = "0.1.0"
+
+import re as _re
+if not _re.fullmatch(r"\d+\.\d+\.\d+", VERSION):
+    raise SystemExit(f'midi_interchange.spec: VERSION must be MAJOR.MINOR.PATCH digits only, got "{VERSION}". '
+                     "Put labels like -pre on the git tag, not here (docs/RELEASING.md).")
 
 # Set by scripts/build_macos.sh from scripts/signing.local.env; unset = ad-hoc signing.
 codesign_identity = os.environ.get("CODESIGN_IDENTITY") or None

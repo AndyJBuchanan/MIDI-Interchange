@@ -302,7 +302,7 @@ Notes:
 
 - The first signing run triggers a keychain prompt to allow `codesign` to use the private key. Choose **Always Allow**. While the prompt is open, the build waits, and if it waits too long the timestamp request fails with "timestamps differ by N seconds". Rerun after allowing access.
 - Only the DMG is submitted. Its notarisation ticket also covers the app inside, which is why the script can staple the app in `dist/`. The copy *inside* the DMG isn't stapled, so if a user drags it out while offline, Gatekeeper checks it online the first time it opens.
-- Before shipping a new release, bump `VERSION` at the top of `midi_interchange.spec`. It sets `CFBundleShortVersionString`, `CFBundleVersion` and the Windows version.
+- Before shipping a new release, bump `VERSION` at the top of `midi_interchange.spec`. It sets `CFBundleShortVersionString`, `CFBundleVersion` and the Windows version. The full process is in [RELEASING.md](RELEASING.md).
 
 **macOS build status (2026-11-09):**
 - Built on Apple silicon with Python 3.12 and PyInstaller 6.x. The DMG is about 39 MB and the app about 100 MB.
@@ -323,7 +323,7 @@ tools/make_demo_midi.py        regenerates samples/
 scripts/                       build scripts; installer.iss (Windows installer); entitlements.plist; signing.env.example (copy to git-ignored signing.local.env)
 midi_interchange.spec          PyInstaller spec (bundle metadata, version, signing identity from env)
 .vscode/                       VS Code extensions, launch configs, tasks, settings
-docs/                          brief, design notes, this guide
+docs/                          brief, design notes, this guide, RELEASING.md, releases/ (release notes)
 ```
 
 - Keep `midi_interchange/core` free of Qt so it can be tested without a GUI.
