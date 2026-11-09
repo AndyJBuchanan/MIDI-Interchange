@@ -10,8 +10,11 @@ Interaction
   drag on empty space (ruler or lanes)     create a range
   drag a range edge (any row)              resize
   drag a range body in the range strip     move
-  Alt/Option-drag a clip                   move the clip
-  Shift while dragging                     bypass snap
+  Alt/Option-drag a clip                   move the clip, in time and across tracks
+                                           (below the last track: onto a new track)
+  Alt+Ctrl / Option-Cmd-drag a clip        copy the clip
+  Shift while dragging a clip              keep its time; change track only
+  Shift while dragging a range             bypass snap
   Cmd/Ctrl + wheel, pinch                  zoom around the cursor
   wheel / trackpad                         scroll (Shift+wheel = horizontal)
   Delete / Backspace                       delete selected range
@@ -72,6 +75,7 @@ class Timeline(QAbstractScrollArea):
     laneHeightChanged = Signal(int)
     hoverTextChanged = Signal(str)
     trackContextMenuRequested = Signal(str, QPoint)
+    clipContextMenuRequested = Signal(str, str, QPoint)   # track id, clip id
     rangeEditRequested = Signal(str)
 
     def __init__(self, ctl: Controller, parent=None) -> None:
@@ -83,6 +87,7 @@ class Timeline(QAbstractScrollArea):
         self._drag: dict | None = None
         self._hover_x: float | None = None
         self._press_pos: QPointF | None = None
+        self._drop_ind: tuple[int | None, Fraction, str] | None = None   # lane (None = new track), time, label
 
         self.setFocusPolicy(Qt.StrongFocus)
         self.viewport().setMouseTracking(True)
@@ -219,6 +224,8 @@ class Timeline(QAbstractScrollArea):
                 continue
             self._paint_track(p, track, top, t0, t1, w)
         self._paint_range_overlays(p, HEADER_H, h)
+        if self._drop_ind is not None:
+            self._paint_drop_indicator(p, w, h)
         p.setClipping(False)
 
         self._paint_header(p, w, t0, t1)
@@ -340,6 +347,51 @@ class Timeline(QAbstractScrollArea):
 
             if render.texts:
                 self._paint_texts(p, render, off, top, lane_h, t0, t1, base, track.enabled)
+
+        if len(track.clips) > 1:
+            for lo, hi in track.overlaps():
+                x0, x1 = self.x_of(float(lo)), self.x_of(float(hi))
+                if x1 < 0 or x0 > w:
+                    continue
+                p.fillRect(QRectF(x0, top + 2, max(x1 - x0, 2), lane_h - 5), theme.OVERLAP_FILL)
+                p.fillRect(QRectF(x0, top + 2, max(x1 - x0, 2), 2), theme.OVERLAP_EDGE)
+
+    def _paint_drop_indicator(self, p: QPainter, w: int, h: int) -> None:
+        lane, t, label = self._drop_ind
+        x = round(self.x_of(float(t))) + 0.5
+        n = len(self.ctl.ws.tracks)
+        if lane is None:
+            top = self.lane_top(n)
+            box = QRectF(max(x, 0), top + 2, max(w - x, 0), self.lane_h - 5)
+            p.setPen(QPen(theme.ACCENT, 1, Qt.DashLine))
+            p.setBrush(theme.DROP_NEW_FILL)
+            p.drawRect(box)
+            y0, y1 = top, top + self.lane_h
+        else:
+            top = self.lane_top(lane)
+            p.fillRect(QRectF(0, top, w, self.lane_h), theme.DROP_LANE_FILL)
+            y0, y1 = top, top + self.lane_h
+        p.setPen(QPen(theme.ACCENT, 2))
+        p.drawLine(QPointF(x, y0), QPointF(x, y1))
+        p.setFont(self.font_small)
+        fm = QFontMetrics(self.font_small)
+        tw = fm.horizontalAdvance(label) + 10
+        lx = min(max(x + 4, 2), w - tw - 2)
+        ly = max(y0 + 2, HEADER_H + 2)
+        p.fillRect(QRectF(lx, ly, tw, fm.height() + 4), theme.DROP_LABEL_BG)
+        p.setPen(theme.ACCENT)
+        p.drawText(QPointF(lx + 5, ly + 2 + fm.ascent()), label)
+
+    # ------------------------------------------------------------------ drop targeting
+    def drop_target(self, pos: QPointF, bypass_snap: bool = False) -> tuple[int | None, Fraction]:
+        """(lane index or None for 'new tracks', snapped time) for a point in the viewport."""
+        t = self.time_at(pos.x(), bypass_snap)
+        return (self.lane_at(pos.y()) if pos.y() >= HEADER_H else -1), t
+
+    def set_drop_indicator(self, ind: tuple[int | None, Fraction, str] | None) -> None:
+        if ind != self._drop_ind:
+            self._drop_ind = ind
+            self.viewport().update()
 
     def _paint_texts(self, p, render: ClipRender, off: float, top: int, lane_h: int,
                      t0: float, t1: float, base: QColor, enabled: bool) -> None:
@@ -523,8 +575,10 @@ class Timeline(QAbstractScrollArea):
         elif hit[0] == "clip" and e.modifiers() & Qt.AltModifier:
             track = self.ctl.ws.track(hit[1])
             clip = next(c for c in track.clips if c.id == hit[2])
-            self._drag = {"kind": "clip", "tid": hit[1], "cid": hit[2],
+            self._drag = {"kind": "clip", "cid": hit[2], "orig_off": clip.offset, "origin": track.copy(),
+                          "copy": bool(e.modifiers() & Qt.ControlModifier),
                           "grab": quantize(self.t_of(pos.x())) - clip.offset, "checkpointed": False}
+            self.viewport().setCursor(Qt.DragCopyCursor if self._drag["copy"] else Qt.ClosedHandCursor)
         else:
             self._drag = {"kind": "create", "anchor": self.time_at(pos.x(), bypass), "rid": None}
 
@@ -541,11 +595,14 @@ class Timeline(QAbstractScrollArea):
             self.viewport().update(0, 0, self.viewport().width(), HEADER_H)
             return
         self._check_autoscroll(pos.x())
-        self._drag_to(pos.x(), bypass)
+        self._drag_to(pos.x(), bypass, pos.y())
 
-    def _drag_to(self, x: float, bypass: bool) -> None:
+    def _drag_to(self, x: float, bypass: bool, y: float | None = None) -> None:
         d = self._drag
         if d is None:
+            return
+        if d["kind"] == "clip":
+            self._drag_clip(x, y, bypass)
             return
         t = self.time_at(x, bypass)
         if d["kind"] == "create":
@@ -583,16 +640,48 @@ class Timeline(QAbstractScrollArea):
                     self.ctl.checkpoint()
                     d["checkpointed"] = True
                 self.ctl.update_range(r.id, start=new_start, end=new_start + r.length)
-        elif d["kind"] == "clip":
+
+    def _drag_clip(self, x: float, y: float | None, lock_time: bool) -> None:
+        """Move (or copy) a clip in time and across tracks. Shift keeps its time."""
+        d = self._drag
+        ws = self.ctl.ws
+        found = ws.find_clip(d["cid"])
+        if found is None:
+            return
+        cur_track, clip = found
+        if lock_time:
+            new_off = d["orig_off"]
+        else:
             raw = quantize(max(self.t_of(x), 0.0)) - d["grab"]
-            new_off = max(self.ctl.snap_time(max(raw, ZERO), bypass), ZERO)
-            track = self.ctl.ws.track(d["tid"])
-            clip = next((c for c in track.clips if c.id == d["cid"]), None) if track else None
-            if clip and new_off != clip.offset:
-                if not d["checkpointed"]:
-                    self.ctl.checkpoint()
-                    d["checkpointed"] = True
-                self.ctl.move_clip(d["tid"], d["cid"], new_off)
+            new_off = max(self.ctl.snap_time(max(raw, ZERO)), ZERO)
+        dest_id: str | None = cur_track.id
+        to_new = False
+        if y is not None and y >= HEADER_H:
+            lane = self.lane_at(y)
+            if lane >= 0:
+                dest_id = ws.tracks[lane].id
+            elif y >= self.lane_top(len(ws.tracks)):
+                # below the last lane: a new track, unless the clip already sits alone on the last one
+                last = ws.tracks[-1] if ws.tracks else None
+                to_new = not (last is cur_track and len(cur_track.clips) == 1 and d.get("made_track"))
+                dest_id = None if to_new else cur_track.id
+        if new_off == clip.offset and dest_id == cur_track.id and not to_new:
+            return
+        if not d["checkpointed"]:
+            self.ctl.checkpoint()
+            d["checkpointed"] = True
+            if d["copy"]:
+                dup = self.ctl.duplicate_clip(d["cid"], offset=clip.offset, checkpoint=False)
+                if dup is None:
+                    return
+                d["cid"] = dup
+        if to_new:
+            ws.new_track_for_clip(d["cid"], like=d["origin"])
+            d["made_track"] = True
+            self.ctl.move_clip_live(d["cid"], new_off)
+            self.ctl.tracksChanged.emit()
+        else:
+            self.ctl.move_clip_live(d["cid"], new_off, dest_id)
 
     def mouseReleaseEvent(self, e: QMouseEvent) -> None:
         d = self._drag
@@ -600,6 +689,8 @@ class Timeline(QAbstractScrollArea):
         self._autoscroll.stop()
         if d is None:
             return
+        if d["kind"] == "clip" and d["checkpointed"]:
+            self.ctl.end_clip_gesture()
         if d["kind"] == "create":
             if d["rid"] is None:
                 rid = self._range_at_x(e.position().x()) if e.position().y() >= RULER_H else None
@@ -661,7 +752,8 @@ class Timeline(QAbstractScrollArea):
             self._autoscroll.stop()
             return
         from PySide6.QtWidgets import QApplication
-        self._drag_to(min(max(x, 0), w), bool(QApplication.keyboardModifiers() & Qt.ShiftModifier))
+        y = self.viewport().mapFromGlobal(QCursor.pos()).y()
+        self._drag_to(min(max(x, 0), w), bool(QApplication.keyboardModifiers() & Qt.ShiftModifier), y)
 
     def _context_menu(self, hit: tuple, e: QMouseEvent) -> None:
         gp = e.globalPosition().toPoint()
@@ -671,7 +763,9 @@ class Timeline(QAbstractScrollArea):
             m.addAction("Edit Range…", lambda: self.rangeEditRequested.emit(hit[1]))
             m.addAction("Delete Range", lambda: self.ctl.delete_range(hit[1]))
             m.exec(gp)
-        elif hit[0] in ("lane", "clip"):
+        elif hit[0] == "clip":
+            self.clipContextMenuRequested.emit(hit[1], hit[2], gp)
+        elif hit[0] == "lane":
             self.trackContextMenuRequested.emit(hit[1], gp)
 
     # ------------------------------------------------------------------ wheel / keys / gestures

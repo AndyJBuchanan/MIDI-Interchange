@@ -171,10 +171,11 @@ class TrackPanel(QWidget):
                 h.grip.moved.connect(self._grip_move)
                 h.grip.released.connect(self._grip_release)
                 h.show()
-            src = ws.source(t.source_id)
-            label = src.name if src else ""
-            desc = src.describe() if src else ""
-            if src and src.id == ws.tempo_source_id:
+            srcs = [x for x in (ws.source(sid) for sid in t.source_ids()) if x]
+            src = srcs[0] if srcs else None
+            label = (src.name if len(srcs) == 1 else f"{len(t.clips)} clips · {len(srcs)} sources") if src else ""
+            desc = "\n\n".join(x.describe() for x in srcs)
+            if any(x.id == ws.tempo_source_id for x in srcs):
                 desc += "\n(Workspace tempo map is taken from this source)"
             h.refresh(t, desc, label)
         self.title.setText(f"TRACKS  {len(ws.enabled_tracks())}/{len(ws.tracks)}" if ws.tracks else "TRACKS")

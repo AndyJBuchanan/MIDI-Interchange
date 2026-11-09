@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, Signal
 from ..core.document import Workspace
 from ..core.export_smf import ExportMode, ExportOptions, ExportResult, build_exports
 from ..core.import_smf import ImportError_, import_smf_bytes
+from ..core.placement import Placement, place_imports
 from ..core.ranges import Range
 from ..core.timing import SnapSetting, ZERO
 from ..interchange.payload import Payload
@@ -76,30 +77,120 @@ class Controller(QObject):
         self.undoStateChanged.emit()
 
     # -- import ---------------------------------------------------------------
-    def import_payloads(self, payloads: list[Payload]) -> list[str]:
-        """Import payloads accumulatively. Returns error strings for failures."""
-        errors: list[str] = []
-        parsed = []
+    def parse_payloads(self, payloads: list[Payload]) -> tuple[list, list[str]]:
+        parsed, errors = [], []
         for p in payloads:
             try:
                 parsed.append(import_smf_bytes(p.data, p.name, path=p.path, app=p.app))
             except ImportError_ as exc:
                 errors.append(f"{p.name}: {exc}")
+        return parsed, errors
+
+    def import_payloads(self, payloads: list[Payload], placement: Placement | None = None) -> list[str]:
+        """Import payloads accumulatively. Returns error strings for failures."""
+        parsed, errors = self.parse_payloads(payloads)
         if parsed:
             self.checkpoint()
             had_tempo = self.ws.tempo_source_id
-            notes: list[str] = []
-            n_tracks = 0
-            for source, tracks in parsed:
-                notes += self.ws.add_import(source, tracks)
+            notes, stats = place_imports(self.ws, parsed, placement or Placement())
+            for source, _tracks in parsed:
                 notes += [f"{source.name}: {w}" for w in source.warnings]
-                n_tracks += len(tracks)
             self.tracksChanged.emit()
             if had_tempo != self.ws.tempo_source_id:
                 self.tempoChanged.emit()
-            summary = f"Imported {len(parsed)} file(s), {n_tracks} track(s)"
+            summary = f"Imported {len(parsed)} file(s)"
+            parts = []
+            if stats["new_tracks"]:
+                parts.append(f"{stats['new_tracks']} new track(s)")
+            if stats["onto_target"]:
+                tgt = self.ws.track(placement.target_track_id) if placement and placement.target_track_id else None
+                parts.append(f"{stats['onto_target']} onto “{tgt.name if tgt else 'track'}”")
+            if placement and placement.time:
+                parts.append(f"at {self.ws.tempo_map.format_bbt(placement.time)}")
+            if parts:
+                summary += ": " + ", ".join(parts)
             self.message.emit("  ·  ".join([summary, *notes]))
         return errors
+
+    def new_document(self) -> None:
+        """Clear the workspace (one undoable step). Export settings are kept."""
+        if not (self.ws.tracks or self.ws.ranges or self.ws.sources):
+            return
+        self.checkpoint()
+        self.ws.clear()
+        self.selected_range_id = None
+        self.tracksChanged.emit()
+        self.tempoChanged.emit()
+        self.rangesChanged.emit()
+        self.selectionChanged.emit()
+        self.message.emit("New workspace (Undo brings the previous one back)")
+
+    # -- clips -------------------------------------------------------------
+    def move_clip_live(self, clip_id: str, offset: Fraction, track_id: str | None = None) -> None:
+        """Live clip move during a drag (caller checkpoints once at drag start)."""
+        found = self.ws.find_clip(clip_id)
+        if found is None:
+            return
+        src, clip = found
+        offset = max(offset, ZERO)
+        dest = track_id or src.id
+        if offset != clip.offset or dest != src.id:
+            self.ws.move_clip_to_track(clip_id, dest, offset)
+            self.tracksChanged.emit()
+
+    def end_clip_gesture(self) -> None:
+        if self.ws.remove_empty_tracks():
+            self.tracksChanged.emit()
+
+    def move_clip_to_track(self, clip_id: str, track_id: str | None) -> None:
+        """Menu command: move to another track, or to a new track when track_id is None."""
+        found = self.ws.find_clip(clip_id)
+        if found is None:
+            return
+        self.checkpoint()
+        if track_id is None:
+            idx = self.ws.tracks.index(found[0]) + 1
+            self.ws.new_track_for_clip(clip_id, idx)
+        else:
+            self.ws.move_clip_to_track(clip_id, track_id)
+        self.ws.remove_empty_tracks()
+        self.tracksChanged.emit()
+
+    def delete_clip(self, clip_id: str) -> None:
+        if self.ws.find_clip(clip_id):
+            self.checkpoint()
+            self.ws.delete_clip(clip_id)
+            self.tracksChanged.emit()
+
+    def duplicate_clip(self, clip_id: str, offset: Fraction | None = None,
+                       track_id: str | None = None, checkpoint: bool = True) -> str | None:
+        if not self.ws.find_clip(clip_id):
+            return None
+        if checkpoint:
+            self.checkpoint()
+        dup = self.ws.duplicate_clip(clip_id, offset, track_id)
+        self.tracksChanged.emit()
+        return dup.id if dup else None
+
+    def snap_clip_to_previous(self, clip_id: str) -> None:
+        found = self.ws.find_clip(clip_id)
+        if found is None:
+            return
+        snap = self.ws.snapshot()
+        if self.ws.snap_clip_to_previous(clip_id):
+            self._undo.append((snap, self.selected_range_id))
+            del self._undo[:-self.UNDO_LIMIT]
+            self._redo.clear()
+            self.undoStateChanged.emit()
+            self.tracksChanged.emit()
+        else:
+            self.message.emit("No earlier clip on this track to butt against")
+
+    def merge_tracks(self, from_id: str, into_id: str) -> None:
+        if self.ws.track(from_id) and self.ws.track(into_id) and from_id != into_id:
+            self.checkpoint()
+            self.ws.merge_tracks(from_id, into_id)
+            self.tracksChanged.emit()
 
     # -- tracks --------------------------------------------------------------
     def set_track_enabled(self, track_id: str, enabled: bool) -> None:
@@ -147,12 +238,8 @@ class Controller(QObject):
         self.tracksChanged.emit()
 
     def move_clip(self, track_id: str, clip_id: str, offset: Fraction) -> None:
-        """Live clip move (caller checkpoints once at drag start)."""
-        t = self.ws.track(track_id)
-        clip = next((c for c in t.clips if c.id == clip_id), None) if t else None
-        if clip and clip.offset != offset:
-            clip.offset = max(offset, ZERO)
-            self.tracksChanged.emit()
+        """Live clip move within its track (caller checkpoints once at drag start)."""
+        self.move_clip_live(clip_id, offset)
 
     def adopt_tempo(self, source_id: str) -> None:
         if source_id != self.ws.tempo_source_id:

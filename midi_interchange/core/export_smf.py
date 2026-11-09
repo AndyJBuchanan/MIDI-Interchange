@@ -340,7 +340,7 @@ def encode_meta_text(display: str, original_raw: str) -> str:
 
 def _serialize(ws: Workspace, tracks: list[Track], conductor: list[_Item],
                out_tracks: list[tuple[Track, list[_Item], Fraction]], end: Fraction) -> mido.MidiFile:
-    src_ppqs = {ws.source(t.source_id).ppq for t in tracks if ws.source(t.source_id)}
+    src_ppqs = {ws.source(sid).ppq for t in tracks for sid in t.source_ids() if ws.source(sid)}
     all_times = [i.time for i in conductor] + [end]
     for _t, items, tend in out_tracks:
         all_times.extend(i.time for i in items)

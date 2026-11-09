@@ -5,7 +5,7 @@ It is not a DAW: there's no playback, no instruments and no note editing.
 
 **Download:** ready-to-run builds for macOS (Apple silicon, macOS 15+) and Windows 10/11 are on the [Releases page](https://github.com/AndyJBuchanan/MIDI-Interchange/releases). You don't need to build anything.
 
-Status: **Milestone 1** (functional vertical slice), plus a few cheap pieces of later milestones: multiple ranges, rebase/concatenate/separate export, whole-output trim, undo/redo, file-URL drag-out and Alt-drag clip moves.
+Status: **Milestone 1** (functional vertical slice), plus a few cheap pieces of later milestones: multiple ranges, rebase/concatenate/separate export, whole-output trim, undo/redo, file-URL drag-out, and clip assembly (place drops at a position, move and copy clips between tracks).
 
 Documentation:
 
@@ -35,15 +35,21 @@ For Windows commands, a new machine, VS Code setup or troubleshooting, see [docs
 | Action | How |
 |---|---|
 | Import | Drop `.mid` files or folders onto the window, use File ▸ Open (⌘O), or pass paths on the command line. Each import adds to the workspace. |
+| Place a drop | While dragging in, an insertion cursor shows where it lands. **Over a track lane:** at the cursor's (snapped) time on that track, but **only if the track names match**; otherwise as new track(s) at that time. **Over a track header:** the same, at the start (bar 1). **Anywhere else:** new track(s), at the cursor time over the timeline or at bar 1 elsewhere. Dropped DAW clips carry no position of their own, so this is how you put them where they belong. |
+| Drop several files | You're asked: **End to End** (each file starts where the previous one ends; same-named tracks share one new track) or **All at Cursor**. |
+| New | File ▸ New (⌘N) clears the workspace. Undo brings it back. Export settings are kept. |
 | Create a range | Drag across empty timeline space (in the ruler or in the lanes) |
 | Resize / move a range | Drag an edge (in any row) / drag the body in the range strip |
 | Bypass snap | Hold Shift while dragging |
 | Precise range | Type `bar.beat.tick` (480 ticks per quarter) into Start/End in the bottom panel |
 | Delete range / cycle ranges | Backspace or Delete / Tab |
-| Move a clip | Alt/Option-drag it |
+| Move a clip | Alt/Option-drag it, in time and onto another track; drag below the last track for a new one. Shift keeps its time (track change only). A track left empty is removed (Undo restores it). |
+| Copy a clip | Alt+Ctrl / Option-⌘-drag it, or right-click ▸ Duplicate Clip (placed straight after it) |
+| Clip tools | Right-click a clip: Duplicate, Butt Against Previous Clip, Move Clip to Track (or New Track), Delete Clip |
+| Overlaps | Clips may overlap on a track; the overlap is tinted red and both clips' notes are exported, merged |
 | Zoom | ⌘/Ctrl + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit) |
 | Lane height | Alt + wheel, ⌘⇧= / ⌘⇧- |
-| Track ops | Checkbox = include in export, click the name to rename, drag ⋮⋮ to reorder, ✕ to remove, right-click for Solo, Save This Track and Source Info |
+| Track ops | Checkbox = include in export, click the name to rename, drag ⋮⋮ to reorder, ✕ to remove, right-click for Solo, Merge Into (another track), Save This Track and Source Info |
 | Export | Save MIDI… (⌘S), or drag the **Drag MIDI out** tile into a DAW or Finder/Explorer |
 | Tempo map | Timing ▸ Tempo Map lets you adopt any imported source's map |
 
@@ -84,7 +90,8 @@ The main design decisions:
 - **Drag-in from DAWs**: file URLs and any MIME format whose bytes start with `MThd` are handled. Qt cannot receive **macOS file promises** (`NSFilePromiseReceiver`) or **Windows virtual files** (`CFSTR_FILEDESCRIPTOR`/`FILECONTENTS`). These need native adapters (PyObjC on macOS, `pywin32`/ctypes on Windows). The apps tested so far on macOS (see the checklist below) didn't need them. Cubase exports only one clip per drag, even to the Finder. If a drop carries no usable MIDI, the app lists the formats it was offered, which is a useful probe for each app.
 - **Drag-out** currently offers file URLs to temp files. They stay in `$TMPDIR/MIDI Interchange Drag` and are pruned after 24 h. That covers Finder/Explorer and DAWs that accept file drops. Native file promises are a Milestone 2 item.
 - SMPTE-division files are rejected with a clear message.
-- Clip moves are whole-clip offsets; there's no splitting.
+- Clip moves are whole-clip offsets; there's no splitting or trimming of clips.
+- A clip moved onto another track keeps its own MIDI channel(s); nothing is rewritten. A track can therefore end up mixing channels (its header lists them all).
 - Not built yet: per-track auto-trim (`Track.auto_trim` exists but the exporter ignores it), drag handles for individual ranges, and workspace persistence.
 
 ## Interoperability test checklist

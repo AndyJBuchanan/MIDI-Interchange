@@ -100,7 +100,8 @@ def import_smf_bytes(data: bytes, name: str, path: str | None = None,
         chans = track_channels(events)
         return Track(
             id=new_id(), name=label, source_id=source_id, original_name=original,
-            clips=[Clip(id=new_id(), events=events, length=end, source_track_index=ti, name=label)],
+            clips=[Clip(id=new_id(), events=events, length=end, source_track_index=ti, name=label,
+                         source_id=source_id)],
             auxiliary=not chans, channels=chans,
         )
 

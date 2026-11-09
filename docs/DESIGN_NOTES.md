@@ -46,6 +46,8 @@ Python 3.12 venv, PySide6 6.12, mido 1.3.3, pytest 8, PyInstaller 6.x. The UI us
 - **Format 0** files are split into one track per channel (`"<name> · Ch N"`), plus a `"· Meta"` track for non-channel events. Channel numbers stay intact in the messages.
 - A **conductor track** that contained only tempo and time-signature data is dropped once those events are lifted out. A track holding only other metas (lyrics, markers) becomes an **auxiliary** track: kept, exported, shown without notes.
 - Each import adds a `Source` (frozen provenance: filename, path, app, PPQ, format, timestamp, original track names, **raw bytes**, warnings) and appends its tracks. Imports never replace material already in the workspace.
+- **Placement** (`core/placement.py`, agreed 2026-11-09, modelled on Cubase/Reason): imports land at the drop's insertion cursor. Dropped on a track lane (or its header, for bar 1), an imported track joins that track **only when the names match** (case-insensitive, against the track's current or original name); otherwise it becomes a new track at the cursor time. Dropped elsewhere, everything becomes new tracks. When several *files* are dropped the user picks End to End (files laid in sequence; same-named tracks share one new track) or All at Cursor. File ▸ Open always adds new tracks at bar 1.
+- **Why:** DAW clip drags carry no position. Tested 2026-11-09: a Cubase part at bar 9 arrives at bar 1. And Cubase drags only one clip at a time, so parts are assembled by dropping them one by one where they belong.
 - **Tempo policy:** the first source with a tempo map becomes the workspace map. Later sources with a different map are reported in the status bar, never merged, and can be adopted from Timing ▸ Tempo Map.
 
 ### Export policy
@@ -97,7 +99,10 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - Shift bypasses snap. Snap choices are off, bar, beat, 1/8, 1/16, 1/32, 1/8T and 1/16T.
   - The view scrolls automatically near the edges.
   - Double-click edits a range; Tab cycles through ranges; Backspace or Delete deletes one.
-- Alt/Option-drag moves a clip (whole-clip offset).
+- Alt/Option-drag moves a clip in time and across tracks (below the last lane: a new track named after the clip's original track). Shift keeps its time. Alt+Ctrl / Option-⌘-drag copies. Empty tracks are removed when the gesture ends; one undo step per gesture.
+- Clips carry their own `source_id`, so a track can hold clips from several sources. Export chooses PPQ from every clip's source; Source Info and the track header list all of them.
+- Overlapping clips on a track are allowed: the overlap is tinted red and both clips' events are exported, merged.
+- File ▸ New empties the workspace as one undoable step, keeping export settings.
 - ⌘/Ctrl+wheel and pinch zoom around the pointer. Alt+wheel changes lane height.
 - The track panel uses absolutely positioned headers kept in sync with the timeline's vertical scroll. Drag the grip to reorder; drops onto a name field are blocked.
 - Creating the first range switches the export mode from Whole to Preserve.
@@ -119,8 +124,15 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
    - **Size:** about 100 MB, because Qt plugins pull in QML/Quick, VirtualKeyboard and Pdf despite the spec's exclude list. Trimming those plugins could save a lot.
    - **Windows:** builds and launches on Windows 11 x64. It's unsigned, so SmartScreen warns. The Inno Setup installer (`scripts/installer.iss`) registers the app under *Open with* for MIDI files but deliberately doesn't claim the default handler. With no single-instance handoff, opening several files from Explorer starts several windows. Drag-in/drag-out against DAWs isn't tested yet. User-facing shortcut hints are platform-aware (`⌘`/`⌥` on macOS, `Ctrl+`/`Alt+` elsewhere); keep any new ones that way.
 8. **Clip moves** apply to whole clips only; there's no splitting.
-9. **No New Document / Clear All.** Starting fresh means restarting the app. Requested after v0.1.0-pre; the design is open (INTEROP_FINDINGS.md lists the choices).
+9. **Mixed channels after clip moves (remember this).** A clip moved or dropped onto another track keeps its own MIDI channel(s). Nothing warns or rewrites yet, so a track can export notes on several channels. Decide later whether to warn, or offer "rewrite to the track's channel".
 10. **Clipboard import.** Not built, and not planned: Cubase puts only an in-process pointer on the clipboard, Reason an encrypted blob, and Logic a text listing of regions with no notes. The only public convention found is `public.midi-audio` (Pro Tools, Sibelius), worth revisiting after a capture from either (INTEROP_FINDINGS.md).
+
+## To do (agreed, not started)
+
+- **Per-range track exclusion:** let a track be switched off within a range, overriding its own enabled setting, for more export flexibility. Next feature after clip assembly; more range-export enhancements may join it.
+- Decide the mixed-channel policy (Risk 9). **Side effect worth keeping in mind:** because clips keep their channels, moving clips together already lets someone assemble a deliberately multi-channel track. Any policy should keep that possible.
+- **For consideration only:** changing a clip's MIDI channel in the UI (per clip), e.g. right-click ▸ Channel ▸ 1–16, rewriting channel messages on export.
+- **Revisit Shift on clip drags.** Shift currently keeps the clip's time (track change only), which differs from range drags, where Shift bypasses snap. The user isn't sure this is right; kept for now, decide after hand testing.
 
 ## Issues found and fixed during development
 

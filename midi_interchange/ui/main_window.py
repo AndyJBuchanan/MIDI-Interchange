@@ -3,17 +3,22 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QPoint, QSettings, Qt, QTimer
+from fractions import Fraction
+
+from PySide6.QtCore import QPoint, QPointF, QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPainter
 from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox,
                                QSplitter, QToolBar, QVBoxLayout, QWidget)
 
+from ..core.import_smf import ImportError_, import_smf_bytes
+from ..core.placement import Placement, names_match
+from ..core.timing import ZERO
 from ..interchange.drag_import import extract_payloads
 from ..interchange.payload import Payload
 from . import theme
 from .controller import SNAP_CHOICES, Controller
 from .export_panel import ExportPanel, start_file_drag
-from .timeline import Timeline
+from .timeline import HEADER_H, Timeline
 from .track_panel import TrackPanel
 
 APP_NAME = "MIDI Interchange"
@@ -26,15 +31,10 @@ class DropOverlay(QWidget):
         self.hide()
 
     def paintEvent(self, _e) -> None:
+        # Border only: the lanes stay visible so the insertion cursor can be seen.
         p = QPainter(self)
-        p.fillRect(self.rect(), theme.DROP_OVERLAY)
         p.setPen(theme.ACCENT)
-        p.drawRect(self.rect().adjusted(2, 2, -3, -3))
-        f = self.font()
-        f.setPointSizeF(f.pointSizeF() + 6)
-        f.setBold(True)
-        p.setFont(f)
-        p.drawText(self.rect(), Qt.AlignCenter, "Drop to add MIDI to the workspace")
+        p.drawRect(self.rect().adjusted(1, 1, -2, -2))
         p.end()
 
 
@@ -86,11 +86,15 @@ class MainWindow(QMainWindow):
         self.ctl.tracksChanged.connect(self._first_import_fit)
         self.timeline.hoverTextChanged.connect(self.hover_label.setText)
         self.timeline.trackContextMenuRequested.connect(self.track_menu)
+        self.timeline.clipContextMenuRequested.connect(self.clip_menu)
         self.timeline.rangeEditRequested.connect(lambda _rid: self.export_panel.focus_range_name())
         self.track_panel.trackContextMenuRequested.connect(self.track_menu)
         self._update_undo_actions()
         self._update_tempo_label()
         self._had_tracks = False
+        self._drag_payloads: list[Payload] = []
+        self._drag_diagnostics: list[str] = []
+        self._drag_names: list[str] | None = None
 
     # ------------------------------------------------------------------ actions
     def _act(self, text: str, slot, shortcut=None, tip: str | None = None) -> QAction:
@@ -104,6 +108,8 @@ class MainWindow(QMainWindow):
         return a
 
     def _build_actions(self) -> None:
+        self.a_new = self._act("New", self.ctl.new_document, QKeySequence.New,
+                               "Clear the workspace and start again (undoable)")
         self.a_open = self._act("Open…", self.open_files, QKeySequence.Open, "Import MIDI files (accumulative)")
         self.a_save = self._act("Save MIDI…", self.save_midi, QKeySequence.Save, "Export with current settings")
         self.a_undo = self._act("Undo", self.ctl.undo, QKeySequence.Undo)
@@ -125,6 +131,7 @@ class MainWindow(QMainWindow):
         tb.setMovable(False)
         tb.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self.addToolBar(tb)
+        tb.addAction(self.a_new)
         tb.addAction(self.a_open)
         tb.addAction(self.a_save)
         tb.addSeparator()
@@ -148,6 +155,7 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         mb = self.menuBar()
         m = mb.addMenu("&File")
+        m.addAction(self.a_new)
         m.addAction(self.a_open)
         m.addAction(self.a_save)
         m.addSeparator()
@@ -246,27 +254,127 @@ class MainWindow(QMainWindow):
         if errors:
             QMessageBox.warning(self, "Some MIDI could not be imported", "\n".join(errors))
 
+    # ------------------------------------------------------------------ drop placement
     def dragEnterEvent(self, e) -> None:
         mime = e.mimeData()
-        if mime.hasUrls() or mime.formats():
-            e.acceptProposedAction()
-            self.overlay.setGeometry(self.centralWidget().rect())
-            self.overlay.show()
-            self.overlay.raise_()
+        if not (mime.hasUrls() or mime.formats()):
+            return
+        e.acceptProposedAction()
+        self._drag_payloads, self._drag_diagnostics, self._drag_names = [], [], None
+        if e.source() is None:
+            # Read the payload now so the cursor can say which track names match.
+            # Some apps only hand data over on drop; then names stay unknown.
+            try:
+                self._drag_payloads, self._drag_diagnostics = extract_payloads(mime)
+                self._drag_names = self._payload_track_names(self._drag_payloads) if self._drag_payloads else None
+            except Exception:  # noqa: BLE001 - previewing must never break the drag
+                self._drag_payloads, self._drag_names = [], None
+        self.overlay.setGeometry(self.centralWidget().rect())
+        self.overlay.show()
+        self.overlay.raise_()
+        self._update_drop_indicator(e)
 
     def dragMoveEvent(self, e) -> None:
         e.acceptProposedAction()
+        self._update_drop_indicator(e)
 
     def dragLeaveEvent(self, _e) -> None:
         self.overlay.hide()
+        self.timeline.set_drop_indicator(None)
+
+    @staticmethod
+    def _payload_track_names(payloads: list[Payload]) -> list[str]:
+        names: list[str] = []
+        for p in payloads:
+            try:
+                _src, tracks = import_smf_bytes(p.data, p.name)
+            except ImportError_:
+                continue
+            names += [t.name for t in tracks]
+        return names
+
+    def drop_placement(self, pos: QPointF, bypass_snap: bool = False) -> tuple[Placement, int | None]:
+        """Placement for a drop at a window position, plus the timeline lane it points at."""
+        pt = pos.toPoint()
+        vp = self.timeline.viewport()
+        p_tl = vp.mapFrom(self, pt)
+        if vp.rect().contains(p_tl):
+            lane, t = self.timeline.drop_target(QPointF(p_tl), bypass_snap)
+            if lane is not None and lane >= 0:
+                return Placement(t, self.ctl.ws.tracks[lane].id), lane
+            return Placement(t), None
+        tp = self.track_panel
+        p_tp = tp.mapFrom(self, pt)
+        if tp.rect().contains(p_tp) and p_tp.y() >= HEADER_H:
+            lane = self.timeline.lane_at(p_tp.y())
+            if lane >= 0:
+                return Placement(ZERO, self.ctl.ws.tracks[lane].id), lane
+        return Placement(ZERO), None
+
+    def _update_drop_indicator(self, e) -> None:
+        if e.source() is not None:  # our own drag-out tile
+            self.timeline.set_drop_indicator(None)
+            return
+        bypass = bool(e.modifiers() & Qt.ShiftModifier)
+        pl, lane = self.drop_placement(e.position(), bypass)
+        bbt = self.ctl.ws.tempo_map.format_bbt(pl.time)
+        names = self._drag_names
+        n_files = len(self._drag_payloads)
+        many = f"{n_files} files" if n_files > 1 else ""
+        if pl.target_track_id:
+            tgt = self.ctl.ws.track(pl.target_track_id)
+            if names is None:
+                label = f"Onto “{tgt.name}” at {bbt} if the names match, else new track(s)"
+            else:
+                hits = [n for n in names if names_match(tgt, n)]
+                if hits and len(hits) == len(names):
+                    label = f"Onto “{tgt.name}” at {bbt}"
+                elif hits:
+                    label = f"{len(hits)} onto “{tgt.name}”, {len(names) - len(hits)} new track(s) at {bbt}"
+                else:
+                    label = f"New track(s) at {bbt}: names differ from “{tgt.name}”"
+                    lane = None
+        else:
+            label = f"New track(s) at {bbt}"
+            lane = None
+        if many:
+            label += f"  ·  {many}"
+        self.timeline.set_drop_indicator((lane, pl.time, label))
 
     def dropEvent(self, e) -> None:
         self.overlay.hide()
+        self.timeline.set_drop_indicator(None)
         if e.source() is not None:  # our own drag-out tile
             return
-        payloads, diagnostics = extract_payloads(e.mimeData())
+        placement, _lane = self.drop_placement(e.position(), bool(e.modifiers() & Qt.ShiftModifier))
+        payloads, diagnostics = self._drag_payloads, self._drag_diagnostics
+        if not payloads:
+            payloads, diagnostics = extract_payloads(e.mimeData())
+        self._drag_payloads, self._drag_diagnostics, self._drag_names = [], [], None
         e.acceptProposedAction()
-        errors = self.ctl.import_payloads(payloads) if payloads else []
+        if len(payloads) > 1:
+            # Ask after the drop completes, so the source app isn't left waiting on a modal dialog.
+            QTimer.singleShot(0, lambda: self._finish_drop(payloads, diagnostics, placement, ask=True))
+        else:
+            self._finish_drop(payloads, diagnostics, placement, ask=False)
+
+    def _finish_drop(self, payloads: list[Payload], diagnostics: list[str], placement: Placement,
+                     ask: bool) -> None:
+        if ask:
+            box = QMessageBox(self)
+            box.setWindowTitle("Place dropped files")
+            box.setText(f"{len(payloads)} files were dropped.")
+            box.setInformativeText("Lay them end to end from the cursor, in the order dropped, "
+                                   "or place them all at the cursor?")
+            seq = box.addButton("End to End", QMessageBox.AcceptRole)
+            same = box.addButton("All at Cursor", QMessageBox.AcceptRole)
+            box.addButton(QMessageBox.Cancel)
+            box.setDefaultButton(same)
+            box.exec()
+            if box.clickedButton() not in (seq, same):
+                return
+            placement.end_to_end = box.clickedButton() is seq
+        errors = self.ctl.import_payloads(payloads, placement) if payloads else []
         if not payloads:
             errors += diagnostics
         elif diagnostics:
@@ -302,12 +410,41 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ track menu
     def track_menu(self, track_id: str, global_pos: QPoint) -> None:
+        m = QMenu(self)
+        if self._add_track_actions(m, track_id):
+            m.exec(global_pos)
+
+    def clip_menu(self, track_id: str, clip_id: str, global_pos: QPoint) -> None:
+        ws = self.ctl.ws
+        found = ws.find_clip(clip_id)
+        if found is None:
+            return
+        track, clip = found
+        m = QMenu(self)
+        title = m.addAction(f"Clip: {clip.name or track.name}")
+        title.setEnabled(False)
+        m.addAction("Duplicate Clip (after it)", lambda: self.ctl.duplicate_clip(clip_id))
+        a = m.addAction("Butt Against Previous Clip", lambda: self.ctl.snap_clip_to_previous(clip_id))
+        a.setEnabled(any(c is not clip and c.start < clip.start for c in track.clips))
+        mv = m.addMenu("Move Clip to Track")
+        for t in ws.tracks:
+            if t.id != track.id:
+                mv.addAction(t.name, lambda tid=t.id: self.ctl.move_clip_to_track(clip_id, tid))
+        if len(ws.tracks) > 1:
+            mv.addSeparator()
+        mv.addAction("New Track", lambda: self.ctl.move_clip_to_track(clip_id, None))
+        m.addAction("Delete Clip", lambda: self.ctl.delete_clip(clip_id))
+        m.addSeparator()
+        tm = m.addMenu(f"Track: {track.name}")
+        self._add_track_actions(tm, track_id)
+        m.exec(global_pos)
+
+    def _add_track_actions(self, m: QMenu, track_id: str) -> bool:
         ws = self.ctl.ws
         t = ws.track(track_id)
         if t is None:
-            return
+            return False
         idx = ws.tracks.index(t)
-        m = QMenu(self)
         m.addAction("Disable" if t.enabled else "Enable",
                     lambda: self.ctl.set_track_enabled(track_id, not t.enabled))
         m.addAction("Rename", lambda: self.track_panel.header(track_id) and self.track_panel.header(track_id).focus_name())
@@ -317,12 +454,17 @@ class MainWindow(QMainWindow):
         a.setEnabled(idx > 0)
         a = m.addAction("Move Down", lambda: self.ctl.move_track(track_id, idx + 1))
         a.setEnabled(idx < len(ws.tracks) - 1)
+        mg = m.addMenu("Merge Into")
+        for o in ws.tracks:
+            if o.id != track_id:
+                mg.addAction(o.name, lambda oid=o.id: self.ctl.merge_tracks(track_id, oid))
+        mg.setEnabled(len(ws.tracks) > 1)
         m.addSeparator()
         m.addAction("Save This Track…", lambda: self.save_midi([track_id]))
         m.addAction("Source Info…", lambda: self._source_info(track_id))
         m.addSeparator()
         m.addAction("Remove Track", lambda: self.ctl.remove_track(track_id))
-        m.exec(global_pos)
+        return True
 
     def _solo(self, track_id: str) -> None:
         self.ctl.checkpoint()
@@ -332,10 +474,15 @@ class MainWindow(QMainWindow):
 
     def _source_info(self, track_id: str) -> None:
         t = self.ctl.ws.track(track_id)
-        src = self.ctl.ws.source(t.source_id) if t else None
-        if src:
-            n_events = sum(len(c.events) for c in t.clips)
-            QMessageBox.information(self, f"Source — {t.name}",
-                                    f"{src.describe()}\n\nTrack: {t.name}\nOriginal name: {t.original_name or '—'}"
-                                    f"\nChannels: {', '.join(str(c + 1) for c in t.channels) or '—'}"
-                                    f"\nEvents: {n_events}")
+        if t is None:
+            return
+        srcs = [s for s in (self.ctl.ws.source(sid) for sid in t.source_ids()) if s]
+        if not srcs:
+            return
+        n_events = sum(len(c.events) for c in t.clips)
+        head = "\n\n".join(s.describe() for s in srcs)
+        QMessageBox.information(self, f"Source — {t.name}",
+                                f"{head}\n\nTrack: {t.name}\nOriginal name: {t.original_name or '—'}"
+                                f"\nClips: {len(t.clips)} from {len(srcs)} source(s)"
+                                f"\nChannels: {', '.join(str(c + 1) for c in t.channels) or '—'}"
+                                f"\nEvents: {n_events}")

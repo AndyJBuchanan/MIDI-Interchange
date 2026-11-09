@@ -107,19 +107,12 @@ Ways to move several Cubase clips into MIDI Interchange (for users):
 2. **File ▸ Export ▸ MIDI File in Cubase**, after soloing or selecting the tracks you want and setting the locators to cover the clips. Then drag or open that file in MIDI Interchange, which handles multi-track Type 1 files and lets you pick ranges and tracks. Not yet tried with Cubase 16's export options.
 3. **Untested:** in Cubase, glue the parts on a track into one part, then drag that part. That only helps for parts on the same track.
 
-Nothing to change in MIDI Interchange for this.
+Dragged parts also **lose their position**: tested 2026-11-09, a Cubase part at bar 9 arrives at bar 1. That's normal for a dragged clip; a MIDI file has no field for it.
+
+**Response in MIDI Interchange (feature/clip-assembly):** drop each part where it belongs. The insertion cursor shows the track and bar; a part whose track name matches the track under the cursor joins it, otherwise it becomes a new track at that bar. Clips can be Option-dragged between tracks, copied, butted against the previous clip, and tracks merged. See the README "Using it" table.
 
 Sources: [Steinberg forum: How do I export a single midi part?](https://forums.steinberg.net/t/how-do-i-export-a-single-midi-part/75973), [Steinberg forum: Midi export seems impossible with Cubase 12](https://forums.steinberg.net/t/midi-export-seems-impossible-with-cubase-12/807297), [Steinberg help: Exporting MIDI Parts as MIDI Files (Cubase 12)](https://archive.steinberg.help/cubase_pro/v12/en/cubase_nuendo/topics/parts_events/parts_and_events_midi_files_exporting_t.html).
 
 ### New Document / Clear All
 
-Needed: a way to clear everything and start fresh without restarting. Not built yet; how it should work is still open.
-
-What the current code makes easy:
-
-- There's no saved workspace file (persistence is Risk 6), so "New" amounts to emptying the workspace: tracks, clips, ranges and the adopted tempo map.
-- Undo stores whole-workspace snapshots ([controller.py](../midi_interchange/ui/controller.py) `checkpoint()`), so clearing can be one undoable step. That may remove the need for a confirmation dialog.
-- To decide:
-  - **Undo history:** keep it so Clear can be undone, or reset it like a real New.
-  - **Export settings:** keep the export mode and trim, or reset them.
-  - **Naming and placement:** File ▸ New (`⌘N`/`Ctrl+N`) or Edit ▸ Clear All, or both, and whether it goes on the toolbar.
+Done on feature/clip-assembly: File ▸ New (⌘N, also on the toolbar) empties the workspace as one undoable step and keeps the export settings.
