@@ -19,28 +19,74 @@ Development so far has been on macOS (Apple silicon) with Python 3.12 and PySide
 
 ## Get the code
 
-The repository has no remote yet. To move it to another machine, either push it to a Git host first:
+The repository is public on GitHub at **https://github.com/AndyJBuchanan/MIDI-Interchange**, owned by the maintainer's *personal* account `AndyJBuchanan`. Clone it, then **configure the clone before you commit or push** (below):
 
 ```bash
-git remote add origin <your-repo-url>
+git clone https://AndyJBuchanan@github.com/AndyJBuchanan/MIDI-Interchange.git
+```
+
+Putting `AndyJBuchanan@` in the URL makes git ask for that account's login specifically. To read the code only, the plain URL works with no login.
+
+> **History rewrite (2026-11-09).** Before the first push, every commit's author was changed from a work address to the no-reply address below, and every commit hash changed. Any copy made before then, such as the Windows working tree, has the old hashes and the work email. Don't push from it: clone again, and move any uncommitted changes across as a patch.
+
+### Configure each clone: identity and GitHub login
+
+This is a personal project, but the build machines may also be signed in to *work* git and GitHub accounts. That includes a global `user.email`, other `gh` accounts, SSH keys and logins saved by credential managers. So set this repo's settings in the repo itself (`--local`), and never change global settings for it.
+
+**1. Commit identity.** Set it in this repo only, and use GitHub's no-reply address so no real email gets published:
+
+```bash
+git config --local user.name "Andy Buchanan"
 ```
 ```bash
-git push -u origin main
+git config --local user.email "9151489+AndyJBuchanan@users.noreply.github.com"
 ```
 
-and clone it on the other machine:
+Check it with `git config user.email`: it must print the no-reply address, not the machine's global email.
+
+**2. GitHub CLI login as the personal account.** Run:
 
 ```bash
-git clone <your-repo-url> MID-Xfr-App
+gh auth login --hostname github.com --git-protocol https --web
 ```
 
-or make a single-file bundle and copy it across:
+- When it asks **"Authenticate Git with your GitHub credentials?"**, answer **No**. Saying yes sets up git globally, so every github.com push from every repo would use whichever `gh` account happens to be active.
+- The browser approval uses whichever account that browser is signed in to. Check that the page shows **AndyJBuchanan** before you authorise; a private window is safest.
+- A `gh` that already has another github.com account keeps it, and the new login becomes the active account.
+
+Check the result with `gh api user --jq .login`, which must print `AndyJBuchanan`, and `gh auth status`.
+
+**3. Point this repo's git login at `gh` as AndyJBuchanan.** The empty first value removes every login helper set elsewhere, such as the macOS keychain helper (`osxkeychain`) or Git Credential Manager on Windows. Either could return a work login.
+
+```bash
+git config --local credential.https://github.com.helper ""
+```
+```bash
+git config --local --add credential.https://github.com.helper '!gh auth git-credential'
+```
+```bash
+git config --local credential.https://github.com.username AndyJBuchanan
+```
+
+On Windows, run these three commands in **Git Bash**, not PowerShell. Windows PowerShell 5.1 drops the empty `""` argument, so the existing helpers wouldn't be removed.
+
+Check it without printing the token. This should show only `gh auth git-credential get` being run and `username=AndyJBuchanan`:
+
+```bash
+printf 'protocol=https\nhost=github.com\n\n' | GIT_TRACE=1 git credential fill 2>&1 | grep -E "run_command|^username="
+```
+
+The remote then needs no other setup: `git push` and `git pull` sign in through `gh` as AndyJBuchanan, whichever `gh` account is active.
+
+### Without GitHub
+
+To copy the repository with no network access, make a single-file bundle and clone from it on the other machine. Then set the remote and configure the clone as above:
 
 ```bash
 git bundle create midi-interchange.bundle --all
 ```
 ```bash
-git clone midi-interchange.bundle MID-Xfr-App
+git clone midi-interchange.bundle MIDI-Interchange
 ```
 
 Don't copy `.venv/`. Virtual environments contain absolute paths and platform-specific binaries, so recreate it on each machine.

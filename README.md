@@ -8,12 +8,15 @@ Status: **Milestone 1** (functional vertical slice), plus a few cheap pieces of 
 Documentation:
 
 - [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code (extensions, launch configurations and tasks in `.vscode/`).
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code (extensions, launch configurations and tasks in `.vscode/`). **Before committing from a new clone**, read its section on setting each clone's commit identity and GitHub login.
 - [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) covers how the spec was interpreted: status for each milestone, deviations, decisions, risks and known gaps.
 
 ## Run (macOS / Windows)
 
+Source: https://github.com/AndyJBuchanan/MIDI-Interchange
+
 ```bash
+git clone https://github.com/AndyJBuchanan/MIDI-Interchange.git && cd MIDI-Interchange
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt   # Windows: .venv\Scripts\pip
 .venv/bin/python tools/make_demo_midi.py          # optional: writes demo files to samples/
