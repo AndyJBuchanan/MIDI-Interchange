@@ -6,3 +6,6 @@ build/
 dist/
 .pytest_cache/
 .DS_Store
+
+# Local code-signing / notarisation config (never commit)
+scripts/signing.local.env

@@ -2,14 +2,14 @@
 
 Companion to [DESIGN_BRIEF.md](DESIGN_BRIEF.md), the original spec, kept verbatim. This file records how the brief was interpreted: decisions, deviations, known gaps and risks. Update it whenever direction changes.
 
-## Status by milestone (2026-11-08, commit `2ada4bf`)
+## Status by milestone (updated 2026-11-09)
 
 | Milestone | Status |
 |---|---|
 | M1 Functional vertical slice | **Done.** Every M1 bullet works in the GUI, and the brief's success criterion is covered by a headless GUI test (`tests/test_ui.py::test_full_workflow`). |
 | M2 Interchange | **Partly done.** Drag-in accepts file URLs and raw MThd data; drag-out offers file URLs to temp files; individual-track export and source provenance are done. Native file promises and virtual files are **not** done (see Risks). |
 | M3 Advanced ranges | **Mostly done.** Multiple named ranges, resize and move, concatenation, separate-range export, the boundary policy and whole-output trim are done. Per-track trim and per-range drag handles are **not** done. |
-| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, ad-hoc signed). The Windows build **has never been run**. Workspace persistence is **not** done. |
+| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, Developer ID signed, hardened runtime). They're notarised and stapled, and Gatekeeper accepts them. The Windows build **has never been run**. Workspace persistence is **not** done. |
 
 User priority, given with the brief: the timeline is the primary UI element and must work early and well. It was built in M1, not deferred.
 
@@ -72,6 +72,19 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 - Output is format 1: an unnamed conductor track first, then the enabled tracks in panel order.
 - Building an export never changes the workspace (tested).
 
+### Packaging and distribution
+- PyInstaller builds a one-folder `.app` bundle, version 0.1.0, bundle ID `com.midiinterchange.app`. It registers `.mid`, `.midi` and `.smf` as documents.
+- **macOS release builds:**
+  - Signed with Developer ID, with the hardened runtime and secure timestamps. PyInstaller signs every nested binary.
+  - No entitlements: `scripts/entitlements.plist` is empty.
+  - Distributed as a compressed DMG with an Applications shortcut.
+  - Only the DMG is notarised. Its ticket covers the app inside, and it's stapled to both the DMG and `dist/` app.
+- **Signing details stay out of git:**
+  - The certificate identity and notary profile name are in `scripts/signing.local.env` (git-ignored); a template is checked in.
+  - The Apple ID and app-specific password live only in the macOS keychain (a `notarytool` profile).
+  - Which Apple account is used depends on the machine; it can be a personal developer team on a work Mac.
+- Builds without the local file still work, but are ad-hoc signed.
+
 ### Timeline and UI
 - One `QAbstractScrollArea` paints everything. Note geometry is cached per clip, and only notes that intersect the viewport are drawn (found by bisect). There are no per-note graphics items.
 - **Header rows:** ruler (22 px), info row for tempo, time signature and markers (16 px), range strip (20 px).
@@ -100,7 +113,11 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 4. **Per-track auto-trim.** `Track.auto_trim` exists in the model but the exporter ignores it.
 5. **Per-range drag handles.** Not built; the drag tile exports the current mode and selection.
 6. **Workspace persistence.** Not built. QSettings stores only window and splitter state.
-7. **Packaging.** The macOS DMG builds and launches, but it isn't code-signed or notarised, has no app icon, and runs on arm64 only. The Windows build has never been run.
+7. **Packaging.**
+   - **macOS:** the DMG is Developer ID signed, notarised and stapled, using a git-ignored local config.
+   - **Still missing:** an app icon, an Intel or universal2 build (arm64 only for now) and stapling the app inside the DMG.
+   - **Size:** about 100 MB, because Qt plugins pull in QML/Quick, VirtualKeyboard and Pdf despite the spec's exclude list. Trimming those plugins could save a lot.
+   - **Windows:** the build has never been run.
 8. **Clip moves** apply to whole clips only; there's no splitting.
 
 ## Issues found and fixed during development
@@ -113,6 +130,10 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - beat numbers at close zoom
   - wider drag tile so its subtitle isn't cut off
   - marker labels shifted only when a tempo or time-signature label shares their position
+- **Packaging:**
+  - `hdiutil create -srcfolder` failed with "Resource busy" straight after a build, consistently once the app was signed; `-fs HFS+` didn't help. The fix was to build the DMG by copying into a blank image and converting it.
+  - The first Developer ID signing failed with "timestamps differ by 297 seconds", most likely because the keychain access prompt was left open. Rerunning after allowing access fixed it.
+  - The signed app launches under the hardened runtime with no entitlements. The first notarisation was accepted with no issues.
 
 ## Working conventions
 
