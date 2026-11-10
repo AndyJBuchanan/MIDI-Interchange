@@ -127,7 +127,8 @@ def export_drag(win, monkeypatch, track_ids=None) -> list[mido.MidiFile]:
     start_file_drag(win.export_panel, win.ctl, track_ids, errors.append, done.append)
     assert not errors, errors
     paths = [u.toLocalFile() for u in urls]
-    assert paths and paths == done[0]
+    # QUrl.toLocalFile() returns "/" separators on Windows; the app wrote native paths.
+    assert paths and [os.path.normpath(p) for p in paths] == [os.path.normpath(p) for p in done[0]]
     return [mido.MidiFile(p) for p in paths]
 
 
