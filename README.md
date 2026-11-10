@@ -12,6 +12,7 @@ Documentation:
 - [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code (extensions, launch configurations and tasks in `.vscode/`). **Before committing from a new clone**, read its section on setting each clone's commit identity and GitHub login.
 - [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md) has the DAW drag test results, the clipboard investigation and open interop issues.
+- [docs/TEST_CHECKLIST.md](docs/TEST_CHECKLIST.md) is the manual test checklist (clip assembly plus a regression pass).
 - [docs/RELEASING.md](docs/RELEASING.md) explains the version number (one line in `midi_interchange.spec`), tag naming, and building and publishing a release. Release notes are in [docs/releases/](docs/releases/).
 - [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) covers how the spec was interpreted: status for each milestone, deviations, decisions, risks and known gaps.
 
