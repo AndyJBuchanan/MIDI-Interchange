@@ -93,6 +93,18 @@ Sources: [Avid: Copy and paste music between Sibelius and Pro Tools](https://www
 
 There is still no MIDI clipboard format that DAWs share in practice. Cubase, Reason and Logic keep copy and paste internal to themselves. The only documented public convention is `public.midi-audio`, used by Pro Tools and Sibelius. Drag and drop with file URLs remains the working route. Clipboard support in MIDI Interchange is only worth considering as `public.midi-audio` copy and paste, and only after a Clip-Test capture from Pro Tools or Sibelius confirms it. Clip-Test flags `MThd` data and file URLs automatically.
 
+### Exports with the song title in the tempo track (tested by hand, macOS, 2026-11-10)
+
+Since 2026-11-10 an export whose clips all come from one song names its first (tempo-only) track after the song, as Staccato.ai's own files do. Tested with the Staccato song exported whole:
+
+| Application | Drag from MIDI Interchange | Open/import the exported file | Notes |
+|---|---|---|---|
+| Cubase 16 | Works | Works, and sets the tempo | The drag was slow, and Cubase didn't offer to do anything with the tempo; that may be normal for a drag into an existing project |
+| Reason 14 | Works | Works, and sets the tempo | Same as Cubase |
+| Logic Pro | Not tested (only Cubase and Reason are the drag test targets for now) | Works; a new project takes the tempo | Dragging the exported `.mid` file from the Finder into an existing project imports cleanly but not the tempo: Logic asks about it, then seems to ignore it or fail |
+
+No app showed an extra empty track named after the song. The exported file used is `samples/cubase-check/ExportedFormatNew.mid` (the whole song, tempo track named "Industrial EBM Anthem"). Whether the tempo behaviour on drag is the same without the song title wasn't checked; it's the first time tempo-on-drag was looked at, so don't read it as caused by the title.
+
 ## Open issues
 
 ### Reason splits multi-channel tracks — importer behaviour

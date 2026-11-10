@@ -5,7 +5,7 @@ It is not a DAW: there's no playback, no instruments and no note editing.
 
 **Download:** ready-to-run builds for macOS (Apple silicon, macOS 15+) and Windows 10/11 are on the [Releases page](https://github.com/AndyJBuchanan/MIDI-Interchange/releases). You don't need to build anything.
 
-Status: **Milestone 1** (functional vertical slice), plus a few cheap pieces of later milestones: multiple ranges, rebase/concatenate/separate export, whole-output trim, undo/redo, file-URL drag-out, and clip assembly (place drops at a position, move and copy clips between tracks).
+Status: **Milestone 1** (functional vertical slice), plus a few cheap pieces of later milestones: multiple ranges, rebase/concatenate/separate export, whole-output trim, undo/redo, file-URL drag-out, clip assembly (place drops at a position, move and copy clips between tracks), per-range track selection, and round-trip name matching that ignores song titles.
 
 Documentation:
 
@@ -36,23 +36,23 @@ For Windows commands, a new machine, VS Code setup or troubleshooting, see [docs
 | Action | How |
 |---|---|
 | Import | Drop `.mid` files or folders onto the window, use File ▸ Open (⌘O), or pass paths on the command line. Each import adds to the workspace. |
-| Place a drop | While dragging in, an insertion cursor shows where it lands. **Over a track lane:** at the cursor's (snapped) time on that track, but **only if the track names match**; otherwise everything arrives as new track(s) at that time. When it does match, the dropped file's other tracks also join existing tracks with the same names, so a multi-track round trip (e.g. from Staccato.ai) dropped on one of its tracks lands back on all of them; unmatched tracks become new tracks. If a file repeats a track name (Staccato.ai files can), the copies pair up in order with the existing same-named tracks; extra copies become new tracks. **Song titles:** Staccato.ai names tracks "part - song" and changes the song between generations, so when no name matches exactly, names are compared again without a known song title ("Drums - Staccato Generation" joins "Drums - Industrial EBM Anthem"); the status bar says when it did. A song title is known only from the file itself (its tempo track's name, or an ending all its tracks share), so DAW clips such as "Lead - Verse" and "Lead - Chorus" never match. Exports write the song title into the tempo track when all exported clips share one. A dropped clip with exactly the same start and end as a clip already on that track **replaces** it; partial overlaps are kept (and tinted). **Over a track header:** the same, at the start (bar 1). **Anywhere else:** new track(s), at the cursor time over the timeline or at bar 1 elsewhere. Dropped DAW clips carry no position of their own, so this is how you put them where they belong. |
+| Place a drop | While dragging in, an insertion cursor and label show where it lands, and what the label says is what happens. **Over a track lane:** at the cursor's (snapped) time on that track, but **only if the track names match**; otherwise everything arrives as new track(s) at that time, and the label and status bar say why (“nothing matches …”, with the file's and the track's song titles). When it does match, the dropped file's other tracks also join existing tracks with the same names, so a multi-track round trip (e.g. from Staccato.ai) dropped on one of its tracks lands back on all of them; unmatched tracks become new tracks. If a file repeats a track name (Staccato.ai files can), the copies pair up in order with the existing same-named tracks; extra copies become new tracks. **Song titles:** Staccato.ai names tracks "part - song" and changes the song between generations, so when no name matches exactly, names are compared again without a known song title ("Drums - Staccato Generation" joins "Drums - Industrial EBM Anthem"); the status bar says when it did. A song title is known only from the file itself (its tempo track's name, or an ending all its tracks share), so DAW clips such as "Lead - Verse" and "Lead - Chorus" never match. Exports write the song title into the tempo track when all exported clips share one. A dropped clip with exactly the same start and end as a clip already on that track **replaces** it; partial overlaps are kept (and tinted). **Over a track header:** the same, at the start (bar 1). **Anywhere else:** new track(s), at the cursor time over the timeline or at bar 1 elsewhere. Dropped DAW clips carry no position of their own, so this is how you put them where they belong. |
 | Drop several files | You're asked: **End to End** (each file starts where the previous one ends, all on **one** new track named after the first file's track; multi-track files line up by track position) or **All at Cursor** (each file at the cursor, with the usual name matching). |
-| New | File ▸ New (⌘N) clears the workspace. Undo brings it back. Export settings are kept. |
+| New | File ▸ New (⌘N, also on the toolbar) clears the workspace. Undo brings it back. Export settings are kept. |
 | Create a range | Drag across empty timeline space (in the ruler or in the lanes) |
 | Resize / move a range | Drag an edge (in any row) / drag the body in the range strip |
-| Bypass snap | Hold Shift while dragging |
-| Precise range | Type `bar.beat.tick` (480 ticks per quarter) into Start/End in the bottom panel |
-| Delete range / cycle ranges | Backspace or Delete / Tab |
+| Snap | Snap menu on the toolbar, or Timing ▸ Snap: off, bar, beat, 1/8, 1/16, 1/32, 1/8T, 1/16T (beat by default). Hold Shift while dragging to bypass it |
+| Name a range / precise range | Pick it in the Range list in the bottom panel (or double-click it, or right-click ▸ Edit Range…), then type a name, and `bar.beat.tick` (480 ticks per quarter) into Start/End |
+| Delete range / cycle ranges | Backspace or Delete (or the panel's Delete button, Edit ▸ Delete Range) / Tab. Escape deselects. Clear All Ranges is on the toolbar and the Edit menu |
 | Leave a track out of a range | Click the range's checkbox in that track's lane (at the range's inner left edge). An excluded section is hatched. Right-click the range for the same list, plus Include All, Exclude All and Reset to Track Toggles. A new range starts with the track toggles; after that the range's checkboxes win. A track switched off is still drawn in colour inside ranges that include it. **Option-click** (Alt-click on Windows) a track's toggle to set it in every range too. |
 | Move a clip | Alt/Option-drag it, in time and onto another track; drag below the last track for a new one. Shift keeps its time (track change only). A track left empty is removed (Undo restores it). |
 | Copy a clip | Alt+Ctrl / Option-⌘-drag it, or right-click ▸ Duplicate Clip (placed straight after it) |
 | Clip tools | Right-click a clip: Duplicate, Butt Against Previous Clip, Move Clip to Track (or New Track), Delete Clip |
 | Overlaps | Clips may overlap on a track; the overlap is tinted red and both clips' notes are exported, merged |
 | Zoom | ⌘/Ctrl + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit) |
-| Lane height | Alt + wheel, ⌘⇧= / ⌘⇧- |
-| Track ops | Checkbox = include in export, click the name to rename, drag ⋮⋮ to reorder, ✕ to remove, right-click for Solo / Unsolo (restores the previous selection), Merge Into (another track), Save This Track and Source Info |
-| Export | Save MIDI… (⌘S), or drag the **Drag MIDI out** tile into a DAW or Finder/Explorer |
+| Lane height | Alt + wheel (a small step per notch), ⌘⇧= / ⌘⇧- (View ▸ Taller/Shorter Lanes) |
+| Track ops | Checkbox = include in export (Edit ▸ Enable/Disable All Tracks for all of them), click the name to rename, drag ⋮⋮ to reorder, ✕ to remove. Right-click a header (or a clip ▸ Track) for Enable/Disable, Rename, Solo for Export / Unsolo (restores the previous selection), Move Up/Down, Merge Into (another track), Save This Track…, Source Info… and Remove Track |
+| Export | Pick a mode in the bottom panel's Export list: **Whole workspace**, **Ranges · keep positions**, **Ranges · rebase & concatenate** (the default) or **Ranges · separate files**; tick **Trim leading/trailing silence** to trim the output as a whole. Then Save MIDI… (⌘S) or drag the **Drag MIDI out** tile into a DAW or Finder/Explorer. The tile and the line beside the Trim box say how many tracks and files will go |
 | Tempo map | Timing ▸ Tempo Map lets you adopt any imported source's map |
 
 ## Architecture
@@ -65,6 +65,8 @@ midi_interchange/core/          pure Python, no Qt dependency
   document.py   Workspace → Source → Track → Clip → Event, undo snapshots
   ranges.py     half-open [start, end) ranges, merging
   import_smf.py SMF → canonical model
+  placement.py  where a drop lands: plan_drop() decides, place_imports() carries it out
+  names.py      every naming rule: name matching, song titles, range labels, file names
   export_smf.py canonical model → SMF (whole / preserve / rebase / separate, trim)
 midi_interchange/interchange/   transport boundary (drop payload extraction, temp files for drag-out)
 midi_interchange/ui/            PySide6: controller (undo + signals), timeline, track panel, export panel
@@ -74,9 +76,9 @@ The main design decisions:
 
 - **Time** is an exact `Fraction` of quarter notes, so mixing 96/480/960/1000 PPQ sources loses nothing. On export the PPQ is the LCM of the source PPQs and every output time's denominator. If that would exceed the 15-bit SMF limit, it falls back to the largest source PPQ (minimum 480) and rounds.
 - **Events** keep the original mido message object. SysEx, unknown metas, sequencer-specific data and text bytes (decoded as latin-1, so the round trip is byte-exact) survive untouched. Text is re-decoded as UTF-8 for display only.
-- **Import policy**: tempo and time-signature events move into the source's `TempoMap`. The first `track_name` at tick 0 becomes the editable track name. `end_of_track` sets the clip length. Format 0 files are split per channel, plus a `· Meta` track for non-channel events. A pure conductor track is dropped, and a track with only meta events becomes an *auxiliary* track.
+- **Import policy**: tempo and time-signature events move into the source's `TempoMap`. The first `track_name` at tick 0 becomes the editable track name; a pure conductor track's name is kept as the source's song title when the track names end in it. `end_of_track` sets the clip length. Format 0 files are split per channel, plus a `· Meta` track for non-channel events. A pure conductor track is dropped, and a track with only meta events becomes an *auxiliary* track.
 - **Tempo policy**: the first source that has a tempo map becomes authoritative. Later conflicting maps stay on their source, are reported, and can be adopted from the menu. They are never merged.
-- **Track names**: an unchanged name is written back with its original bytes; an edited name is written as UTF-8.
+- **Track names**: an unchanged name is written back with its original bytes; an edited name is written as UTF-8. The conductor track is named after the song when every exported clip comes from one song, otherwise it's unnamed.
 
 ### Export boundary policy (`core/export_smf.py`)
 
@@ -96,11 +98,11 @@ The main design decisions:
 - SMPTE-division files are rejected with a clear message.
 - Clip moves are whole-clip offsets; there's no splitting or trimming of clips.
 - A clip moved onto another track keeps its own MIDI channel(s); nothing is rewritten. A track can therefore end up mixing channels (its header lists them all). Some importers split a MIDI track by channel: **Reason 14** turns a multi-channel track into one track per channel, each with the same name plus the channel number (confirmed 2026-11-10). MIDI Interchange's own export is correct (one track, every note); the split happens in the importer. To get one track there, assemble clips that share a channel. A channel option for export is on the back burner (DESIGN_NOTES Risk 9).
-- Not built yet: per-track auto-trim (`Track.auto_trim` exists but the exporter ignores it), drag handles for individual ranges, and workspace persistence.
+- Not built yet: per-track auto-trim (`Track.auto_trim` exists but the exporter ignores it), drag handles for individual ranges, and keeping the workspace between sessions (planned; see the DESIGN_NOTES to-do list).
 
 ## Interoperability test checklist
 
-Tested by hand on macOS (2026-11-09). Drag-and-drop works as far as each app allows. Nothing has been tested on Windows yet. Details, the clipboard investigation and open issues are in [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md).
+Tested by hand on macOS (2026-11-09 and 2026-11-10). Drag-and-drop works as far as each app allows. Nothing has been tested on Windows yet. Details, the clipboard investigation and open issues are in [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md).
 
 Key: ✓ works · ◐ works within limits (see notes) · — the app doesn't support it · ☐ not tested or not yet confirmed
 

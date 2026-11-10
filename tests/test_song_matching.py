@@ -189,3 +189,51 @@ def test_a_drop_that_matches_nothing_says_why(qapp=None):
     assert "new because nothing matches “Piercing Lead - Industrial EBM Anthem”" in msgs[-1]
     assert "its song title is “Staccato Generation”" in msgs[-1]
     assert "the track's song title is “Industrial EBM Anthem”" in msgs[-1]
+
+
+def test_studio_sequence_through_window_drops(qapp=None):
+    """The exact studio steps (2026-11-10), with the studio's own files, through the
+    window's drag events: Range 1 into empty space, Range 2 onto Heavy EBM Drums at
+    bar 9, the new Staccato generation onto Heavy EBM Drums at bar 3. The preview
+    must say where it goes, and the parts must land on their tracks."""
+    import pytest
+    pytest.importorskip("PySide6")
+    from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+    from PySide6.QtWidgets import QApplication
+    from midi_interchange.ui.main_window import MainWindow
+    from midi_interchange.ui.timeline import HEADER_H
+    app = QApplication.instance() or QApplication([])
+    ranges = SONG.parent.parent / "complex-matching"
+    w = MainWindow()
+    w.resize(1600, 1000)
+    w.show()
+    tl = w.timeline
+
+    def drop(path: Path, lane: int, beat: float) -> str:
+        tl.set_zoom(25.0, 0)
+        tl.horizontalScrollBar().setValue(0)
+        tl.verticalScrollBar().setValue(0)
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(path))])
+        pt = tl.viewport().mapTo(w, QPoint(int(tl.x_of(beat)), HEADER_H + lane * tl.lane_h + tl.lane_h // 2))
+        w.dragEnterEvent(QDragEnterEvent(pt, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+        preview = tl._drop_ind[2]
+        w.dropEvent(QDropEvent(QPointF(pt), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+        app.processEvents()
+        return preview
+
+    try:
+        drop(ranges / "Range 1.mid", 30, 0.1)
+        assert len(w.ctl.ws.tracks) == 10
+        assert drop(ranges / "Range 2.mid", 0, 32.1).startswith("Onto “Heavy EBM Drums - Industrial EBM Anthem”")
+        assert len(w.ctl.ws.tracks) == 10
+        preview = drop(REAL_GEN, 0, 8.1)
+        assert preview.startswith("Onto “Heavy EBM Drums - Industrial EBM Anthem”"), preview
+        assert len(w.ctl.ws.tracks) == 10
+        got = [t.name for t in w.ctl.ws.tracks if len(t.clips) == 3]
+        assert got == ["Heavy EBM Drums - Industrial EBM Anthem", "Galloping Synth Bass - Industrial EBM Anthem",
+                       "Detuned Saw Pads - Industrial EBM Anthem", "Monotone Chant - Industrial EBM Anthem"]
+        assert "matched ignoring song titles" in w.statusBar().currentMessage()
+    finally:
+        w.close()
