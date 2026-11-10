@@ -1,22 +1,126 @@
 # MIDI Interchange
 
-A small desktop workspace for collecting, trimming and re-exporting MIDI between applications.
-It is not a DAW: there's no playback, no instruments and no note editing.
+A palette for MIDI on its way between music apps. Drop in bits of MIDI from the apps you're working with, hold them and shape them in one place, then hand exactly what's needed to the next app.
 
-**Download:** ready-to-run builds for macOS (Apple silicon, macOS 15+) and Windows 10/11 are on the [Releases page](https://github.com/AndyJBuchanan/MIDI-Interchange/releases). You don't need to build anything.
+Moving MIDI between apps is full of friction: each app drags MIDI in a different, often one-way, way. Cubase drags out one clip at a time with no position, Logic can't drag MIDI out at all, and there's no shared MIDI clipboard. MIDI Interchange sits in the middle. It takes whatever each app can give, lets you collect, trim and choose, and hands it on as plain MIDI files, the one format that works with almost every app.
 
-Status: **Milestone 1** (functional vertical slice), plus a few cheap pieces of later milestones: multiple ranges, rebase/concatenate/separate export, whole-output trim, undo/redo, file-URL drag-out, clip assembly (place drops at a position, move and copy clips between tracks), per-range track selection, and round-trip name matching that ignores song titles.
+It isn't a DAW or an arranger: there's no playback, no instruments and no note editing. Your source files are never changed.
 
-Documentation:
+## Download
 
-- [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code (extensions, launch configurations and tasks in `.vscode/`). **Before committing from a new clone**, read its section on setting each clone's commit identity and GitHub login.
-- [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md) has the DAW drag test results, the clipboard investigation and open interop issues.
-- [docs/TEST_CHECKLIST.md](docs/TEST_CHECKLIST.md) is the manual test checklist (clip assembly plus a regression pass).
-- [docs/RELEASING.md](docs/RELEASING.md) explains the version number (one line in `midi_interchange.spec`), tag naming, and building and publishing a release. Release notes are in [docs/releases/](docs/releases/).
-- [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) covers how the spec was interpreted: status for each milestone, deviations, decisions, risks and known gaps.
+The current release is **[v0.2.0-pre](https://github.com/AndyJBuchanan/MIDI-Interchange/releases/tag/v0.2.0-pre)** (2026-11-10), a pre-release. All releases are on the [Releases page](https://github.com/AndyJBuchanan/MIDI-Interchange/releases); you don't need to build anything.
 
-## Run (macOS / Windows)
+| Your computer | Download |
+|---|---|
+| Mac with Apple silicon, macOS 15 or newer | `MIDI-Interchange-<ver>-macOS-arm64.dmg`: signed and notarised |
+| Windows 10 / 11 (64-bit) | `MIDI-Interchange-<ver>-Windows-x64-Setup.exe` (installer), or the portable `.zip`. Not code-signed yet, so Windows may warn: **More info ▸ Run anyway** |
+
+## What it's for
+
+- **Collect from apps that give MIDI out a clip at a time.** Drag Cubase parts in one by one and drop each on its track at the bar it belongs to.
+- **Round trips.** Send tracks to another app (Staccato.ai, for example), then drop what comes back on one of its tracks: every part lands back on its own track, even when the app has renamed the song.
+- **Hand on exactly what the next app needs.** Mark ranges, choose which tracks each range sends, and drag the result straight into the next app, or into a folder.
+- **Keep what matters intact.** Notes cut cleanly at range edges with nothing stuck, instrument and controller settings are carried into each range, and lyrics, markers and other MIDI data survive.
+
+## Using it
+
+Shortcuts are shown for macOS; on Windows use Ctrl for ⌘ and Alt for ⌥ (Option).
+
+### Bringing MIDI in
+
+- Drag MIDI from another app, or `.mid` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import adds to the workspace.
+- While you drag, a cursor and label show where it will land, and **what the label says is what happens**:
+  - **Over a track lane:** it joins that track at the cursor's (snapped) time, but **only if the names match** (ignoring case and spacing; a renamed track still matches its original name). If nothing matches, it arrives as new track(s) at that time, and the label and status bar say why.
+  - **Over a track header:** the same, at bar 1.
+  - **Anywhere else:** new track(s), at the cursor time over the timeline or at bar 1 elsewhere.
+- Dropped DAW clips carry no position of their own, so this is how you put them where they belong.
+- **Several files at once:** you're asked: **End to End** (each file starts where the previous one ends, on **one** new track named after the first file's track; multi-track files line up by track position) or **All at Cursor** (each file at the cursor, with the usual name matching).
+- **Round trips:** when a multi-track file matches the track you drop it on, its other tracks also join their same-named tracks, and the rest become new tracks.
+  - A file that repeats a track name (Staccato.ai files can) pairs its copies in order with the existing same-named tracks.
+  - A dropped clip with exactly the same start and end as one already on the track **replaces** it; partial overlaps are kept and tinted.
+  - **Song titles:** Staccato.ai names tracks "part - song" and changes the song between generations. If no name matches exactly, names are compared again without a known song title, so "Drums - Staccato Generation" joins "Drums - Industrial EBM Anthem"; the status bar says when it did. A song title is known only from the file itself (its tempo track's name, or an ending all its tracks share), so DAW clips such as "Lead - Verse" and "Lead - Chorus" never match.
+- The first file with a tempo map sets the workspace tempo. Timing ▸ Tempo Map lets you adopt another file's map.
+
+### Reorganising what you hold
+
+| Action | How |
+|---|---|
+| Move a clip | ⌥-drag it in time and onto another track; drag below the last track for a new one. Hold Shift to keep its time (track change only). A track left empty is removed (Undo restores it) |
+| Copy a clip | ⌥⌘-drag it, or right-click ▸ Duplicate Clip (placed straight after it) |
+| Clip tools | Right-click a clip: Duplicate, Butt Against Previous Clip, Move Clip to Track (or New Track), Delete Clip |
+| Overlaps | Clips may overlap on a track; the overlap is tinted red and both clips' notes are exported, merged |
+| Tracks | Click the name to rename, drag ⋮⋮ to reorder, ✕ to remove. Right-click a header (or a clip ▸ Track) for Enable/Disable, Rename, Solo for Export / Unsolo, Move Up/Down, Merge Into (another track), Save This Track…, Source Info… and Remove Track |
+| Start again | File ▸ New (⌘N, also on the toolbar) clears the workspace; Undo brings it back. Export settings are kept |
+| Undo / redo | ⌘Z / ⇧⌘Z cover everything |
+
+### Choosing what to hand on
+
+| Action | How |
+|---|---|
+| Choose tracks | Each track's checkbox includes it in the export (Edit ▸ Enable/Disable All Tracks for all of them) |
+| Create a range | Drag across empty timeline space (in the ruler or in the lanes) |
+| Resize / move a range | Drag an edge (in any row) / drag the body in the range strip |
+| Snap | Snap list on the toolbar, or Timing ▸ Snap: off, bar, beat (the default), 1/8, 1/16, 1/32, 1/8T, 1/16T. Hold Shift while dragging to bypass it |
+| Name a range, exact positions | Pick it in the Range list in the bottom panel (or double-click it, or right-click ▸ Edit Range…), then type a name, and `bar.beat.tick` (480 ticks per quarter) into Start/End |
+| Delete / cycle ranges | Backspace or Delete (or the panel's Delete button, Edit ▸ Delete Range) / Tab. Escape deselects. Clear All Ranges is on the toolbar and the Edit menu |
+| Tracks per range | Click the range's checkbox in a track's lane (at the range's inner left edge) to leave that track out of the range; the excluded section is hatched. Right-click the range for the same list, plus Include All, Exclude All and Reset to Track Toggles. A new range starts with the track checkboxes; after that its own checkboxes win. A track switched off is still drawn in colour inside ranges that include it. ⌥-click a track's checkbox to set it in every range too |
+
+### Exporting
+
+- Pick a mode in the bottom panel's Export list:
+  - **Whole workspace**
+  - **Ranges · keep positions**
+  - **Ranges · rebase & concatenate** (the default): the ranges back to back from bar 1
+  - **Ranges · separate files**: one file per range
+- Tick **Trim leading/trailing silence** to trim the output as a whole; tracks stay aligned.
+- Then **Save MIDI…** (⌘S), or drag the **Drag MIDI out** tile straight into another app or a folder. The tile and the line beside the Trim box say how many tracks and files will go.
+- **File names:** a one-track export is named after the track; otherwise after the range names ("Verse + Chorus"). Separate files dragged out are named after their range ("Verse.mid"; a repeat gets " (2)"); Save MIDI… adds the range name to the name you choose.
+- An export whose clips all come from one song keeps the song's title in its tempo track, so it can be matched again when it comes back.
+
+### Viewing
+
+- Zoom: ⌘ + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit).
+- Lane height: ⌥ + wheel (a small step per notch), or ⌘⇧= / ⌘⇧- (View ▸ Taller/Shorter Lanes).
+- Each lane shows its notes, lyrics and text; the rows above show tempo, time signature, markers and the ranges. The status bar shows the position under the pointer.
+
+## Works with
+
+Tested by hand on macOS (2026-11-09 and 2026-11-10). Drag and drop works as far as each app allows. On Windows the app builds and its tests pass, but drag and drop with DAWs hasn't been tried yet. Details, the clipboard investigation and open issues are in [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md).
+
+Key: ✓ works · ◐ works within limits (see notes) · — the app doesn't support it · ☐ not tested or not yet confirmed
+
+"Drag-in" means dragging from the app into MIDI Interchange; "drag-out" means dragging from MIDI Interchange into the app.
+
+| App | macOS drag-in | macOS drag-out | Windows drag-in | Windows drag-out | Notes |
+|---|---|---|---|---|---|
+| Cubase 16 | ◐ | ✓ | ☐ | ☐ | Cubase drags out one clip at a time (a Cubase limitation; also true when dragging to the Finder). A drag into Cubase doesn't set its tempo (possibly normal for a drag into an open project); opening the saved file does |
+| Reason 14 | ✓ | ◐ | ☐ | ☐ | Drag-out works, whole and by range, but Reason splits a track that mixes MIDI channels into one track per channel, and a drag doesn't set its tempo |
+| RapidComposer 6 | ◐ | ☐ | ☐ | ☐ | Single clip/track only |
+| Scaler 3 | ◐ | ◐ | ☐ | ☐ | Where it applies, e.g. the main page |
+| Staccato.ai | ✓ | ✓ | ☐ | ☐ | Round trips match tracks even when Staccato renames the song |
+| Logic Pro | — | ✓ | ☐ | ☐ | Logic doesn't drag MIDI out. A dragged file imports cleanly, but Logic doesn't take its tempo; a new project made from the file does |
+| Synthesizer V Studio 2 | ☐ | ☐ | ☐ | ☐ | |
+| Finder / Explorer | ✓ | ✓ | ☐ | ☐ | Files and folders in; files out (used throughout testing) |
+
+Yamaha Omnivocal isn't listed: no MIDI is dragged to or from it. It takes its MIDI from Cubase.
+
+**Clipboard:** Cubase, Reason and Logic Pro don't put usable MIDI on the system clipboard, so copy and paste between them and MIDI Interchange isn't possible. Pro Tools and Sibelius use `public.midi-audio`, a possible future route; see the findings page.
+
+For each app check: does the drop import at all (if not, note the formats listed in the error); are track names, channels, lyrics and tempo intact; does a rebased range land at the drop position with the correct length; and are there no stuck notes at range edges.
+
+## Known limitations
+
+- **Drag and drop depends on the other app.** File URLs and any data starting with `MThd` are handled. Qt can't receive **macOS file promises** or **Windows virtual files**; no app tested so far needed them. If a drop carries no usable MIDI, the app lists the formats it was offered, which helps a lot in a bug report. Drag-out offers temp files (in `$TMPDIR/MIDI Interchange Drag`, pruned after 24 h).
+- **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, assemble clips that share a channel. A per-track export channel is planned.
+- Clips move whole; they can't be split or trimmed yet (edge trims are planned).
+- The workspace isn't kept between sessions yet (planned); export what you need before quitting.
+- SMPTE-division files are rejected with a clear message.
+- On Windows, opening several files at once from Explorer opens several windows; drag them onto one window instead.
+- No app icon yet.
+
+The plan for what comes next is in the "To do" section of [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md).
+
+## Run from source (macOS / Windows)
 
 Source: https://github.com/AndyJBuchanan/MIDI-Interchange
 
@@ -31,29 +135,14 @@ python3.12 -m venv .venv
 Run the tests with `.venv/bin/python -m pytest -q`. The GUI tests use Qt's offscreen platform.
 For Windows commands, a new machine, VS Code setup or troubleshooting, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-## Using it
+## Documentation
 
-| Action | How |
-|---|---|
-| Import | Drop `.mid` files or folders onto the window, use File ▸ Open (⌘O), or pass paths on the command line. Each import adds to the workspace. |
-| Place a drop | While dragging in, an insertion cursor and label show where it lands, and what the label says is what happens. **Over a track lane:** at the cursor's (snapped) time on that track, but **only if the track names match**; otherwise everything arrives as new track(s) at that time, and the label and status bar say why (“nothing matches …”, with the file's and the track's song titles). When it does match, the dropped file's other tracks also join existing tracks with the same names, so a multi-track round trip (e.g. from Staccato.ai) dropped on one of its tracks lands back on all of them; unmatched tracks become new tracks. If a file repeats a track name (Staccato.ai files can), the copies pair up in order with the existing same-named tracks; extra copies become new tracks. **Song titles:** Staccato.ai names tracks "part - song" and changes the song between generations, so when no name matches exactly, names are compared again without a known song title ("Drums - Staccato Generation" joins "Drums - Industrial EBM Anthem"); the status bar says when it did. A song title is known only from the file itself (its tempo track's name, or an ending all its tracks share), so DAW clips such as "Lead - Verse" and "Lead - Chorus" never match. Exports write the song title into the tempo track when all exported clips share one. A dropped clip with exactly the same start and end as a clip already on that track **replaces** it; partial overlaps are kept (and tinted). **Over a track header:** the same, at the start (bar 1). **Anywhere else:** new track(s), at the cursor time over the timeline or at bar 1 elsewhere. Dropped DAW clips carry no position of their own, so this is how you put them where they belong. |
-| Drop several files | You're asked: **End to End** (each file starts where the previous one ends, all on **one** new track named after the first file's track; multi-track files line up by track position) or **All at Cursor** (each file at the cursor, with the usual name matching). |
-| New | File ▸ New (⌘N, also on the toolbar) clears the workspace. Undo brings it back. Export settings are kept. |
-| Create a range | Drag across empty timeline space (in the ruler or in the lanes) |
-| Resize / move a range | Drag an edge (in any row) / drag the body in the range strip |
-| Snap | Snap menu on the toolbar, or Timing ▸ Snap: off, bar, beat, 1/8, 1/16, 1/32, 1/8T, 1/16T (beat by default). Hold Shift while dragging to bypass it |
-| Name a range / precise range | Pick it in the Range list in the bottom panel (or double-click it, or right-click ▸ Edit Range…), then type a name, and `bar.beat.tick` (480 ticks per quarter) into Start/End |
-| Delete range / cycle ranges | Backspace or Delete (or the panel's Delete button, Edit ▸ Delete Range) / Tab. Escape deselects. Clear All Ranges is on the toolbar and the Edit menu |
-| Leave a track out of a range | Click the range's checkbox in that track's lane (at the range's inner left edge). An excluded section is hatched. Right-click the range for the same list, plus Include All, Exclude All and Reset to Track Toggles. A new range starts with the track toggles; after that the range's checkboxes win. A track switched off is still drawn in colour inside ranges that include it. **Option-click** (Alt-click on Windows) a track's toggle to set it in every range too. |
-| Move a clip | Alt/Option-drag it, in time and onto another track; drag below the last track for a new one. Shift keeps its time (track change only). A track left empty is removed (Undo restores it). |
-| Copy a clip | Alt+Ctrl / Option-⌘-drag it, or right-click ▸ Duplicate Clip (placed straight after it) |
-| Clip tools | Right-click a clip: Duplicate, Butt Against Previous Clip, Move Clip to Track (or New Track), Delete Clip |
-| Overlaps | Clips may overlap on a track; the overlap is tinted red and both clips' notes are exported, merged |
-| Zoom | ⌘/Ctrl + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit) |
-| Lane height | Alt + wheel (a small step per notch), ⌘⇧= / ⌘⇧- (View ▸ Taller/Shorter Lanes) |
-| Track ops | Checkbox = include in export (Edit ▸ Enable/Disable All Tracks for all of them), click the name to rename, drag ⋮⋮ to reorder, ✕ to remove. Right-click a header (or a clip ▸ Track) for Enable/Disable, Rename, Solo for Export / Unsolo (restores the previous selection), Move Up/Down, Merge Into (another track), Save This Track…, Source Info… and Remove Track |
-| Export | Pick a mode in the bottom panel's Export list: **Whole workspace**, **Ranges · keep positions**, **Ranges · rebase & concatenate** (the default) or **Ranges · separate files**; tick **Trim leading/trailing silence** to trim the output as a whole. Then Save MIDI… (⌘S) or drag the **Drag MIDI out** tile into a DAW or Finder/Explorer. The tile and the line beside the Trim box say how many tracks and files will go |
-| Tempo map | Timing ▸ Tempo Map lets you adopt any imported source's map |
+- [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
+- [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) covers how the spec was interpreted: status, decisions, risks, known gaps and the to-do list.
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code. **Before committing from a new clone**, read its section on setting each clone's commit identity and GitHub login.
+- [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md) has the app-by-app drag test results, the clipboard investigation and open interop issues.
+- [docs/TEST_CHECKLIST.md](docs/TEST_CHECKLIST.md) is the manual test checklist, one section per feature plus a regression pass.
+- [docs/RELEASING.md](docs/RELEASING.md) explains the version number, tag naming, and building and publishing a release. Release notes are in [docs/releases/](docs/releases/).
 
 ## Architecture
 
@@ -91,40 +180,6 @@ The main design decisions:
 - **File names:** a one-track export is named after the track; otherwise after the range names ("Verse + Chorus"). Separate files dragged out are named by their range alone ("Verse.mid", a repeat gets " (2)"); Save MIDI… adds the range name to the name you choose.
 - **Trim** applies to the whole output only. It cuts to the first and last note or lyric and moves every track by the same amount, so alignment is never broken.
 
-## Known limitations and risks (for Milestone 2)
-
-- **Drag-in from DAWs**: file URLs and any MIME format whose bytes start with `MThd` are handled. Qt cannot receive **macOS file promises** (`NSFilePromiseReceiver`) or **Windows virtual files** (`CFSTR_FILEDESCRIPTOR`/`FILECONTENTS`). These need native adapters (PyObjC on macOS, `pywin32`/ctypes on Windows). The apps tested so far on macOS (see the checklist below) didn't need them. Cubase exports only one clip per drag, even to the Finder. If a drop carries no usable MIDI, the app lists the formats it was offered, which is a useful probe for each app.
-- **Drag-out** currently offers file URLs to temp files. They stay in `$TMPDIR/MIDI Interchange Drag` and are pruned after 24 h. That covers Finder/Explorer and DAWs that accept file drops. Native file promises are a Milestone 2 item.
-- SMPTE-division files are rejected with a clear message.
-- Clip moves are whole-clip offsets; there's no splitting or trimming of clips.
-- A clip moved onto another track keeps its own MIDI channel(s); nothing is rewritten. A track can therefore end up mixing channels (its header lists them all). Some importers split a MIDI track by channel: **Reason 14** turns a multi-channel track into one track per channel, each with the same name plus the channel number (confirmed 2026-11-10). MIDI Interchange's own export is correct (one track, every note); the split happens in the importer. To get one track there, assemble clips that share a channel. A channel option for export is on the back burner (DESIGN_NOTES Risk 9).
-- Not built yet: per-track auto-trim (`Track.auto_trim` exists but the exporter ignores it), drag handles for individual ranges, and keeping the workspace between sessions (planned; see the DESIGN_NOTES to-do list).
-
-## Interoperability test checklist
-
-Tested by hand on macOS (2026-11-09 and 2026-11-10). Drag-and-drop works as far as each app allows. Nothing has been tested on Windows yet. Details, the clipboard investigation and open issues are in [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md).
-
-Key: ✓ works · ◐ works within limits (see notes) · — the app doesn't support it · ☐ not tested or not yet confirmed
-
-"Drag-in" means dragging from the app into MIDI Interchange; "drag-out" means dragging from MIDI Interchange into the app.
-
-| Target | macOS drag-in | macOS drag-out | Windows drag-in | Windows drag-out | Notes |
-|---|---|---|---|---|---|
-| Cubase 16 | ◐ | ✓ | ☐ | ☐ | Cubase drags out one clip at a time (a Cubase limitation; also true when dragging to the Finder) |
-| Reason 14 | ✓ | ◐ | ☐ | ☐ | Drag-out works, whole and by range; Reason splits a multi-channel track into one track per channel |
-| RapidComposer 6 | ◐ | ☐ | ☐ | ☐ | Single clip/track only |
-| Scaler 3 | ◐ | ◐ | ☐ | ☐ | Where it applies, e.g. the main page |
-| Staccato.ai | ✓ | ✓ | ☐ | ☐ | |
-| Logic Pro | — | ✓ | ☐ | ☐ | Logic doesn't drag MIDI out |
-| Synthesizer V Studio 2 | ☐ | ☐ | ☐ | ☐ | |
-| Finder / Explorer | ☐ | ☐ | ☐ | ☐ | |
-
-Yamaha Omnivocal isn't listed: no MIDI is dragged to or from it. It takes its MIDI from Cubase.
-
-**Clipboard:** Cubase, Reason and Logic Pro don't put usable MIDI on the system clipboard, so copy and paste between them and MIDI Interchange isn't possible. Pro Tools and Sibelius use `public.midi-audio`, a possible future route; see the findings page.
-
-For each target check: does the drop import at all (if not, note the formats listed in the error); are track names, channels, lyrics and tempo intact; does a rebased range land at the drop position with the correct length; and are there no stuck notes at range edges.
-
 ## Packaging
 
 ```bash
@@ -136,5 +191,5 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1   # → dist\
 
 Both scripts use PyInstaller with `midi_interchange.spec`.
 
-- **macOS:** when the git-ignored `scripts/signing.local.env` is set up, the app and DMG are signed with Developer ID and the hardened runtime, notarised by Apple and stapled. Verified on 2026-11-09: Gatekeeper reports "Notarized Developer ID". Without that file the build falls back to ad-hoc signing. Setup is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#macos-signing-and-notarisation).
-- **Windows:** builds a one-folder app, a portable zip and an installer (Inno Setup: per-user install with no admin prompt, Start-menu shortcut, uninstaller, *Open with* for `.mid`). Verified on 2026-11-09 (Windows 11 x64, Python 3.12.10): the tests pass, and the app runs from the zip and after a silent install, which also uninstalls cleanly. It is **not code-signed** yet, so SmartScreen warns on download. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#windows-build).
+- **macOS:** when the git-ignored `scripts/signing.local.env` is set up, the app and DMG are signed with Developer ID and the hardened runtime, notarised by Apple and stapled. Verified for v0.2.0-pre (2026-11-10): Gatekeeper reports "Notarized Developer ID". Without that file the build falls back to ad-hoc signing. Setup is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#macos-signing-and-notarisation).
+- **Windows:** builds a one-folder app, a portable zip and an installer (Inno Setup: per-user install with no admin prompt, Start-menu shortcut, uninstaller, *Open with* for `.mid`). Verified on 2026-11-09 (Windows 11 x64, Python 3.12.10): the app runs from the zip and after a silent install, which also uninstalls cleanly. For v0.2.0-pre (2026-11-10) the full test suite passes on Windows too. It is **not code-signed** yet, so SmartScreen warns on download. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#windows-build).
