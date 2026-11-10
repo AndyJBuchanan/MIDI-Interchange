@@ -6,6 +6,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QPoint, QPointF, Qt  # noqa: E402
+from PySide6.QtGui import QColor  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -13,7 +14,7 @@ from helpers import conductor, note, smf, track  # noqa: E402
 
 from midi_interchange.core.placement import Placement  # noqa: E402
 from midi_interchange.interchange.payload import Payload  # noqa: E402
-from midi_interchange.ui.timeline import HEADER_H  # noqa: E402
+from midi_interchange.ui.timeline import HEADER_H, note_rows  # noqa: E402
 
 
 def part(name, pitch=60, ch=0):
@@ -153,3 +154,42 @@ def test_solo_and_unsolo(win):
     ctl.solo_track(bass.id)                       # switch solo: the original selection is kept
     ctl.unsolo()
     assert (bass.enabled, keys.enabled) == (True, False) and ctl.solo is None
+
+
+@pytest.mark.parametrize("area_h", [10, 26, 40, 120, 400])
+@pytest.mark.parametrize("pmin,pmax", [(59, 61), (35, 81), (24, 127), (0, 127)])
+def test_note_rows_stay_inside_the_lane(area_h, pmin, pmax):
+    """Regression: a wide pitch range (e.g. End to End parts, drums) overflowed the lane."""
+    top = 100.0
+    y_base, row, _draw = note_rows(top, area_h, pmin, pmax)
+    for pitch in (pmin, pmax):
+        y = y_base + (pmax - pitch) * row
+        assert top - 1e-9 <= y and y + row <= top + area_h + 1e-9
+
+
+def test_end_to_end_parts_render_inside_their_lane(win):
+    """Paint the real timeline after an End to End drop of the assembly samples and check
+    no note pixels land outside the Bass lane."""
+    import os
+    from PySide6.QtGui import QImage
+    samples = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "samples", "assembly")
+    names = sorted(n for n in os.listdir(samples) if n.startswith("bass_part"))
+    win.ctl.new_document()
+    win.ctl.import_payloads([Payload(n, open(os.path.join(samples, n), "rb").read()) for n in names],
+                            Placement(end_to_end=True))
+    QApplication.processEvents()
+    tl = win.timeline
+    tl.set_zoom(25.0, 0)
+    tl.horizontalScrollBar().setValue(0)
+    tl.verticalScrollBar().setValue(0)
+    QApplication.processEvents()
+    img: QImage = tl.viewport().grab().toImage()
+    lane_bottom = HEADER_H + tl.lane_h
+    note_col = QColor(win.ctl.ws.tracks[0].color).lighter(135)
+    stray = 0
+    for y in range(lane_bottom + 1, img.height()):
+        for x in range(0, img.width(), 2):
+            c = img.pixelColor(x, y)
+            if abs(c.red() - note_col.red()) + abs(c.green() - note_col.green()) + abs(c.blue() - note_col.blue()) < 60:
+                stray += 1
+    assert stray == 0, f"{stray} note-coloured pixels below the lane"

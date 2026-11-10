@@ -30,6 +30,7 @@ Record interop results (does a drag work with an app at all) in the README check
 
 - [x] The dialog appears only for several **files**, not for one file with several tracks.
 - [ ] **End to End** (changed 2026-11-10): the files are laid in sequence from the cursor on **one** new track named after the first file's track, whatever the names. The dialog says the track's name. Multi-track files line up by position (first tracks together, second tracks together, …).
+- [ ] After End to End with the `samples/assembly/bass_part_*` files, every clip's notes draw **inside** the clip, high and low parts alike (fixed 2026-11-10: wide pitch ranges used to overflow the lane). Also check a drum track and a small lane height.
 - [x] **All at Cursor**: each file starts at the cursor on its own tracks.
 - [x] **Cancel** imports nothing. Check the source app isn't left hanging.
 - [x] Dropped on a matching lane: the name-matching rules from sections 1 and 2 still apply.

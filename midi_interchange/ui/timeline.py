@@ -70,6 +70,19 @@ def build_render(clip: Clip) -> ClipRender:
         pmin=min(pitches, default=60), pmax=max(pitches, default=60), texts=texts)
 
 
+def note_rows(area_top: float, area_h: float, pmin: int, pmax: int) -> tuple[float, float, float]:
+    """Vertical layout of a lane's notes: (y of row pmax, row pitch, drawn note height).
+
+    Note y = y_base + (pmax - pitch) * row. Rows always fit inside the area (a wide
+    pitch range compresses rather than overflowing the lane); each note is still
+    drawn at least 1.2 px tall so it stays visible.
+    """
+    span = pmax - pmin + 1
+    row = min(area_h / span, 7.0)
+    y_base = area_top + (area_h - row * span) / 2
+    return y_base, row, max(row - (1 if row >= 4 else 0), 1.2)
+
+
 class Timeline(QAbstractScrollArea):
     verticalOffsetChanged = Signal(int)
     laneHeightChanged = Signal(int)
@@ -296,10 +309,7 @@ class Timeline(QAbstractScrollArea):
         pmin, pmax = pmin - 1, pmax + 1
         area_top = top + 3 + name_h
         area_h = lane_h - 7 - name_h - (8 if track.auxiliary or lane_h < 44 else 4)
-        span = pmax - pmin + 1
-        note_h = max(min(area_h / span, 7.0), 1.5)
-        used_h = note_h * span
-        y_base = area_top + (area_h - used_h) / 2
+        y_base, note_h, draw_h = note_rows(area_top, area_h, pmin, pmax)
 
         for clip in track.clips:
             x0, x1 = self.x_of(float(clip.start)), self.x_of(float(clip.end))
@@ -323,6 +333,8 @@ class Timeline(QAbstractScrollArea):
 
             render = self.render_for(clip)
             off = float(clip.offset)
+            p.save()
+            p.setClipRect(cr.adjusted(1, 1, -1, -1))          # notes never paint outside their clip
             note_col = base.lighter(135) if track.enabled else base
             p.setPen(Qt.NoPen)
             a, b = t0 - off, t1 - off
@@ -343,7 +355,8 @@ class Timeline(QAbstractScrollArea):
                 ny = y_base + (pmax - pitch) * note_h
                 c = QColor(note_col)
                 c.setAlpha(int(140 + vel * 115 / 127) if track.enabled else 110)
-                p.fillRect(QRectF(nx, ny, nw, max(note_h - (1 if note_h >= 4 else 0), 1.2)), c)
+                p.fillRect(QRectF(nx, ny, nw, draw_h), c)
+            p.restore()
 
             if render.texts:
                 self._paint_texts(p, render, off, top, lane_h, t0, t1, base, track.enabled)
