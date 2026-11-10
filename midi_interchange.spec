@@ -9,7 +9,7 @@ import sys
 # with a regex, so keep it a plain "MAJOR.MINOR.PATCH" literal).
 # Numbers only: macOS and Windows both reject suffixes such as "-pre". Pre-release labels go on the
 # git tag / GitHub release instead (e.g. VERSION "0.1.0" is released as tag v0.1.0-pre).
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 import re as _re
 if not _re.fullmatch(r"\d+\.\d+\.\d+", VERSION):
