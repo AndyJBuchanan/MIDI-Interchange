@@ -23,6 +23,13 @@ Range boundary policy (half-open ranges [s, e)):
 * The output end-of-track is placed at the end of the range (or of the last
   concatenated range) so loop lengths survive, unless trimming is enabled.
 
+Track selection: a whole export takes the enabled tracks (the track toggles).
+A range export takes every track and asks each range which tracks it
+includes (``Range.excluded``); the track toggles are not consulted. A track
+is silent in a range that excludes it (the range still takes its time in the
+output) and is left out of the file when no exported range includes it.
+``track_ids`` narrows the candidates in both cases.
+
 Trim: content is defined as notes and lyrics. "Trim" removes leading and
 trailing time without content from the assembled output as a whole: all tracks
 shift by the same amount, so relative alignment is never changed.
@@ -39,6 +46,7 @@ import mido
 
 from .document import Track, Workspace
 from .events import MODE_CCS, Event, Msg, display_text, is_note_off, is_note_on, pair_notes
+from .names import range_label, safe_filename
 from .ranges import Range, merge_ranges
 from .timing import TempoMap, ZERO
 
@@ -55,7 +63,7 @@ class ExportMode(Enum):
 @dataclass
 class ExportOptions:
     mode: ExportMode = ExportMode.WHOLE
-    track_ids: list[str] | None = None      # None -> all enabled tracks
+    track_ids: list[str] | None = None      # None -> all tracks (whole: enabled tracks)
     ranges: list[Range] | None = None       # None -> workspace ranges
     trim: bool = False
     partial_notes: bool = True
@@ -86,9 +94,9 @@ class _Segment:
 
 def build_exports(ws: Workspace, opts: ExportOptions | None = None) -> list[ExportResult]:
     opts = opts or ExportOptions()
-    tracks = _select_tracks(ws, opts.track_ids)
     ranges = [r for r in (ws.ranges if opts.ranges is None else opts.ranges) if not r.is_empty]
     mode = opts.mode if ranges else ExportMode.WHOLE
+    tracks = export_tracks(ws, opts.track_ids, None if mode is ExportMode.WHOLE else ranges)
 
     if mode is ExportMode.WHOLE:
         if opts.trim:
@@ -103,33 +111,78 @@ def build_exports(ws: Workspace, opts: ExportOptions | None = None) -> list[Expo
         spans = merge_ranges(ranges)
         segs = [_Segment(s, e, s) for s, e in spans]
         end = spans[-1][1]
+        # each track keeps the union of the ranges that include it
+        own = {t.id: [_Segment(s, e, s) for s, e in merge_ranges([r for r in ranges if r.includes(t.id)])]
+               for t in tracks}
         if opts.trim:
-            bounds = content_bounds(tracks, spans[0][0], end)
-            if bounds is not None:
-                end = bounds[1]
-        return [ExportResult("", _segmented(ws, tracks, segs, opts, preserve=True, end=end))]
+            his = [b[1] for t in tracks for sg in own[t.id]
+                   if (b := content_bounds([t], sg.start, sg.end)) is not None]
+            if his:
+                end = max(his)
+        return [ExportResult("", _segmented(ws, tracks, segs, opts, preserve=True, end=end, own=own))]
 
     if mode is ExportMode.REBASE:
-        segs, end = _concat_segments([(r.start, r.end) for r in ranges], tracks, opts.trim)
-        return [ExportResult("", _segmented(ws, tracks, segs, opts, preserve=False, end=end))]
+        segs, end, own = _concat_segments(ranges, tracks, opts.trim)
+        return [ExportResult("", _segmented(ws, tracks, segs, opts, preserve=False, end=end, own=own))]
 
     results = []
     for i, r in enumerate(ranges):
-        segs, end = _concat_segments([(r.start, r.end)], tracks, opts.trim)
-        label = r.name or f"Range {i + 1}"
-        results.append(ExportResult(label, _segmented(ws, tracks, segs, opts, preserve=False, end=end)))
+        in_range = [t for t in tracks if r.includes(t.id)]
+        if not in_range:
+            continue
+        segs, end, _own = _concat_segments([r], in_range, opts.trim)
+        label = range_label(r.name, i)
+        results.append(ExportResult(label, _segmented(ws, in_range, segs, opts, preserve=False, end=end)))
     return results
 
 
-def save_exports(results: list[ExportResult], path: str) -> list[str]:
-    """Write results; multiple results get the range label appended."""
+def export_tracks(ws: Workspace, track_ids: list[str] | None = None,
+                  ranges: list[Range] | None = None) -> list[Track]:
+    """Tracks that go into an export. ``ranges`` None = whole export (track
+    toggles); otherwise every track some range includes (range toggles)."""
+    if ranges is None:
+        pool = ws.enabled_tracks() if track_ids is None else ws.tracks
+    else:
+        pool = [t for t in ws.tracks if any(r.includes(t.id) for r in ranges if not r.is_empty)]
+    if track_ids is None:
+        return list(pool)
+    wanted = set(track_ids)
+    return [t for t in pool if t.id in wanted]
+
+
+def export_name(tracks: list[Track], ranges: list[Range] | None) -> str:
+    """Suggested name for a single export: the track's name when there is one
+    track, else the names of the ranges used (in export order), else a default.
+    ``ranges`` None = whole export."""
+    if len(tracks) == 1:
+        return tracks[0].name
+    ids = {t.id for t in tracks}
+    names: list[str] = []
+    for r in ranges or []:
+        if r.name and not r.is_empty and any(r.includes(i) for i in ids) and r.name not in names:
+            names.append(r.name)
+    return " + ".join(names) or "MIDI Interchange Export"
+
+
+def save_exports(results: list[ExportResult], path: str, label_only: bool = False) -> list[str]:
+    """Write results; multiple results get the range label appended
+    ("out - Verse.mid"), or with label_only are named by it alone
+    ("Verse.mid", for drag-out). Clashing names get a number."""
     import os
 
     paths = []
     stem, ext = os.path.splitext(path)
     ext = ext or ".mid"
     for res in results:
-        p = f"{stem}{ext}" if len(results) == 1 else f"{stem} - {_safe(res.label)}{ext}"
+        if len(results) == 1:
+            base = stem
+        elif label_only:
+            base = os.path.join(os.path.dirname(stem), safe_filename(res.label))
+        else:
+            base = f"{stem} - {safe_filename(res.label, 'range')}"
+        p, n = f"{base}{ext}", 2
+        while p in paths:
+            p, n = f"{base} ({n}){ext}", n + 1
         res.midi.save(p)
         paths.append(p)
     return paths
@@ -181,26 +234,27 @@ def choose_ppq(source_ppqs: Iterable[int], times: Iterable[Fraction]) -> int:
 # ---------------------------------------------------------------------------
 # internals
 
-def _select_tracks(ws: Workspace, ids: list[str] | None) -> list[Track]:
-    if ids is None:
-        return ws.enabled_tracks()
-    wanted = set(ids)
-    return [t for t in ws.tracks if t.id in wanted]
-
-
-def _concat_segments(spans: list[tuple[Fraction, Fraction]], tracks: list[Track],
-                     trim: bool) -> tuple[list[_Segment], Fraction]:
+def _concat_segments(ranges: list[Range], tracks: list[Track],
+                     trim: bool) -> tuple[list[_Segment], Fraction, dict[str, list[_Segment]]]:
+    """Ranges end to end. Returns the segments, the output end, and per track
+    the segments of the ranges that include it."""
     segs: list[_Segment] = []
+    own: dict[str, list[_Segment]] = {t.id: [] for t in tracks}
     cursor = ZERO
-    for s, e in spans:
+    for r in ranges:
+        members = [t for t in tracks if r.includes(t.id)]
+        s, e = r.start, r.end
         if trim:
-            b = content_bounds(tracks, s, e)
+            b = content_bounds(members, s, e)
             if b is None:
                 continue
             s, e = b
-        segs.append(_Segment(s, e, cursor))
+        seg = _Segment(s, e, cursor)
+        segs.append(seg)
+        for t in members:
+            own[t.id].append(seg)
         cursor += e - s
-    return segs, cursor
+    return segs, cursor, own
 
 
 def _whole(ws: Workspace, tracks: list[Track]) -> mido.MidiFile:
@@ -218,11 +272,13 @@ def _whole(ws: Workspace, tracks: list[Track]) -> mido.MidiFile:
 
 
 def _segmented(ws: Workspace, tracks: list[Track], segs: list[_Segment], opts: ExportOptions,
-               preserve: bool, end: Fraction) -> mido.MidiFile:
+               preserve: bool, end: Fraction, own: dict[str, list[_Segment]] | None = None) -> mido.MidiFile:
+    """``segs`` drive the conductor; ``own`` (default: all of segs) gives each
+    track the segments it takes part in."""
     out_tracks = []
     for track in tracks:
         items: list[_Item] = []
-        for si, seg in enumerate(segs):
+        for si, seg in enumerate(segs if own is None else own[track.id]):
             items.extend(_extract(track, seg, si, opts.partial_notes))
         out_tracks.append((track, items, end))
     conductor = _tempo_items(ws.tempo_map, segs, preserve=preserve, until=end if preserve else None)
@@ -348,11 +404,24 @@ def _serialize(ws: Workspace, tracks: list[Track], conductor: list[_Item],
     ppq = choose_ppq(src_ppqs, all_times)
 
     mf = mido.MidiFile(type=1, ticks_per_beat=ppq)
-    mf.tracks.append(_to_mido_track(conductor, end, ppq, name=None))
+    song = export_song(ws, tracks)
+    mf.tracks.append(_to_mido_track(conductor, end, ppq, name=encode_meta_text(song, "") if song else None))
     for track, items, tend in out_tracks:
         name = encode_meta_text(track.name, track.original_name)
         mf.tracks.append(_to_mido_track(items, tend, ppq, name=name))
     return mf
+
+
+def export_song(ws: Workspace, tracks: list[Track]) -> str:
+    """The song title to write as the conductor track's name: the one song
+    every exported clip's source shares, else none. Keeps the title through a
+    round trip so name matching can remove it again (placement.py)."""
+    songs = set()
+    for t in tracks:
+        for c in t.clips:
+            src = ws.source(c.source_id)
+            songs.add(src.song if src else "")
+    return songs.pop() if len(songs) == 1 else ""
 
 
 def _tick(t: Fraction, ppq: int) -> int:
@@ -371,6 +440,3 @@ def _to_mido_track(items: list[_Item], end: Fraction, ppq: int, name: str | None
     trk.append(mido.MetaMessage("end_of_track", time=max(_tick(end, ppq), prev) - prev))
     return trk
 
-
-def _safe(label: str) -> str:
-    return "".join(c if c.isalnum() or c in " -_()" else "_" for c in label).strip() or "range"

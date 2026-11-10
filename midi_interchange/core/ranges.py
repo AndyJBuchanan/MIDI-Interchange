@@ -1,8 +1,14 @@
-"""Export ranges: half-open intervals [start, end) in quarter notes."""
+"""Export ranges: half-open intervals [start, end) in quarter notes.
+
+Each range carries its own track selection (``excluded``: ids of tracks left
+out of that range). It is seeded from the track toggles when the range is
+created and is independent of them afterwards: in range exports the range's
+selection wins over the track toggle.
+"""
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 
 
@@ -12,6 +18,7 @@ class Range:
     end: Fraction
     name: str = ""
     id: str = ""
+    excluded: set[str] = field(default_factory=set)
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -29,6 +36,18 @@ class Range:
 
     def contains(self, t: Fraction) -> bool:
         return self.start <= t < self.end
+
+    def includes(self, track_id: str) -> bool:
+        return track_id not in self.excluded
+
+    def set_included(self, track_id: str, included: bool) -> None:
+        if included:
+            self.excluded.discard(track_id)
+        else:
+            self.excluded.add(track_id)
+
+    def copy(self) -> "Range":
+        return replace(self, excluded=set(self.excluded))
 
     def overlaps(self, start: Fraction, end: Fraction) -> bool:
         return self.start < end and start < self.end

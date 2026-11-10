@@ -5,9 +5,11 @@ from fractions import Fraction
 
 from PySide6.QtCore import QObject, Signal
 
-from ..core.document import Workspace
-from ..core.export_smf import ExportMode, ExportOptions, ExportResult, build_exports
+from ..core.document import Track, Workspace
+from ..core.export_smf import (ExportMode, ExportOptions, ExportResult, build_exports, export_name,
+                               export_tracks)
 from ..core.import_smf import ImportError_, import_smf_bytes
+from ..core.names import quoted
 from ..core.placement import Placement, place_imports
 from ..core.ranges import Range
 from ..core.timing import SnapSetting, ZERO
@@ -104,8 +106,13 @@ class Controller(QObject):
             if stats["new_tracks"]:
                 parts.append(f"{stats['new_tracks']} new track(s)")
             if stats["onto_existing"]:
-                names = ", ".join(f"“{n}”" for n in stats["onto_names"])
-                parts.append(f"{stats['onto_existing']} onto existing {names}")
+                parts.append(f"{stats['onto_existing']} onto existing {quoted(stats['onto_names'], None)}")
+            if stats["by_song"]:
+                songs = quoted(stats["songs_ignored"], None)
+                word = "title" if len(stats["songs_ignored"]) == 1 else "titles"
+                parts.append(f"{stats['by_song']} matched ignoring song {word} {songs}")
+            if stats["no_match"]:
+                parts.append(f"new because {stats['no_match']}")
             if stats["replaced"]:
                 parts.append(f"replacing {stats['replaced']} identical clip(s)")
             if placement and placement.time:
@@ -197,12 +204,22 @@ class Controller(QObject):
             self.tracksChanged.emit()
 
     # -- tracks --------------------------------------------------------------
-    def set_track_enabled(self, track_id: str, enabled: bool) -> None:
+    def set_track_enabled(self, track_id: str, enabled: bool, ranges_too: bool = False) -> None:
+        """Switch a track on/off. ``ranges_too`` (Option/Alt-click) also sets the
+        track's toggle in every range to match, as one undo step."""
         t = self.ws.track(track_id)
-        if t and t.enabled != enabled:
-            self.checkpoint()
-            t.enabled = enabled
-            self.tracksChanged.emit()
+        if t is None:
+            return
+        ranges = [r for r in self.ws.ranges if r.includes(track_id) != enabled] if ranges_too else []
+        if t.enabled == enabled and not ranges:
+            return
+        self.checkpoint()
+        t.enabled = enabled
+        for r in ranges:
+            r.set_included(track_id, enabled)
+        self.tracksChanged.emit()
+        if ranges:
+            self.rangesChanged.emit()
 
     def rename_track(self, track_id: str, name: str) -> None:
         t = self.ws.track(track_id)
@@ -284,7 +301,7 @@ class Controller(QObject):
 
     # -- ranges -----------------------------------------------------------------
     def add_range(self, start: Fraction, end: Fraction) -> Range:
-        r = Range(start, end)
+        r = Range(start, end, excluded={t.id for t in self.ws.tracks if not t.enabled})
         self.ws.ranges.append(r)
         if self.export_mode is ExportMode.WHOLE:
             self.export_mode = ExportMode.REBASE
@@ -319,6 +336,28 @@ class Controller(QObject):
         if self.selected_range_id == range_id:
             self.selected_range_id = None
             self.selectionChanged.emit()
+        self.rangesChanged.emit()
+
+    def set_range_track_included(self, range_id: str, track_id: str, included: bool) -> None:
+        """Include/exclude one track in one range (the range's toggle wins over the track's)."""
+        r = self.ws.range(range_id)
+        if r is None or self.ws.track(track_id) is None or r.includes(track_id) == included:
+            return
+        self.checkpoint()
+        r.set_included(track_id, included)
+        self.rangesChanged.emit()
+
+    def set_range_tracks(self, range_id: str, included: bool | None) -> None:
+        """Include all (True), exclude all (False) or reset to the track toggles (None)."""
+        r = self.ws.range(range_id)
+        if r is None:
+            return
+        want = {t.id: (t.enabled if included is None else included) for t in self.ws.tracks}
+        if all(r.includes(i) == on for i, on in want.items()):
+            return
+        self.checkpoint()
+        for i, on in want.items():
+            r.set_included(i, on)
         self.rangesChanged.emit()
 
     def clear_ranges(self) -> None:
@@ -362,12 +401,12 @@ class Controller(QObject):
                       range_ids: list[str] | None = None) -> list[ExportResult]:
         return build_exports(self.ws, self.export_options(track_ids, range_ids))
 
+    def export_tracks(self, track_ids: list[str] | None = None) -> list[Track]:
+        """The tracks an export would contain: track toggles for a whole
+        export, range toggles when exporting ranges."""
+        ranges = self.ws.ranges if self.ws.ranges and self.export_mode is not ExportMode.WHOLE else None
+        return export_tracks(self.ws, track_ids, ranges)
+
     def default_export_name(self, track_ids: list[str] | None = None) -> str:
-        tracks = [self.ws.track(i) for i in track_ids] if track_ids else self.ws.enabled_tracks()
-        tracks = [t for t in tracks if t]
-        if len(tracks) == 1:
-            return tracks[0].name
-        r = self.selected_range
-        if r and r.name and self.export_mode is not ExportMode.WHOLE:
-            return r.name
-        return "MIDI Interchange Export"
+        ranges = None if self.export_mode is ExportMode.WHOLE or not self.ws.ranges else self.ws.ranges
+        return export_name(self.export_tracks(track_ids), ranges)

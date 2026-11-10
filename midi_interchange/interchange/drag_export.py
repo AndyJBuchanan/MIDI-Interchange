@@ -11,6 +11,7 @@ import tempfile
 import time
 
 from ..core.export_smf import ExportResult, save_exports
+from ..core.names import safe_filename
 
 _DIR = os.path.join(tempfile.gettempdir(), "MIDI Interchange Drag")
 MAX_AGE_S = 24 * 3600
@@ -42,7 +43,7 @@ def prune_old(max_age: float = MAX_AGE_S) -> None:
 
 def write_temp(results: list[ExportResult], base_name: str) -> list[str]:
     # Each drag gets its own folder so the visible filename stays clean
-    # (destination apps typically name the new track/clip after it).
+    # (destination apps typically name the new track/clip after it). Separate
+    # files are named by their range alone ("Verse.mid", "Verse (2).mid").
     folder = tempfile.mkdtemp(prefix=time.strftime("%H%M%S-"), dir=temp_dir())
-    safe = "".join(c if c.isalnum() or c in " -_()" else "_" for c in base_name).strip() or "MIDI"
-    return save_exports(results, os.path.join(folder, safe + ".mid"))
+    return save_exports(results, os.path.join(folder, safe_filename(base_name) + ".mid"), label_only=True)

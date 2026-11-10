@@ -23,6 +23,7 @@ import mido
 
 from .document import Clip, Source, Track, new_id, track_channels
 from .events import Event, display_text, is_channel_msg
+from .names import song_title
 from .timing import TempoChange, TempoMap, TimeSigChange
 
 
@@ -129,11 +130,15 @@ def import_smf_bytes(data: bytes, name: str, path: str | None = None,
             label = display_names[ti] or fallback
             tracks.append(make_track(label, tname, events, end, ti))
 
+    conductor = ""
+    if mf.type == 1 and raw_tracks and not track_channels(raw_tracks[0][2]):
+        conductor = display_names[0]
     source = Source(
         id=source_id, name=name, ppq=ppq, smf_format=mf.type,
         imported_at=datetime.now(), raw=data, tempo_map=TempoMap(tempos, sigs),
         path=path, app=app, track_names=tuple(display_names),
         warnings=tuple(warnings),
+        song=song_title(conductor, [t.name for t in tracks]),
     )
     return source, tracks
 

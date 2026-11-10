@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMen
                                QSplitter, QToolBar, QVBoxLayout, QWidget)
 
 from ..core.import_smf import ImportError_, import_smf_bytes
-from ..core.placement import Placement, assign_tracks, end_to_end_names, target_matches
+from ..core.names import quoted
+from ..core.placement import Placement, plan_drop
 from ..core.timing import ZERO
 from ..interchange.drag_import import extract_payloads
 from ..interchange.payload import Payload
@@ -94,7 +95,7 @@ class MainWindow(QMainWindow):
         self._had_tracks = False
         self._drag_payloads: list[Payload] = []
         self._drag_diagnostics: list[str] = []
-        self._drag_names: list[list[str]] | None = None   # per file
+        self._drag_parsed: list | None = None   # the dragged files, parsed (None = not readable yet)
 
     # ------------------------------------------------------------------ actions
     def _act(self, text: str, slot, shortcut=None, tip: str | None = None) -> QAction:
@@ -260,15 +261,15 @@ class MainWindow(QMainWindow):
         if not (mime.hasUrls() or mime.formats()):
             return
         e.acceptProposedAction()
-        self._drag_payloads, self._drag_diagnostics, self._drag_names = [], [], None
+        self._drag_payloads, self._drag_diagnostics, self._drag_parsed = [], [], None
         if e.source() is None:
             # Read the payload now so the cursor can say which track names match.
             # Some apps only hand data over on drop; then names stay unknown.
             try:
                 self._drag_payloads, self._drag_diagnostics = extract_payloads(mime)
-                self._drag_names = self._payload_track_names(self._drag_payloads) if self._drag_payloads else None
+                self._drag_parsed = self.ctl.parse_payloads(self._drag_payloads)[0] if self._drag_payloads else None
             except Exception:  # noqa: BLE001 - previewing must never break the drag
-                self._drag_payloads, self._drag_names = [], None
+                self._drag_payloads, self._drag_parsed = [], None
         self.overlay.setGeometry(self.centralWidget().rect())
         self.overlay.show()
         self.overlay.raise_()
@@ -281,17 +282,6 @@ class MainWindow(QMainWindow):
     def dragLeaveEvent(self, _e) -> None:
         self.overlay.hide()
         self.timeline.set_drop_indicator(None)
-
-    @staticmethod
-    def _payload_track_names(payloads: list[Payload]) -> list[list[str]]:
-        names: list[list[str]] = []
-        for p in payloads:
-            try:
-                _src, tracks = import_smf_bytes(p.data, p.name)
-            except ImportError_:
-                continue
-            names.append([t.name for t in tracks])
-        return names
 
     def drop_placement(self, pos: QPointF, bypass_snap: bool = False) -> tuple[Placement, int | None]:
         """Placement for a drop at a window position, plus the timeline lane it points at."""
@@ -318,28 +308,20 @@ class MainWindow(QMainWindow):
         bypass = bool(e.modifiers() & Qt.ShiftModifier)
         pl, lane = self.drop_placement(e.position(), bypass)
         bbt = self.ctl.ws.tempo_map.format_bbt(pl.time)
-        names = self._drag_names
         n_files = len(self._drag_payloads)
         many = f"{n_files} files" if n_files > 1 else ""
-        if pl.target_track_id:
+        if pl.target_track_id and self._drag_parsed is None:
             tgt = self.ctl.ws.track(pl.target_track_id)
-            if names is None:
-                label = f"Onto “{tgt.name}” (and other tracks) at {bbt} if the names match, else new track(s)"
-            elif not target_matches(tgt, [n for file_names in names for n in file_names]):
-                label = f"New track(s) at {bbt}: names differ from “{tgt.name}”"
-                lane = None
-            else:
-                dests = [d for file_names in names
-                         for d in assign_tracks(self.ctl.ws.tracks, tgt, file_names)]
-                hit_names = list(dict.fromkeys(d.name for d in dests if d is not None))
-                n_new = sum(d is None for d in dests)
-                shown = ", ".join(f"“{n}”" for n in hit_names[:3]) + (" …" if len(hit_names) > 3 else "")
-                label = f"Onto {shown} at {bbt}"
-                if n_new:
-                    label += f", {n_new} new track(s)"
+            label = f"Onto “{tgt.name}” (and other tracks) at {bbt} if the names match, else new track(s)"
         else:
-            label = f"New track(s) at {bbt}"
-            lane = None
+            plan = plan_drop(self.ctl.ws, self._drag_parsed or [], pl)
+            if plan.matching:
+                label = f"Onto {quoted(t.name for t in plan.onto())} at {bbt}"
+                if plan.new_names:
+                    label += f", {len(plan.new_names)} new track(s)"
+            else:
+                label = f"New track(s) at {bbt}" + (f": {plan.no_match}" if plan.no_match else "")
+                lane = None
         if many:
             label += f"  ·  {many}"
         self.timeline.set_drop_indicator((lane, pl.time, label))
@@ -353,7 +335,7 @@ class MainWindow(QMainWindow):
         payloads, diagnostics = self._drag_payloads, self._drag_diagnostics
         if not payloads:
             payloads, diagnostics = extract_payloads(e.mimeData())
-        self._drag_payloads, self._drag_diagnostics, self._drag_names = [], [], None
+        self._drag_payloads, self._drag_diagnostics, self._drag_parsed = [], [], None
         e.acceptProposedAction()
         if len(payloads) > 1:
             # Ask after the drop completes, so the source app isn't left waiting on a modal dialog.
@@ -367,11 +349,11 @@ class MainWindow(QMainWindow):
             box = QMessageBox(self)
             box.setWindowTitle("Place dropped files")
             box.setText(f"{len(payloads)} files were dropped.")
-            run = end_to_end_names(self._payload_track_names(payloads))
+            run = plan_drop(self.ctl.ws, self.ctl.parse_payloads(payloads)[0], Placement(end_to_end=True)).new_names
             if len(run) == 1:
                 e2e = f"End to End joins them on one new track, “{run[0]}”, in the order dropped."
             else:
-                shown = ", ".join(f"“{n}”" for n in run[:4]) + (" …" if len(run) > 4 else "")
+                shown = quoted(run, 4)
                 e2e = (f"End to End lays them in the order dropped on {len(run)} new tracks ({shown}), "
                        "lining up each file's tracks by position.")
             box.setInformativeText(e2e + "\n\nAll at Cursor places each file at the cursor "
@@ -395,8 +377,8 @@ class MainWindow(QMainWindow):
     def save_midi(self, track_ids: list[str] | None = None) -> None:
         if not isinstance(track_ids, list):
             track_ids = None
-        if not (track_ids or self.ctl.ws.enabled_tracks()):
-            self.statusBar().showMessage("No enabled tracks to export", 6000)
+        if not self.ctl.export_tracks(track_ids):
+            self.statusBar().showMessage("No tracks to export (check the track and range toggles)", 6000)
             return
         try:
             results = self.ctl.build_exports(track_ids=track_ids)

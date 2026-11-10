@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass, field
+from fractions import Fraction
 
 import mido
 
@@ -51,6 +52,44 @@ SONG: list[Part] = [
     Part("Lead", 1, 960, 16, _run(100, 8, step=2.0)),
     Part("Bass", 4, 960, 16, _run(110, 16, dur=0.25)),
 ]
+
+# Seven distinctly named tracks (A-G, channels 1-7), for range round trips:
+# export ranges as separate files, drop them back into a new workspace.
+# 12 bars of 4/4, in three 4-bar sections (bars 1-4, 5-8, 9-12), so three
+# equal ranges cut cleanly. Recognisable by eye:
+# * each track has its own shape (below) and its own four pitches, so any
+#   note identifies its track;
+# * in section k the shape is played k times per bar, so 1, 2 or 3 repeats
+#   per bar shows which section a clip came from.
+SEVEN_FILE = "seven_tracks_A-G.mid"
+SEVEN_BARS = 12
+# shape: (start, length) as fractions of one repeat, and a pitch step 0-3
+_F = Fraction
+SEVEN_SHAPES: dict[str, list[tuple[Fraction, Fraction, int]]] = {
+    "A": [(_F(i, 4), _F(1, 4), i) for i in range(4)],              # rising stairs
+    "B": [(_F(i, 4), _F(1, 4), 3 - i) for i in range(4)],          # falling stairs
+    "C": [(_F(i, 4), _F(1, 4), 3 * (i % 2)) for i in range(4)],    # zigzag low-high
+    "D": [(_F(0), _F(1), p) for p in (0, 2, 3)],                   # held chord
+    "E": [(_F(0), _F(1), 1)],                                      # one long note
+    "F": [(_F(0), _F(1, 2), 0), (_F(1, 2), _F(1, 4), 3), (_F(3, 4), _F(1, 4), 3)],  # long-short-short
+    "G": [(_F(0), _F(1, 2), 3), (_F(1, 2), _F(1, 2), 0)],          # high then low
+}
+
+
+def _seven_notes(shape: list, base: int) -> tuple:
+    out = []
+    for bar in range(SEVEN_BARS):
+        reps = bar // (SEVEN_BARS // 3) + 1          # 1, 2, 3 repeats per bar by section
+        rep_len = _F(4, reps)
+        for r in range(reps):
+            t0 = bar * 4 + r * rep_len
+            for start, length, step in shape:
+                out.append((t0 + start * rep_len, length * rep_len * _F(9, 10), base + step))
+    return tuple(out)
+
+
+SEVEN: list[Part] = [Part(n, i, 480, SEVEN_BARS * 4, _seven_notes(SEVEN_SHAPES[n], 36 + 6 * i))
+                     for i, n in enumerate("ABCDEFG")]
 
 
 def _ticks(beats: float, ppq: int) -> int:
@@ -95,6 +134,7 @@ def build(parts: list[Part]) -> mido.MidiFile:
 def all_files() -> dict[str, mido.MidiFile]:
     out = {name: build([p]) for name, p in PARTS.items()}
     out[SONG_FILE] = build(SONG)
+    out[SEVEN_FILE] = build(SEVEN)
     return out
 
 

@@ -105,6 +105,12 @@ def test_full_workflow(win, tmp_path):
     save_exports(ctl.build_exports(), str(out))
     mf = mido.MidiFile(str(out))
     names = [m.name for t in mf.tracks for m in t if m.type == "track_name"]
+    # the range was drawn while Drums was on: the range's toggle wins
+    assert "Low End" in names and "Drums" in names
+    ctl.set_range_track_included(r.id, drums.id, False)
+    save_exports(ctl.build_exports(), str(out))
+    mf = mido.MidiFile(str(out))
+    names = [m.name for t in mf.tracks for m in t if m.type == "track_name"]
     assert "Low End" in names and "Drums" not in names
     bass_notes = notes_of(track_by_name(mf, "Low End"), mf.ticks_per_beat)
     assert bass_notes and bass_notes[0][0] == 0 and max(n[1] for n in bass_notes) <= 8
@@ -142,3 +148,51 @@ def test_zoom_keeps_anchor(win):
     t_before = tl.t_of(400)
     tl.zoom_by(2.0, 400)
     assert abs(tl.t_of(400) - t_before) < 0.1
+
+
+def test_alt_wheel_lane_height_is_gentle(win):
+    """Studio 2026-11-10: Alt+wheel was too sensitive. 3 px per wheel notch,
+    and small trackpad deltas add up instead of each stepping 6 px."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QWheelEvent
+    tl = win.timeline
+    tl.set_lane_height(68)
+
+    def wheel(dy):
+        pos = QPointF(200, 120)
+        tl.wheelEvent(QWheelEvent(pos, tl.mapToGlobal(pos), QPoint(0, 0), QPoint(0, dy),
+                                  Qt.NoButton, Qt.AltModifier, Qt.NoScrollPhase, False))
+
+    wheel(120)
+    assert tl.lane_h == 71
+    for _ in range(4):
+        wheel(10)                       # a slow trackpad stroke: 40 units
+    assert tl.lane_h == 72
+    wheel(-240)
+    assert tl.lane_h == 66
+
+
+def test_drop_preview_knows_song_titles(win):
+    """Studio 2026-11-10: the drop preview still compared exact names, so over a
+    matching row it said 'names differ' for a new Staccato generation."""
+    from PySide6.QtCore import QMimeData, QUrl
+    from PySide6.QtGui import QDragEnterEvent
+    from midi_interchange.ui.timeline import HEADER_H
+    win.import_paths([str(SAMPLES / "non-synthetic" / "Industrial EBM Anthem_1793561268176.mid")])
+    QApplication.processEvents()
+    tl = win.timeline
+    tl.set_zoom(20.0, 0)
+    tl.horizontalScrollBar().setValue(0)
+    tl.verticalScrollBar().setValue(0)
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(SAMPLES / "non-synthetic" / "Staccato Generation_1794336609801.mid"))])
+
+    def preview(lane):
+        y = HEADER_H + lane * tl.lane_h + tl.lane_h // 2
+        pt = tl.viewport().mapTo(win, QPoint(int(tl.x_of(8.1)), y))
+        win.dragEnterEvent(QDragEnterEvent(pt, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+        return tl._drop_ind[2]
+
+    assert preview(0).startswith("Onto “Heavy EBM Drums - Industrial EBM Anthem”")
+    assert "nothing matches “Piercing Lead - Industrial EBM Anthem”" in preview(2)   # not in the new generation
+    win.dragLeaveEvent(None)

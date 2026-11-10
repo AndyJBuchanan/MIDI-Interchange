@@ -2,14 +2,26 @@
 
 Companion to [DESIGN_BRIEF.md](DESIGN_BRIEF.md), the original spec, kept verbatim. This file records how the brief was interpreted: decisions, deviations, known gaps and risks. Update it whenever direction changes.
 
-## Status by milestone (updated 2026-11-09)
+## Why MIDI Interchange
+
+The brief's aim is to remove the friction of moving MIDI between applications. Hand testing on macOS keeps confirming that the friction is real: each app supports a different, often one-way, subset of MIDI drag-and-drop, and there is no shared MIDI clipboard. Detail is in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md).
+
+- **Logic Pro** accepts dragged MIDI but doesn't drag MIDI out.
+- **Cubase 16** drags only one MIDI part at a time from its Project window, however many are selected, to any destination: the desktop, MIDI Interchange or a VST plugin it hosts. Dragged parts also lose their position.
+- **Reason 14** takes MIDI dragged from a VST plugin it hosts into its sequencer, but can't drag sequencer MIDI into that plugin. It also splits a multi-channel track into one track per channel on import.
+- **RapidComposer 6** drags only a single clip or track out.
+- **Clipboard:** Cubase, Reason and Logic keep copy and paste to themselves (a pointer, an encrypted blob, a text listing). No public MIDI clipboard format is in common use.
+
+Plain MIDI files via file URLs are the one route that works almost everywhere. MIDI Interchange builds on that: it takes whatever each app can give (one part at a time, whole files), assembles and trims it in one place, and hands it on as a file any of them can accept.
+
+## Status by milestone (updated 2026-11-10)
 
 | Milestone | Status |
 |---|---|
 | M1 Functional vertical slice | **Done.** Every M1 bullet works in the GUI, and the brief's success criterion is covered by a headless GUI test (`tests/test_ui.py::test_full_workflow`). |
-| M2 Interchange | **Partly done.** Drag-in accepts file URLs and raw MThd data; drag-out offers file URLs to temp files; individual-track export and source provenance are done. Native file promises and virtual files are **not** done (see Risks). Even so, hand tests on macOS (2026-11-09) show drag in and out working with Cubase 16, Scaler 3 and Staccato.ai; drag-in with Reason 14 and RapidComposer 6 (drag-out not yet confirmed); and drag-out to Logic Pro, which can't drag MIDI out. Cubase drags out only one clip at a time, even to the Finder (a Cubase limitation). Details in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md). Clipboard import was investigated and isn't viable for those DAWs. |
-| M3 Advanced ranges | **Mostly done.** Multiple named ranges, resize and move, concatenation, separate-range export, the boundary policy and whole-output trim are done. Per-track trim and per-range drag handles are **not** done. |
-| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, Developer ID signed, hardened runtime). They're notarised and stapled, and Gatekeeper accepts them. On Windows, the one-folder build, zip and Inno Setup installer build and launch (x64, 2026-11-09), but aren't code-signed. Workspace persistence is **not** done. |
+| M2 Interchange | **Partly done.** Drag-in accepts file URLs and raw MThd data; drag-out offers file URLs to temp files; individual-track export and source provenance are done. Native file promises and virtual files are **not** done (see Risks). Even so, hand tests on macOS (2026-11-09) show drag in and out working with Cubase 16, Scaler 3, Staccato.ai and Reason 14 (Reason drag-out confirmed 2026-11-10); drag-in with RapidComposer 6 (drag-out not yet confirmed); and drag-out to Logic Pro, which can't drag MIDI out. Cubase drags out only one clip at a time, even to the Finder (a Cubase limitation). Details in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md). Clipboard import was investigated and isn't viable for those DAWs. |
+| M3 Advanced ranges | **Mostly done.** Multiple named ranges, resize and move, concatenation, separate-range export, per-range track selection, the boundary policy and whole-output trim are done. Per-track trim and per-range drag handles are **not** done. |
+| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, Developer ID signed, hardened runtime). They're notarised and stapled, and Gatekeeper accepts them. On Windows, the one-folder build, zip and Inno Setup installer build and launch (x64, 2026-11-09), but aren't code-signed. Workspace persistence is **not** done (keeping one session between runs is planned; see To do). |
 
 User priority, given with the brief: the timeline is the primary UI element and must work early and well. It was built in M1, not deferred.
 
@@ -46,7 +58,7 @@ Python 3.12 venv, PySide6 6.12, mido 1.3.3, pytest 8, PyInstaller 6.x. The UI us
 - **Format 0** files are split into one track per channel (`"<name> · Ch N"`), plus a `"· Meta"` track for non-channel events. Channel numbers stay intact in the messages.
 - A **conductor track** that contained only tempo and time-signature data is dropped once those events are lifted out. A track holding only other metas (lyrics, markers) becomes an **auxiliary** track: kept, exported, shown without notes.
 - Each import adds a `Source` (frozen provenance: filename, path, app, PPQ, format, timestamp, original track names, **raw bytes**, warnings) and appends its tracks. Imports never replace material already in the workspace.
-- **Placement** (`core/placement.py`, agreed 2026-11-09, modelled on Cubase/Reason): imports land at the drop's insertion cursor. Dropped on a track lane (or its header, for bar 1), an imported track joins that track **only when the names match** (case-insensitive, against the track's current or original name); if nothing matches that track, everything becomes new tracks at the cursor time. When the track under the cursor does match, the drop's other imported tracks also join existing tracks with matching names (the target wins ties; tracks made by the same drop are never candidates); the rest become new tracks. Added 2026-11-09 after hand testing, for multi-track round trips. A clip landing on an existing track replaces any clip there with exactly the same start and end (only clips that existed before the drop); partial overlaps are kept. Sources left with no clips are pruned (the tempo source is kept). Undo restores the replaced clips. Each existing track takes at most one imported track per file: a file that repeats a name (seen in Staccato.ai exports, 2026-11-10) pairs its copies in order with the existing same-named tracks, and extras become new tracks; Dropped elsewhere, everything becomes new tracks. When several *files* are dropped the user picks End to End or All at Cursor. **End to End** (revised 2026-11-10 after hand testing): files laid in sequence on **one** new track named after the first file's track, ignoring names; multi-track files line up by track position; no matching to existing tracks (re-dropping a run isn't supported). The dialog names the resulting track(s). File ▸ Open always adds new tracks at bar 1.
+- **Placement** (`core/placement.py`, agreed 2026-11-09, modelled on Cubase/Reason): imports land at the drop's insertion cursor. Dropped on a track lane (or its header, for bar 1), an imported track joins that track **only when the names match** (case-insensitive, against the track's current or original name); if nothing matches that track, everything becomes new tracks at the cursor time. When the track under the cursor does match, the drop's other imported tracks also join existing tracks with matching names (the target wins ties; tracks made by the same drop are never candidates); the rest become new tracks. Added 2026-11-09 after hand testing, for multi-track round trips. A clip landing on an existing track replaces any clip there with exactly the same start and end (only clips that existed before the drop); partial overlaps are kept. Sources left with no clips are pruned (the tempo source is kept). Undo restores the replaced clips. Each existing track takes at most one imported track per file: a file that repeats a name (seen in Staccato.ai exports, 2026-11-10) pairs its copies in order with the existing same-named tracks, and extras become new tracks. **Song titles** (added 2026-11-10 after a studio round trip failed: Staccato renamed "Heavy EBM Drums - Industrial EBM Anthem" to "Heavy EBM Drums - Staccato Generation"): matching has two levels, paired in this order across the whole file: exact names, then names with a known song title removed from the end (" - <song>") on both sides. A source's song (`Source.song`, `names.song_title`) is its conductor track's name when some track ends in " - <it>", else an ending every named track shares (two or more tracks). A third, generic level (cut at the last " - ") was discussed and rejected as too loose: it would join "Lead - Verse" to "Lead - Chorus". Consequence: Reason's shortened names ("Monotone Chant - Industr Ch4") don't match. Export writes the song title as the conductor track's name when every exported clip's source shares one, so a title survives a round trip through MIDI Interchange (checked 2026-11-10: Cubase, Reason and Logic import such a file with no extra track; see INTEROP_FINDINGS). Dropped elsewhere, everything becomes new tracks. When several *files* are dropped the user picks End to End or All at Cursor. **End to End** (revised 2026-11-10 after hand testing): files laid in sequence on **one** new track named after the first file's track, ignoring names; multi-track files line up by track position; no matching to existing tracks (re-dropping a run isn't supported). The dialog names the resulting track(s). File ▸ Open always adds new tracks at bar 1. **One decision, one place** (2026-11-10, after the drop preview kept the old exact-name rule while the drop used song titles): `placement.plan_drop()` decides every drop and changes nothing; the drop preview, the several-files dialog and `place_imports()` (which only carries the plan out) all use it. Every name rule (comparing names, song titles, range labels, quoting names in messages, cleaning file names) is in `core/names.py`. A drop on a track that matches nothing says why in the preview and the status bar: the file's tracks and song title, and the track's song title.
 - **Why:** DAW clip drags carry no position. Tested 2026-11-09: a Cubase part at bar 9 arrives at bar 1. And Cubase drags only one clip at a time, so parts are assembled by dropping them one by one where they belong.
 - **Tempo policy:** the first source with a tempo map becomes the workspace map. Later sources with a different map are reported in the status bar, never merged, and can be adopted from Timing ▸ Tempo Map.
 
@@ -56,7 +68,7 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - **Whole:** lossless; used when there are no ranges.
   - **Preserve:** ranges are merged and keep their positions.
   - **Rebase:** ranges are concatenated in list order.
-  - **Separate:** one rebased file per range, named `"<stem> - <range>.mid"`.
+  - **Separate:** one rebased file per range. Dragged out, each is named after its range ("Verse.mid"); Save MIDI… names them `"<chosen name> - <range>.mid"` (see Export names below).
 - **Boundaries:**
   - Ranges are half-open, `[s, e)`.
   - A note that started before `s` is clipped to `s`; the `partial_notes=False` option omits it instead.
@@ -71,7 +83,7 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - The tempo and time signature in effect at `s` are written at the segment start.
   - SysEx and poly aftertouch are **not** carried.
 - **Trim** applies to the whole output only. It moves every track by the same amount, so alignment is never broken.
-- Output is format 1: an unnamed conductor track first, then the enabled tracks in panel order.
+- Output is format 1: a conductor track first (named after the song when every exported clip comes from one song, else unnamed), then the exported tracks in panel order.
 - Building an export never changes the workspace (tested).
 
 ### Packaging and distribution
@@ -98,13 +110,21 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - Drag the body in the strip to move it.
   - Shift bypasses snap. Snap choices are off, bar, beat, 1/8, 1/16, 1/32, 1/8T and 1/16T.
   - The view scrolls automatically near the edges.
-  - Double-click edits a range; Tab cycles through ranges; Backspace or Delete deletes one.
+  - Double-click a range (or a lane inside it) to edit it in the bottom panel; Tab cycles through ranges; Escape deselects; Backspace or Delete deletes one.
+  - Each range has an include checkbox per lane at its inner left edge (hidden when the range is under ~23 px wide; the range's right-click menu lists the same choices). A quick second click on it flips it again rather than opening the range editor.
 - Alt/Option-drag moves a clip in time and across tracks (below the last lane: a new track named after the clip's original track). Shift keeps its time. Alt+Ctrl / Option-⌘-drag copies. Empty tracks are removed when the gesture ends; one undo step per gesture.
 - Clips carry their own `source_id`, so a track can hold clips from several sources. Export chooses PPQ from every clip's source; Source Info and the track header list all of them.
 - Overlapping clips on a track are allowed: the overlap is tinted red and both clips' events are exported, merged.
 - File ▸ New empties the workspace as one undoable step, keeping export settings.
-- ⌘/Ctrl+wheel and pinch zoom around the pointer. Alt+wheel changes lane height.
+- ⌘/Ctrl+wheel and pinch zoom around the pointer. Alt+wheel changes lane height, 3 px per wheel notch, with trackpad deltas added up (halved after studio testing, 2026-11-10).
 - The track panel uses absolutely positioned headers kept in sync with the timeline's vertical scroll. Drag the grip to reorder; drops onto a name field are blocked.
+- **Per-range track selection** (2026-11-10). `Range.excluded` holds the ids of tracks left out of that range.
+  - A new range is seeded from the track toggles; afterwards it is independent of them (the range wins). Track toggles still drive whole export and seed new ranges.
+  - A track created later starts with its own toggle in every range (imports); a clip moved onto a new track copies the range state of the track it came from.
+  - Export: Rebase and Preserve give each track only the segments of ranges that include it (the conductor still covers every range); Separate writes each range's file with that range's tracks and skips a range with none; a track in no exported range is left out. Trim measures content only over the tracks each range includes. An explicit track export (track header drag) follows the same range rules.
+  - Excluded lane sections are dimmed and hatched. A track switched off at track level is drawn grey except inside the ranges that include it, where it is drawn normally: a range shows what it exports (changed after studio testing, 2026-11-10).
+  - Option/Alt-click on a track toggle also sets that track's checkbox in every range to match (one undo step).
+- **Export names** (revised 2026-11-10 after studio testing). One file: the track's name if it holds one track, else the names of the ranges used joined with " + " (in export order, each once, skipping unnamed ranges and ranges that contribute no tracks), else "MIDI Interchange Export". Separate files dragged out are named by their range's label alone ("Verse.mid"; studio found "Verse + Chorus - Verse.mid" overkill); Save MIDI… appends the label to the chosen name ("name - Range.mid"). Clashing names get " (2)" etc. instead of overwriting.
 - The default export mode is Rebase & concatenate (changed from Preserve on 2026-11-10, after hand testing). If Whole is selected, creating a range switches it to Rebase. With no ranges, export is always whole.
 - Undo takes up to 200 snapshots of the workspace structure; event lists are shared, not copied. Range and clip drags record one undo step per gesture.
 - The window zooms to fit on the first import.
@@ -114,28 +134,35 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 
 1. **Native drag-in (M2).** Qt can't receive macOS file promises (`NSFilePromiseReceiver`) or Windows virtual files (`CFSTR_FILEDESCRIPTOR`/`CFSTR_FILECONTENTS`). DAWs that drag clips this way will need PyObjC and pywin32/ctypes adapters. As a probe for now, when a drop has no usable MIDI the app lists the MIME formats it was offered.
 2. **Native drag-out (M2).** Drag-out offers only file URLs, pointing at temp files in `$TMPDIR/MIDI Interchange Drag/<per-drag dir>`. Those files are pruned after 24 h at startup. A destination that needs promises or the data inline won't accept them.
-3. **DAW interop is only partly tested.** On macOS, plain file-URL drags work with Cubase 16, Reason 14, RapidComposer 6, Scaler 3, Staccato.ai and Logic Pro in the directions each app supports; no native promise support was needed. Cubase drags out only one clip at a time (its limitation, confirmed with the Finder); drag-out to Reason and RapidComposer isn't confirmed. Synthesizer V hasn't been tested (Omnivocal is out of scope for drag tests: it takes its MIDI from Cubase, not by drag and drop), and nothing has been tested on Windows. See [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md). Results go in the README checklist; don't claim compatibility for a target until it's ticked.
+3. **DAW interop is only partly tested.** On macOS, plain file-URL drags work with Cubase 16, Reason 14, RapidComposer 6, Scaler 3, Staccato.ai and Logic Pro in the directions each app supports; no native promise support was needed. Cubase drags out only one clip at a time (its limitation, confirmed with the Finder); drag-out to Reason works (2026-11-10), drag-out to RapidComposer isn't confirmed. Synthesizer V hasn't been tested (Omnivocal is out of scope for drag tests: it takes its MIDI from Cubase, not by drag and drop), and nothing has been tested on Windows. See [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md). Results go in the README checklist; don't claim compatibility for a target until it's ticked.
 4. **Per-track auto-trim.** `Track.auto_trim` exists in the model but the exporter ignores it.
 5. **Per-range drag handles.** Not built; the drag tile exports the current mode and selection.
-6. **Workspace persistence.** Not built. QSettings stores only window and splitter state.
+6. **Workspace persistence.** Not built. QSettings stores only window and splitter state. Keeping one session between runs is planned (To do).
 7. **Packaging.**
    - **macOS:** the DMG is Developer ID signed, notarised and stapled, using a git-ignored local config.
    - **Still missing:** an app icon, an Intel or universal2 build (arm64 only for now) and stapling the app inside the DMG.
    - **Size:** about 100 MB, because Qt plugins pull in QML/Quick, VirtualKeyboard and Pdf despite the spec's exclude list. Trimming those plugins could save a lot.
    - **Windows:** builds and launches on Windows 11 x64. It's unsigned, so SmartScreen warns. The Inno Setup installer (`scripts/installer.iss`) registers the app under *Open with* for MIDI files but deliberately doesn't claim the default handler. With no single-instance handoff, opening several files from Explorer starts several windows. Drag-in/drag-out against DAWs isn't tested yet. User-facing shortcut hints are platform-aware (`⌘`/`⌥` on macOS, `Ctrl+`/`Alt+` elsewhere); keep any new ones that way.
 8. **Clip moves** apply to whole clips only; there's no splitting.
-9. **Mixed channels after clip moves (remember this).** A clip moved or dropped onto another track keeps its own MIDI channel(s). Nothing warns or rewrites yet, so a track can export notes on several channels. Decide later whether to warn, or offer "rewrite to the track's channel". **Seen in practice (2026-11-10):** Reason 14 splits a multi-channel track into one track per channel on import (INTEROP_FINDINGS). Documented; the fix is on the back burner.
+9. **Mixed channels after clip moves (remember this).** A clip moved or dropped onto another track keeps its own MIDI channel(s). Nothing warns or rewrites yet, so a track can export notes on several channels. Decide later whether to warn, or offer "rewrite to the track's channel". **Seen in practice (2026-11-10):** Reason 14 splits a multi-channel track into one track per channel on import (INTEROP_FINDINGS). Documented; to be handled by the planned track export channel feature (To do).
 10. **Clipboard import.** Not built, and not planned: Cubase puts only an in-process pointer on the clipboard, Reason an encrypted blob, and Logic a text listing of regions with no notes. The only public convention found is `public.midi-audio` (Pro Tools, Sibelius), worth revisiting after a capture from either (INTEROP_FINDINGS.md).
 
 ## To do (agreed, not started)
 
-- **Per-range track exclusion:** let a track be switched off within a range, overriding its own enabled setting, for more export flexibility. Next feature after clip assembly; more range-export enhancements may join it.
-- **Back burner:** decide the mixed-channel policy (Risk 9). Reason splits multi-channel tracks on import, so an export option to put each track on one channel is the likely answer. **Side effect worth keeping in mind:** because clips keep their channels, moving clips together already lets someone assemble a deliberately multi-channel track. Any policy should keep that possible.
-- **For consideration only:** changing a clip's MIDI channel in the UI (per clip), e.g. right-click ▸ Channel ▸ 1–16, rewriting channel messages on export.
-- **Export / drag filename:** always the same today. Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
+Planned features (decided 2026-11-10), each on its own branch:
+
 - **Clip edge trims:** drag a clip's left or right edge to trim it, limited to the clip's original extent.
-- **Keys and modifiers:** review the UI's keyboard shortcuts and drag modifiers as a whole; expect adjustments after more use (includes Shift on clip drags, below).
-- **Revisit Shift on clip drags.** Shift currently keeps the clip's time (track change only), which differs from range drags, where Shift bypasses snap. The user isn't sure this is right; kept for now, decide after hand testing.
+- **Export / drag filename decoration:** names are mostly fixed today (a range-name join, "Verse + Chorus", was added 2026-11-10). Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
+- **Track export channel (one feature, design still open):** covers both the mixed-channel policy (Risk 9; Reason splits multi-channel tracks on import) and changing a clip's channel. Likely shape: a control in the track header that sets the export channel for every clip on the track, whatever the clips' or the track's original channels. Keep a way to leave channels as they are, since a deliberately multi-channel track is possible today.
+- **Session persistence (not save/load):** keep the one current workspace between runs. Write it to disk on exit, restore it at startup, and say so if it couldn't be restored cleanly, e.g. after a crash or a crash on exit. No project files, no Save/Open of workspaces. (Open question: also write it periodically, so a crash loses little?)
+
+Suggested (studio, 2026-11-10), not yet agreed:
+
+- **Scroll bar zoom:** drag the ends of the horizontal scroll bar to zoom, as other apps do.
+
+Later, after more real-world use:
+
+- **Keys and modifiers:** review the UI's keyboard shortcuts and drag modifiers as a whole, including Shift on clip drags. Shift currently keeps the clip's time (track change only), unlike range drags, where Shift bypasses snap; kept for now.
 
 ## Issues found and fixed during development
 

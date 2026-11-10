@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame, QHBox
                                QLineEdit, QPushButton, QToolButton, QVBoxLayout, QWidget)
 
 from ..core.export_smf import ExportMode
+from ..core.names import range_label
 from ..interchange.drag_export import write_temp
 from . import theme
 from .controller import Controller
@@ -38,7 +39,7 @@ class DragTile(QFrame):
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        enabled = bool(self.ctl.ws.enabled_tracks())
+        enabled = bool(self.ctl.export_tracks())
         col = theme.ACCENT if enabled else theme.DISABLED
         fill = QColor(col)
         fill.setAlpha(40)
@@ -81,8 +82,8 @@ def start_file_drag(widget: QWidget, ctl: Controller, track_ids: list[str] | Non
     except Exception as exc:  # noqa: BLE001 - surface to the user, never crash the drag
         on_error(f"Export failed: {exc}")
         return
-    if not results:
-        on_error("Nothing to export")
+    if not results or not ctl.export_tracks(track_ids):
+        on_error("Nothing to export (check the track and range toggles)")
         return
     paths = write_temp(results, ctl.default_export_name(track_ids))
     mime = QMimeData()
@@ -198,7 +199,7 @@ class ExportPanel(QFrame):
         if not ws.ranges:
             self.range_combo.addItem("No ranges", None)
         for i, r in enumerate(ws.ranges):
-            self.range_combo.addItem(f"{r.name or f'Range {i + 1}'}", r.id)
+            self.range_combo.addItem(range_label(r.name, i), r.id)
         sel = self.ctl.selected_range
         idx = next((i for i, r in enumerate(ws.ranges) if sel and r.id == sel.id), -1)
         if idx < 0 and ws.ranges:
@@ -220,7 +221,9 @@ class ExportPanel(QFrame):
             if not self.end_edit.hasFocus():
                 self.end_edit.setText(tm.format_bbt(sel.end))
             bars = sel.length / tm.timesig_at(sel.start).bar_length
-            self.length_label.setText(f"{float(sel.length):g} beats ({float(bars):.4g} bars)")
+            n_in = sum(1 for t in ws.tracks if sel.includes(t.id))
+            self.length_label.setText(f"{float(sel.length):g} beats ({float(bars):.4g} bars) · "
+                                      f"{n_in} of {len(ws.tracks)} tracks")
         else:
             for ed in (self.name_edit, self.start_edit, self.end_edit):
                 ed.clear()
@@ -234,7 +237,7 @@ class ExportPanel(QFrame):
         self.trim_cb.setChecked(self.ctl.trim)
         self.trim_cb.blockSignals(False)
 
-        n_en, n = len(ws.enabled_tracks()), len(ws.tracks)
+        n_en, n = len(self.ctl.export_tracks()), len(ws.tracks)
         mode = self.ctl.export_mode if ws.ranges else ExportMode.WHOLE
         if mode is ExportMode.WHOLE:
             what = "whole workspace"

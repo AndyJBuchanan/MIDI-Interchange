@@ -10,7 +10,7 @@ Record interop results (does a drag work with an app at all) in the README check
 
 - [x] While you drag over the window, the insertion cursor and label follow the mouse and snap to beats. Holding Shift turns snapping off.
 - [x] Drop on a lane whose track has the **same name** (try different capitals and extra spaces): the clip lands on that track at the cursor time.
-- [x] Drop on a lane with a **different name**: you get a new track at the cursor time, and the label says *names differ*.
+- [x] Drop on a lane with a **different name**: you get a new track at the cursor time, and the label says *nothing matches “…”* and why (wording changed 2026-11-10; was *names differ*).
 - [x] Drop on a track you've **renamed**: it still matches the original name.
 - [x] Drop on a **track header**: it lands at bar 1 under the same name rules.
 - [x] Drop on the **blank area below the tracks**: new track at the cursor time, shown with a dashed box.
@@ -77,6 +77,40 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 - [x] Combine sources with **different PPQ** (e.g. Cubase + Reason): the timing is still correct.
 - [x] A clip moved to a track with **another MIDI channel** keeps its own channel. This is expected for now (DESIGN_NOTES Risk 9); just note how the DAW handles it. *Reason 14 splits such a track into one track per channel (2026-11-10).*
 - [x] Range export across clip joins: notes at the edges are cut cleanly, and a rebased range lands at the drop position.
+
+## 8a. Per-range track exclusion (`feature/range-track-exclusion`)
+
+- [x] Draw a range: each lane gets a checkbox at the range's inner left edge, ticked to match the track toggles (an off track starts unticked).
+- [x] Click a checkbox: it untick/ticks, the lane section inside the range is hatched/clear, and ⌘Z undoes it. Two quick clicks flip it twice and don't open the range editor.
+- [x] Change a track toggle after drawing the range: the range's checkboxes don't change.
+- [x] Turn a track off but leave it ticked in a range: its notes from that range are still exported.
+- [x] Rebase with two ranges, a track excluded from the first: in the DAW its notes appear only in the second range's part, at the right position.
+- [x] Separate: each file holds only the tracks ticked in its range; a range with nothing ticked gives no file.
+- [x] A track unticked in every range is missing from the file (and from the "N of M tracks" counts).
+- [x] Whole export ignores the range checkboxes and uses the track toggles.
+- [x] A very narrow range shows no checkboxes; right-click it: the track list, Include All, Exclude All and Reset to Track Toggles all work.
+- [x] Drop a new file after drawing a range: its track is ticked in the range. Option-drag a clip from an excluded track to a new track: the new track is unticked.
+- [x] The bottom panel shows "N of M tracks" for the selected range.
+
+## 8b. Studio round fixes (2026-11-10)
+
+- [x] Two named ranges, several tracks, Rebase: the Save dialog and the dragged file are named "Verse + Chorus".
+- [x] Two ranges with the same name, Separate drag: both files arrive (the second gets " (2)").
+- [x] Switch a track off while a range includes it: its clips are in colour inside the range, grey outside.
+- [x] Option-click a track toggle: the track and its checkbox in every range change together; ⌘Z undoes both. A plain click still changes only the track.
+- [x] Round trip (studio report, not reproduced on the dev Mac): open `samples/assembly/seven_tracks_A-G.mid`, draw three ranges, tick A B / C D / E F, Separate, drag out to Finder, ⌘N, then drop each file in turn onto track A. Expect A B, then C D added, then E F added, each with its own notes. If it goes wrong, keep the files and note the exact drop spot.
+- [x] Scroll the track list vertically: headers disappear under the "TRACKS n/m" band instead of drawing over it.
+
+## 8c. Studio round fixes 2 (2026-11-10)
+
+- [x] ⌥ + mouse wheel changes lane height gently: one wheel notch is a small step (half or less of before), and a trackpad stroke no longer jumps.
+- [x] Separate drag: files are named by their range alone ("Verse.mid", "Chorus.mid"); two ranges with the same name give "Dank.mid" and "Dank (2).mid". Save MIDI… in Separate mode still appends the range name to the name you type.
+- [x] New `samples/assembly/seven_tracks_A-G.mid`: 12 bars in three 4-bar sections. Each track has its own shape (A rising, B falling, C zigzag, D chord, E long note, F long-short-short, G high-low), played once per bar in bars 1–4, twice in 5–8, three times in 9–12. Round trip: three ranges on the sections (bars 1–5, 5–9, 9–13), tick A B / C D / E F, Separate, drag out, ⌘N, drop each file onto track A. Check by eye that A B show one repeat per bar, C D two, E F three.
+- [x] Staccato round trip with a new generation: open the Staccato song, export or drag some tracks to Staccato, generate, and drag the result back onto one of its tracks. Tracks named "part - <new song>" land on the matching "part - <old song>" tracks; the status bar says "matched ignoring song titles …". (Built test: tests/test_song_matching.py, from the Industrial EBM Anthem sample renamed the way Staccato did.)
+- [x] Two DAW clips named "Lead - Verse" and "Lead - Chorus": dropping the second onto the first's track makes a new track (not a song title).
+- [x] Exports now carry the song title. Every MIDI file has a first track that holds only the tempo and time signature; MIDI Interchange now names that track after the song ("Industrial EBM Anthem") when all the exported clips come from one song, as Staccato's own files do. Check that apps don't mind: open the Staccato song, drag it out whole into Cubase, Logic and Reason, and check each gets the same tracks and tempo as before, with no extra empty track called "Industrial EBM Anthem". (Note if an app shows the name somewhere, e.g. as a song or marker title.)
+- [x] Staccato round trip again (round 2 failed with the drop on Heavy EBM Drums; not reproduced on the dev Mac with the same files and steps, round 3 adds the reason to the message): open the Staccato song, drag a new Staccato generation onto Heavy EBM Drums. While dragging, the preview says "Onto “Heavy EBM Drums - …” …"; after the drop, the parts land on their tracks and the status bar says "matched ignoring song titles …". **If it makes new tracks instead, copy down the status bar message**: it now ends "new because nothing matches “…” (…)" with the file's and the track's song titles.
+- [x] The preview and the result always agree: whatever the cursor says before you let go ("Onto …" or "New track(s) …: nothing matches …") is what happens.
 
 ## 9. New document
 
