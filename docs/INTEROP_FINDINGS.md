@@ -90,6 +90,7 @@ There is still no MIDI clipboard format that DAWs share in practice. Cubase, Rea
 
 - How it shows up in clip assembly: clips keep their own channel when moved (DESIGN_NOTES Risk 9). Staccato.ai files, for example, put same-named tracks on different channels, so assembling them gives a multi-channel track.
 - MIDI Interchange's export is not at fault: `tests/test_export_assembly.py` proves an assembled track is written as one track holding every note, and `samples/reason-check/` has a one-channel and a two-channel assembled file that show the difference in Reason.
+- Reason's own export confirms its model (`samples/non-synthetic/Nov01-01-000-Reason.mid`, exported from the Staccato song after a drag-in): every track is written on **channel 1**, the original channel is kept only in the track name ("… Ch4", "… Ch8", "… Ch10"), it writes at **15360 PPQ**, and adds note-less "Transport" and "Master Section" tracks. MIDI Interchange imports it cleanly.
 - Other importers may do the same. Workaround for now: assemble clips that share a channel, or set channels in the source DAW first.
 - Decision deferred (back burner): an export option to put each track on one channel, and/or per-clip channel changes. See DESIGN_NOTES Risk 9 and the to-do list.
 

@@ -29,8 +29,8 @@ Record interop results (does a drag work with an app at all) in the README check
 ## 3. Several files at once (Finder multi-select)
 
 - [x] The dialog appears only for several **files**, not for one file with several tracks.
-- [ ] **End to End** (changed 2026-11-10): the files are laid in sequence from the cursor on **one** new track named after the first file's track, whatever the names. The dialog says the track's name. Multi-track files line up by position (first tracks together, second tracks together, …).
-- [ ] After End to End with the `samples/assembly/bass_part_*` files, every clip's notes draw **inside** the clip, high and low parts alike (fixed 2026-11-10: wide pitch ranges used to overflow the lane). Also check a drum track and a small lane height.
+- [x] **End to End** (changed 2026-11-10): the files are laid in sequence from the cursor on **one** new track named after the first file's track, whatever the names. The dialog says the track's name. Multi-track files line up by position (first tracks together, second tracks together, …).
+- [x] After End to End with the `samples/assembly/bass_part_*` files, every clip's notes draw **inside** the clip, high and low parts alike (fixed 2026-11-10: wide pitch ranges used to overflow the lane). Also check a drum track and a small lane height.
 - [x] **All at Cursor**: each file starts at the cursor on its own tracks.
 - [x] **Cancel** imports nothing. Check the source app isn't left hanging.
 - [x] Dropped on a matching lane: the name-matching rules from sections 1 and 2 still apply.
@@ -44,7 +44,7 @@ Reason and RapidComposer can't drag MIDI out (they only export files), so they h
 ## 5. Moving and copying clips
 
 - [x] **Option-drag** moves a clip in time, and onto another track.
-- [ ] **Option-drag below the last track** creates a new track. Also drag through another lane first; the new track should keep the **original** track's name. A clip that is alone on the last track stays put (a new track would look identical); Option-⌘ (copy) still makes one.
+- [x] **Option-drag below the last track** creates a new track. Also drag through another lane first; the new track should keep the **original** track's name. A clip that is alone on the last track stays put (a new track would look identical); Option-⌘ (copy) still makes one.
 - [x] **Option-Shift-drag** changes track but keeps the clip's time.
 - [x] **Option-⌘-drag** copies; the original stays put.
 - [x] A track left with no clips is removed, and ⌘Z undoes the whole move (the track comes back with its clip).
@@ -59,24 +59,24 @@ Reason and RapidComposer can't drag MIDI out (they only export files), so they h
 - [x] **Move Clip to Track ▸** moves it to an existing track, or to a **New Track**.
 - [x] **Delete Clip** removes it. Deleting the last clip removes the track.
 - [x] The **Track ▸** submenu offers the usual track operations.
-- [ ] **Solo for Export**, then right-click the soloed track ▸ **Unsolo**: the previous track selection comes back. Soloing another track in between still restores the original selection.
+- [x] **Solo for Export**, then right-click the soloed track ▸ **Unsolo**: the previous track selection comes back. Soloing another track in between still restores the original selection.
 
 ## 7. Track operations
 
 - [x] **Merge Into ▸** another track puts all the clips on the target track and removes the source track.
 - [x] The track header shows "N clips · M sources" for a mixed track.
-- [ ] **Source Info** is a proper dialog: track summary, a table of clips (position, channels, notes, source), and the sources with their details. Clicking a clip selects its source; Show in Folder opens the file's folder.
+- [x] **Source Info** is a proper dialog: track summary, a table of clips (position, channels, notes, source), and the sources with their details. Clicking a clip selects its source; Show in Folder opens the file's folder.
 - [x] Rename, reorder, remove, solo and the export checkbox still work on assembled tracks.
 
 ## 8. Export of assembled tracks
 
 The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). Check the export mode before each test.
 
-- [ ] Use **Save MIDI…** and **Drag MIDI out** into Cubase and Staccato. Clips from several sources arrive on one track, in the right places.
-- [ ] Overlapping clips export with both clips' notes merged, and there are no stuck notes.
-- [ ] Combine sources with **different PPQ** (e.g. Cubase + Reason): the timing is still correct.
+- [x] Use **Save MIDI…** and **Drag MIDI out** into Cubase and Staccato. Clips from several sources arrive on one track, in the right places.
+- [x] Overlapping clips export with both clips' notes merged, and there are no stuck notes.
+- [x] Combine sources with **different PPQ** (e.g. Cubase + Reason): the timing is still correct.
 - [x] A clip moved to a track with **another MIDI channel** keeps its own channel. This is expected for now (DESIGN_NOTES Risk 9); just note how the DAW handles it. *Reason 14 splits such a track into one track per channel (2026-11-10).*
-- [ ] Range export across clip joins: notes at the edges are cut cleanly, and a rebased range lands at the drop position.
+- [x] Range export across clip joins: notes at the edges are cut cleanly, and a rebased range lands at the drop position.
 
 ## 9. New document
 
@@ -89,9 +89,11 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 
 - [x] File ▸ Open, command-line paths and folder drops still import as new tracks at bar 1.
 - [x] Ranges: create, resize, move, Tab to cycle, delete, and type positions as bar.beat.tick.
-- [ ] Zoom, lane height and the tempo map dialog.
-- [ ] A long undo/redo chain mixing drops, moves and the clip menu.
+- [x] Zoom, lane height and the tempo map dialog.
+- [x] A long undo/redo chain mixing drops, moves and the clip menu.
 
-## 11. Windows
+## 11. Windows (release time only)
+
+Windows is a secondary platform: it isn't tested during normal development, only before a release (RELEASING.md, step 3). Leave this section unticked until then.
 
 - [ ] Use **Alt** in place of Option and **Ctrl** in place of ⌘ for the clip drags. Check the drop cursor and the multi-file dialog.
