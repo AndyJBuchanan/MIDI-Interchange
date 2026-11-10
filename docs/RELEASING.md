@@ -118,4 +118,5 @@ gh release upload v<ver>[-label] -R AndyJBuchanan/MIDI-Interchange --clobber <fi
 
 | Tag | Version | Commit | Notes |
 |---|---|---|---|
+| `v0.2.0-pre` | 0.2.0 | `7145b12` (published 2026-11-10) | Both platforms built from the tagged commit. The Windows tests were fixed on main first (PR #3, test helper only). |
 | `v0.1.0-pre` | 0.1.0 | `9092edb` (published 2026-11-09) | First public pre-release. The Windows files were built from the Windows working copy before the commit authors were rewritten. Their code is identical to the tagged commit apart from the macOS-only "⌥-drag" hint text. |
