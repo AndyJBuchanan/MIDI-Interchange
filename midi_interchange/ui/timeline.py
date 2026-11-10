@@ -47,6 +47,7 @@ RULER_H = 22
 INFO_H = 16
 RANGE_H = 20
 HEADER_H = RULER_H + INFO_H + RANGE_H
+LANE_PX_PER_NOTCH = 3    # Alt+wheel lane height change per wheel notch (was 6 per event)
 RANGE_TOP = RULER_H + INFO_H
 EDGE_PX = 5
 TOGGLE_PX = 13        # range track toggle: size, and gap from the range's left edge
@@ -909,8 +910,13 @@ class Timeline(QAbstractScrollArea):
             e.accept()
             return
         if mods & Qt.AltModifier:
-            dy = ad.y() or ad.x()
-            self.set_lane_height(self.lane_h + (6 if dy > 0 else -6))
+            # 3 px per mouse-wheel notch (120 units); trackpad deltas accumulate
+            # the same way, so a flick no longer jumps many steps.
+            self._lane_acc = getattr(self, "_lane_acc", 0.0) + (ad.y() or ad.x()) * LANE_PX_PER_NOTCH / 120
+            step = int(self._lane_acc)
+            if step:
+                self._lane_acc -= step
+                self.set_lane_height(self.lane_h + step)
             e.accept()
             return
         if not pd.isNull():

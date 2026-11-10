@@ -129,11 +129,15 @@ def import_smf_bytes(data: bytes, name: str, path: str | None = None,
             label = display_names[ti] or fallback
             tracks.append(make_track(label, tname, events, end, ti))
 
+    conductor = ""
+    if mf.type == 1 and raw_tracks and not track_channels(raw_tracks[0][2]):
+        conductor = display_names[0]
     source = Source(
         id=source_id, name=name, ppq=ppq, smf_format=mf.type,
         imported_at=datetime.now(), raw=data, tempo_map=TempoMap(tempos, sigs),
         path=path, app=app, track_names=tuple(display_names),
         warnings=tuple(warnings),
+        song=song_title(conductor, [t.name for t in tracks]),
     )
     return source, tracks
 
@@ -142,3 +146,31 @@ def import_smf_file(path: str, app: str | None = None) -> tuple[Source, list[Tra
     with open(path, "rb") as fh:
         data = fh.read()
     return import_smf_bytes(data, os.path.basename(path), path=path, app=app)
+
+
+SONG_SEP = " - "
+
+
+def song_title(conductor_name: str, track_names: list[str]) -> str:
+    """The song a file's tracks belong to, when it can be known (2026-11-10).
+
+    Staccato names every track "part - song" and puts the song in the first
+    (conductor) track, and changes the song between generations, so name
+    matching removes a known song title from both sides (placement.py).
+    Known means either:
+    * the conductor track's name, when some track name ends in " - <it>";
+    * else an ending " - X" that every named track shares (at least two), as
+      in a file that has been through an app that drops the conductor name.
+    Ranges such as "Lead - Verse" / "Bass - Chorus" give no song: their
+    endings differ. A single-track file never has one.
+    """
+    names = [n for n in track_names if n.strip()]
+    c = " ".join(conductor_name.split())
+    if c and any(" ".join(n.split()).casefold().endswith((SONG_SEP + c).casefold()) for n in names):
+        return c
+    if len(names) >= 2:
+        tails = {" ".join(n.split()).rpartition(SONG_SEP)[2].casefold() if SONG_SEP in n else None
+                 for n in names}
+        if len(tails) == 1 and None not in tails:
+            return " ".join(names[0].split()).rpartition(SONG_SEP)[2]
+    return ""

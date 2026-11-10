@@ -163,16 +163,22 @@ def export_name(tracks: list[Track], ranges: list[Range] | None) -> str:
     return " + ".join(names) or "MIDI Interchange Export"
 
 
-def save_exports(results: list[ExportResult], path: str) -> list[str]:
+def save_exports(results: list[ExportResult], path: str, label_only: bool = False) -> list[str]:
     """Write results; multiple results get the range label appended
-    ("out - Verse.mid"). Clashing names get a number."""
+    ("out - Verse.mid"), or with label_only are named by it alone
+    ("Verse.mid", for drag-out). Clashing names get a number."""
     import os
 
     paths = []
     stem, ext = os.path.splitext(path)
     ext = ext or ".mid"
     for res in results:
-        base = stem if len(results) == 1 else f"{stem} - {_safe(res.label)}"
+        if len(results) == 1:
+            base = stem
+        elif label_only:
+            base = os.path.join(os.path.dirname(stem), _safe(res.label) or "MIDI")
+        else:
+            base = f"{stem} - {_safe(res.label)}"
         p, n = f"{base}{ext}", 2
         while p in paths:
             p, n = f"{base} ({n}){ext}", n + 1
@@ -397,11 +403,24 @@ def _serialize(ws: Workspace, tracks: list[Track], conductor: list[_Item],
     ppq = choose_ppq(src_ppqs, all_times)
 
     mf = mido.MidiFile(type=1, ticks_per_beat=ppq)
-    mf.tracks.append(_to_mido_track(conductor, end, ppq, name=None))
+    song = export_song(ws, tracks)
+    mf.tracks.append(_to_mido_track(conductor, end, ppq, name=encode_meta_text(song, "") if song else None))
     for track, items, tend in out_tracks:
         name = encode_meta_text(track.name, track.original_name)
         mf.tracks.append(_to_mido_track(items, tend, ppq, name=name))
     return mf
+
+
+def export_song(ws: Workspace, tracks: list[Track]) -> str:
+    """The song title to write as the conductor track's name: the one song
+    every exported clip's source shares, else none. Keeps the title through a
+    round trip so name matching can remove it again (placement.py)."""
+    songs = set()
+    for t in tracks:
+        for c in t.clips:
+            src = ws.source(c.source_id)
+            songs.add(src.song if src else "")
+    return songs.pop() if len(songs) == 1 else ""
 
 
 def _tick(t: Fraction, ppq: int) -> int:

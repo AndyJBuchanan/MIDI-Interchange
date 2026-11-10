@@ -107,6 +107,10 @@ class Controller(QObject):
             if stats["onto_existing"]:
                 names = ", ".join(f"“{n}”" for n in stats["onto_names"])
                 parts.append(f"{stats['onto_existing']} onto existing {names}")
+            if stats["by_song"]:
+                songs = ", ".join(f"“{n}”" for n in stats["songs_ignored"])
+                word = "title" if len(stats["songs_ignored"]) == 1 else "titles"
+                parts.append(f"{stats['by_song']} matched ignoring song {word} {songs}")
             if stats["replaced"]:
                 parts.append(f"replacing {stats['replaced']} identical clip(s)")
             if placement and placement.time:

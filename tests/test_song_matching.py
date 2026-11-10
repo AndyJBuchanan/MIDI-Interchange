@@ -1,0 +1,142 @@
+"""Name matching with song titles removed (studio round trip, 2026-11-10).
+
+Staccato names every track "part - song" and writes the song as the conductor
+track's name. A later generation came back as "Heavy EBM Drums - Staccato
+Generation" and failed to land on "Heavy EBM Drums - Industrial EBM Anthem".
+The real song is samples/non-synthetic; what Staccato sent back is rebuilt
+from it the way Staccato changed it (renamed, Lead dropped, channels moved).
+"""
+import io
+from fractions import Fraction as F
+from pathlib import Path
+
+import mido
+
+from helpers import conductor, note, reparse, smf, track
+
+from midi_interchange.core.document import Workspace
+from midi_interchange.core.export_smf import ExportMode, ExportOptions, build_exports
+from midi_interchange.core.import_smf import import_smf_bytes, song_title
+from midi_interchange.core.placement import Placement, place_imports
+
+SONG = Path(__file__).resolve().parent.parent / "samples" / "non-synthetic" / "Industrial EBM Anthem_1793561268176.mid"
+OLD, NEW = "Industrial EBM Anthem", "Staccato Generation"
+
+
+def to_bytes(mf: mido.MidiFile) -> bytes:
+    buf = io.BytesIO()
+    mf.save(file=buf)
+    return buf.getvalue()
+
+
+def staccato_regeneration() -> bytes:
+    """The first set of the song's parts, as a new Staccato generation: renamed to
+    the new song, Piercing Lead missing, Pads and Chant moved to ch 2 and 3."""
+    mf = mido.MidiFile(str(SONG))
+    out = mido.MidiFile(type=1, ticks_per_beat=mf.ticks_per_beat)
+    out.tracks.append(mido.MidiTrack(m.copy(name=NEW) if m.type == "track_name" else m for m in mf.tracks[0]))
+    for ti, ch in ((1, 9), (2, 0), (4, 1), (5, 2)):
+        trk = mido.MidiTrack()
+        for m in mf.tracks[ti]:
+            if m.type == "track_name":
+                m = m.copy(name=m.name.replace(OLD, NEW))
+            elif hasattr(m, "channel"):
+                m = m.copy(channel=ch)
+            trk.append(m)
+        out.tracks.append(trk)
+    return to_bytes(out)
+
+
+def song_workspace() -> Workspace:
+    ws = Workspace()
+    ws.add_import(*import_smf_bytes(SONG.read_bytes(), SONG.name))
+    return ws
+
+
+def parts(*names: str, conductor_name: str | None = None) -> bytes:
+    ppq = 480
+    cond = conductor(ppq)
+    if conductor_name:
+        cond.insert(0, mido.MetaMessage("track_name", name=conductor_name, time=0))
+    return smf([cond] + [track(note(i, 60 + i, 0, ppq), name=n) for i, n in enumerate(names)], ppq=ppq)
+
+
+# -- song titles ---------------------------------------------------------------------
+def test_song_title_comes_from_the_conductor_track():
+    src, _ = import_smf_bytes(SONG.read_bytes(), SONG.name)
+    assert src.song == OLD
+    src, _ = import_smf_bytes(staccato_regeneration(), "Staccato Generation_1794335906187.mid")
+    assert src.song == NEW
+
+
+def test_song_title_from_an_ending_every_track_shares():
+    # a file that lost its conductor name (e.g. an older MIDI Interchange export)
+    assert song_title("", ["Drums - Anthem", "Bass - Anthem"]) == "Anthem"
+    assert song_title("", ["Drums - Anthem", "Bass - Ballad"]) == ""        # differ: no song
+    assert song_title("", ["Lead - Verse"]) == ""                           # one track: never
+    assert song_title("", ["Drums - Anthem", "Bass"]) == ""
+    assert song_title("Transport", ["Drums - Anthem", "Bass - Anthem"]) == "Anthem"   # Reason-style conductor
+
+
+# -- matching ------------------------------------------------------------------------
+def test_new_staccato_generation_lands_on_the_same_parts():
+    """The studio screenshot: dropped on Heavy EBM Drums, all four parts must
+    join their existing tracks (the first of each repeated name), none new."""
+    ws = song_workspace()
+    before = [t.id for t in ws.tracks]
+    names = [t.name for t in ws.tracks]
+    _, stats = place_imports(ws, [import_smf_bytes(staccato_regeneration(), "Staccato Generation_1.mid")],
+                             Placement(F(32), ws.tracks[0].id))
+    assert [t.id for t in ws.tracks] == before
+    assert stats["new_tracks"] == 0 and stats["onto_existing"] == 4 and stats["by_song"] == 4
+    assert set(stats["songs_ignored"]) == {OLD, NEW}
+    got = [i for i, t in enumerate(ws.tracks) if len(t.clips) == 2]
+    assert got == [0, 1, 3, 4], [names[i] for i in got]            # Drums, Bass, Pads, Chant
+
+
+def test_exact_names_are_paired_before_song_matches():
+    # existing: "Drums - Anthem" (song Anthem) and a plain "Drums" drag
+    ws = Workspace()
+    ws.add_import(*import_smf_bytes(parts("Drums - Anthem", "Bass - Anthem", conductor_name="Anthem"), "a.mid"))
+    ws.add_import(*import_smf_bytes(parts("Drums"), "d.mid"))
+    plain = ws.tracks[2]
+    # the incoming file has both an exact "Drums" ... and a song-only match
+    src = import_smf_bytes(parts("Drums - Ballad", "Drums", conductor_name="Ballad"), "b.mid")
+    place_imports(ws, [src], Placement(F(8), plain.id))
+    assert len(ws.tracks) == 3
+    assert [len(t.clips) for t in ws.tracks] == [2, 1, 2]
+    assert plain.clips[-1].name == "Drums"                          # the exact one, not "Drums - Ballad"
+
+
+def test_section_names_are_not_song_titles():
+    """'Lead - Verse' and 'Lead - Chorus' are DAW clips, not songs: no match."""
+    ws = Workspace()
+    ws.add_import(*import_smf_bytes(parts("Lead - Verse"), "verse.mid"))
+    _, stats = place_imports(ws, [import_smf_bytes(parts("Lead - Chorus"), "chorus.mid")],
+                             Placement(F(8), ws.tracks[0].id))
+    assert len(ws.tracks) == 2 and stats["onto_existing"] == 0
+
+
+def test_a_different_part_of_the_same_song_does_not_match():
+    ws = song_workspace()
+    lead = next(t for t in ws.tracks if t.name.startswith("Piercing Lead"))
+    _, stats = place_imports(ws, [import_smf_bytes(parts("Mystery Synth - Staccato Generation", "Choir - Staccato Generation",
+                                                         conductor_name=NEW), "x.mid")],
+                             Placement(F(8), lead.id))
+    assert stats["onto_existing"] == 0 and stats["new_tracks"] == 2
+
+
+# -- export keeps the song --------------------------------------------------------------
+def test_export_writes_the_song_title_and_round_trips():
+    ws = song_workspace()
+    mf = reparse(build_exports(ws, ExportOptions(mode=ExportMode.WHOLE))[0].midi)
+    assert [m.name for m in mf.tracks[0] if m.type == "track_name"] == [OLD]
+    src, _ = import_smf_bytes(to_bytes(mf), "MIDI Interchange Export.mid")
+    assert src.song == OLD
+
+
+def test_export_of_mixed_songs_writes_no_title():
+    ws = song_workspace()
+    ws.add_import(*import_smf_bytes(parts("Drums"), "d.mid"))
+    mf = reparse(build_exports(ws, ExportOptions(mode=ExportMode.WHOLE))[0].midi)
+    assert not [m for m in mf.tracks[0] if m.type == "track_name"]

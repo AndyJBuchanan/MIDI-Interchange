@@ -42,7 +42,8 @@ def prune_old(max_age: float = MAX_AGE_S) -> None:
 
 def write_temp(results: list[ExportResult], base_name: str) -> list[str]:
     # Each drag gets its own folder so the visible filename stays clean
-    # (destination apps typically name the new track/clip after it).
+    # (destination apps typically name the new track/clip after it). Separate
+    # files are named by their range alone ("Verse.mid", "Verse (2).mid").
     folder = tempfile.mkdtemp(prefix=time.strftime("%H%M%S-"), dir=temp_dir())
     safe = "".join(c if c.isalnum() or c in " -_()+" else "_" for c in base_name).strip() or "MIDI"
-    return save_exports(results, os.path.join(folder, safe + ".mid"))
+    return save_exports(results, os.path.join(folder, safe + ".mid"), label_only=True)

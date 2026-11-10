@@ -38,6 +38,7 @@ class Source:
     app: str | None = None       # source application, when known
     track_names: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    song: str = ""              # song title, when known (see import_smf.song_title)
 
     def describe(self) -> str:
         lines = [
@@ -47,6 +48,8 @@ class Source:
             f"SMF format {self.smf_format}, {self.ppq} PPQ, {len(self.raw)} bytes",
             f"Imported: {self.imported_at:%Y-%m-%d %H:%M:%S}",
         ]
+        if self.song:
+            lines.append(f"Song: {self.song}")
         if self.track_names:
             lines.append("Original tracks: " + ", ".join(n or "(unnamed)" for n in self.track_names))
         if not self.tempo_map.is_empty:

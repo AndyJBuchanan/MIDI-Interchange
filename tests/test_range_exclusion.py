@@ -336,8 +336,7 @@ def test_separate_drag_files_with_the_same_range_name_all_arrive(song, monkeypat
         ctl.update_range(r.id, name=n)
     ctl.set_range_tracks(r1.id, False)
     ctl.set_range_track_included(r1.id, ctl.ws.tracks[LEAD].id, True)
-    assert _drag_names(song, monkeypatch) == ["Verse + Chorus - Verse.mid", "Verse + Chorus - Chorus.mid",
-                                            "Verse + Chorus - Chorus (2).mid"]
+    assert _drag_names(song, monkeypatch) == ["Verse.mid", "Chorus.mid", "Chorus (2).mid"]
 
 
 def test_alt_click_track_toggle_sets_every_range(song):
@@ -415,7 +414,7 @@ def test_separate_files_dropped_back_one_by_one_keep_their_tracks(win, monkeypat
     ctl = win.ctl
     drop(win, gen.SEVEN_FILE)
     assert [t.name for t in ctl.ws.tracks] == list("ABCDEFG")
-    rs = add_ranges(win, ExportMode.SEPARATE, [(0, 4), (4, 8), (8, 12)])
+    rs = add_ranges(win, ExportMode.SEPARATE, [(0, 16), (16, 32), (32, 48)])   # the three 4-bar sections
     for k, r in enumerate(rs):
         ctl.set_range_tracks(r.id, False)
         for t in ctl.ws.tracks[2 * k:2 * k + 2]:

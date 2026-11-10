@@ -94,12 +94,21 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 
 ## 8b. Studio round fixes (2026-11-10)
 
-- [ ] Two named ranges, several tracks, Rebase: the Save dialog and the dragged file are named "Verse + Chorus".
-- [ ] Two ranges with the same name, Separate drag: both files arrive (the second gets " (2)").
-- [ ] Switch a track off while a range includes it: its clips are in colour inside the range, grey outside.
-- [ ] Option-click a track toggle: the track and its checkbox in every range change together; ⌘Z undoes both. A plain click still changes only the track.
-- [ ] Round trip (studio report, not reproduced on the dev Mac): open `samples/assembly/seven_tracks_A-G.mid`, draw three ranges, tick A B / C D / E F, Separate, drag out to Finder, ⌘N, then drop each file in turn onto track A. Expect A B, then C D added, then E F added, each with its own notes. If it goes wrong, keep the files and note the exact drop spot.
-- [ ] Scroll the track list vertically: headers disappear under the "TRACKS n/m" band instead of drawing over it.
+- [x] Two named ranges, several tracks, Rebase: the Save dialog and the dragged file are named "Verse + Chorus".
+- [x] Two ranges with the same name, Separate drag: both files arrive (the second gets " (2)").
+- [x] Switch a track off while a range includes it: its clips are in colour inside the range, grey outside.
+- [x] Option-click a track toggle: the track and its checkbox in every range change together; ⌘Z undoes both. A plain click still changes only the track.
+- [x] Round trip (studio report, not reproduced on the dev Mac): open `samples/assembly/seven_tracks_A-G.mid`, draw three ranges, tick A B / C D / E F, Separate, drag out to Finder, ⌘N, then drop each file in turn onto track A. Expect A B, then C D added, then E F added, each with its own notes. If it goes wrong, keep the files and note the exact drop spot.
+- [x] Scroll the track list vertically: headers disappear under the "TRACKS n/m" band instead of drawing over it.
+
+## 8c. Studio round fixes 2 (2026-11-10)
+
+- [ ] ⌥ + mouse wheel changes lane height gently: one wheel notch is a small step (half or less of before), and a trackpad stroke no longer jumps.
+- [ ] Separate drag: files are named by their range alone ("Verse.mid", "Chorus.mid"); two ranges with the same name give "Dank.mid" and "Dank (2).mid". Save MIDI… in Separate mode still appends the range name to the name you type.
+- [ ] New `samples/assembly/seven_tracks_A-G.mid`: 12 bars in three 4-bar sections. Each track has its own shape (A rising, B falling, C zigzag, D chord, E long note, F long-short-short, G high-low), played once per bar in bars 1–4, twice in 5–8, three times in 9–12. Round trip: three ranges on the sections (bars 1–5, 5–9, 9–13), tick A B / C D / E F, Separate, drag out, ⌘N, drop each file onto track A. Check by eye that A B show one repeat per bar, C D two, E F three.
+- [ ] Staccato round trip with a new generation: open the Staccato song, export or drag some tracks to Staccato, generate, and drag the result back onto one of its tracks. Tracks named "part - <new song>" land on the matching "part - <old song>" tracks; the status bar says "matched ignoring song titles …". (Built test: tests/test_song_matching.py, from the Industrial EBM Anthem sample renamed the way Staccato did.)
+- [ ] Two DAW clips named "Lead - Verse" and "Lead - Chorus": dropping the second onto the first's track makes a new track (not a song title).
+- [ ] An exported file from the Staccato song opens in Cubase, Logic and Reason as before (it now names the tempo track with the song title).
 
 ## 9. New document
 

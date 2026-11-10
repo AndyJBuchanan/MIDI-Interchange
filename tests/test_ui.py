@@ -148,3 +148,25 @@ def test_zoom_keeps_anchor(win):
     t_before = tl.t_of(400)
     tl.zoom_by(2.0, 400)
     assert abs(tl.t_of(400) - t_before) < 0.1
+
+
+def test_alt_wheel_lane_height_is_gentle(win):
+    """Studio 2026-11-10: Alt+wheel was too sensitive. 3 px per wheel notch,
+    and small trackpad deltas add up instead of each stepping 6 px."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QWheelEvent
+    tl = win.timeline
+    tl.set_lane_height(68)
+
+    def wheel(dy):
+        pos = QPointF(200, 120)
+        tl.wheelEvent(QWheelEvent(pos, tl.mapToGlobal(pos), QPoint(0, 0), QPoint(0, dy),
+                                  Qt.NoButton, Qt.AltModifier, Qt.NoScrollPhase, False))
+
+    wheel(120)
+    assert tl.lane_h == 71
+    for _ in range(4):
+        wheel(10)                       # a slow trackpad stroke: 40 units
+    assert tl.lane_h == 72
+    wheel(-240)
+    assert tl.lane_h == 66
