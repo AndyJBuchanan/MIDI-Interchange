@@ -74,7 +74,7 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 - [ ] Use **Save MIDI…** and **Drag MIDI out** into Cubase and Staccato. Clips from several sources arrive on one track, in the right places.
 - [ ] Overlapping clips export with both clips' notes merged, and there are no stuck notes.
 - [ ] Combine sources with **different PPQ** (e.g. Cubase + Reason): the timing is still correct.
-- [ ] A clip moved to a track with **another MIDI channel** keeps its own channel. This is expected for now (DESIGN_NOTES Risk 9); just note how the DAW handles it.
+- [x] A clip moved to a track with **another MIDI channel** keeps its own channel. This is expected for now (DESIGN_NOTES Risk 9); just note how the DAW handles it. *Reason 14 splits such a track into one track per channel (2026-11-10).*
 - [ ] Range export across clip joins: notes at the edges are cut cleanly, and a rebased range lands at the drop position.
 
 ## 9. New document

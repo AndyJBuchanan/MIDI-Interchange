@@ -92,7 +92,7 @@ The main design decisions:
 - **Drag-out** currently offers file URLs to temp files. They stay in `$TMPDIR/MIDI Interchange Drag` and are pruned after 24 h. That covers Finder/Explorer and DAWs that accept file drops. Native file promises are a Milestone 2 item.
 - SMPTE-division files are rejected with a clear message.
 - Clip moves are whole-clip offsets; there's no splitting or trimming of clips.
-- A clip moved onto another track keeps its own MIDI channel(s); nothing is rewritten. A track can therefore end up mixing channels (its header lists them all).
+- A clip moved onto another track keeps its own MIDI channel(s); nothing is rewritten. A track can therefore end up mixing channels (its header lists them all). Some importers split a MIDI track by channel: **Reason 14** turns a multi-channel track into one track per channel, each with the same name plus the channel number (confirmed 2026-11-10). MIDI Interchange's own export is correct (one track, every note); the split happens in the importer. To get one track there, assemble clips that share a channel. A channel option for export is on the back burner (DESIGN_NOTES Risk 9).
 - Not built yet: per-track auto-trim (`Track.auto_trim` exists but the exporter ignores it), drag handles for individual ranges, and workspace persistence.
 
 ## Interoperability test checklist
@@ -106,7 +106,7 @@ Key: ✓ works · ◐ works within limits (see notes) · — the app doesn't sup
 | Target | macOS drag-in | macOS drag-out | Windows drag-in | Windows drag-out | Notes |
 |---|---|---|---|---|---|
 | Cubase 16 | ◐ | ✓ | ☐ | ☐ | Cubase drags out one clip at a time (a Cubase limitation; also true when dragging to the Finder) |
-| Reason 14 | ✓ | ☐ | ☐ | ☐ | |
+| Reason 14 | ✓ | ◐ | ☐ | ☐ | Drag-out works, whole and by range; Reason splits a multi-channel track into one track per channel |
 | RapidComposer 6 | ◐ | ☐ | ☐ | ☐ | Single clip/track only |
 | Scaler 3 | ◐ | ◐ | ☐ | ☐ | Where it applies, e.g. the main page |
 | Staccato.ai | ✓ | ✓ | ☐ | ☐ | |

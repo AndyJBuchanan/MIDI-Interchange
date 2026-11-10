@@ -17,7 +17,7 @@ Not every combination of tracks, clips or selections has been tried.
 | Application | Into MIDI Interchange | From MIDI Interchange | Notes |
 |---|---|---|---|
 | Cubase 16 | Works | Works | Dragging several selected clips out of Cubase brings only one into MIDI Interchange; see below |
-| Reason 14 | Works | Not yet confirmed | |
+| Reason 14 | Works | Works | Reason splits a multi-channel track by channel; see below |
 | RapidComposer 6 | Works | Not yet confirmed | Single clip/track only |
 | Scaler 3 | Works | Works | Where it applies, e.g. the main page |
 | Staccato.ai | Works | Works | Fine in both directions |
@@ -83,6 +83,16 @@ Sources: [Avid: Copy and paste music between Sibelius and Pro Tools](https://www
 There is still no MIDI clipboard format that DAWs share in practice. Cubase, Reason and Logic keep copy and paste internal to themselves. The only documented public convention is `public.midi-audio`, used by Pro Tools and Sibelius. Drag and drop with file URLs remains the working route. Clipboard support in MIDI Interchange is only worth considering as `public.midi-audio` copy and paste, and only after a Clip-Test capture from Pro Tools or Sibelius confirms it. Clip-Test flags `MThd` data and file URLs automatically.
 
 ## Open issues
+
+### Reason splits multi-channel tracks — importer behaviour
+
+**Confirmed 2026-11-10 on the studio Mac.** Dragging from MIDI Interchange into Reason 14 works, for the whole workspace and by range. But a track whose clips use more than one MIDI channel arrives in Reason as **one track per channel**, all with the same name, and Reason adds the channel to each track's name. It went unnoticed before because most files use only channel 1 or 10.
+
+- How it shows up in clip assembly: clips keep their own channel when moved (DESIGN_NOTES Risk 9). Staccato.ai files, for example, put same-named tracks on different channels, so assembling them gives a multi-channel track.
+- MIDI Interchange's export is not at fault: `tests/test_export_assembly.py` proves an assembled track is written as one track holding every note, and `samples/reason-check/` has a one-channel and a two-channel assembled file that show the difference in Reason.
+- Other importers may do the same. Workaround for now: assemble clips that share a channel, or set channels in the source DAW first.
+- Decision deferred (back burner): an export option to put each track on one channel, and/or per-clip channel changes. See DESIGN_NOTES Risk 9 and the to-do list.
+
 
 ### Cubase: several selected clips drag in as one — Cubase limitation
 
