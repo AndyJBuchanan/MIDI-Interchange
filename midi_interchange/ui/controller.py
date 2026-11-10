@@ -5,8 +5,8 @@ from fractions import Fraction
 
 from PySide6.QtCore import QObject, Signal
 
-from ..core.document import Workspace
-from ..core.export_smf import ExportMode, ExportOptions, ExportResult, build_exports
+from ..core.document import Track, Workspace
+from ..core.export_smf import ExportMode, ExportOptions, ExportResult, build_exports, export_tracks
 from ..core.import_smf import ImportError_, import_smf_bytes
 from ..core.placement import Placement, place_imports
 from ..core.ranges import Range
@@ -284,7 +284,7 @@ class Controller(QObject):
 
     # -- ranges -----------------------------------------------------------------
     def add_range(self, start: Fraction, end: Fraction) -> Range:
-        r = Range(start, end)
+        r = Range(start, end, excluded={t.id for t in self.ws.tracks if not t.enabled})
         self.ws.ranges.append(r)
         if self.export_mode is ExportMode.WHOLE:
             self.export_mode = ExportMode.REBASE
@@ -319,6 +319,28 @@ class Controller(QObject):
         if self.selected_range_id == range_id:
             self.selected_range_id = None
             self.selectionChanged.emit()
+        self.rangesChanged.emit()
+
+    def set_range_track_included(self, range_id: str, track_id: str, included: bool) -> None:
+        """Include/exclude one track in one range (the range's toggle wins over the track's)."""
+        r = self.ws.range(range_id)
+        if r is None or self.ws.track(track_id) is None or r.includes(track_id) == included:
+            return
+        self.checkpoint()
+        r.set_included(track_id, included)
+        self.rangesChanged.emit()
+
+    def set_range_tracks(self, range_id: str, included: bool | None) -> None:
+        """Include all (True), exclude all (False) or reset to the track toggles (None)."""
+        r = self.ws.range(range_id)
+        if r is None:
+            return
+        want = {t.id: (t.enabled if included is None else included) for t in self.ws.tracks}
+        if all(r.includes(i) == on for i, on in want.items()):
+            return
+        self.checkpoint()
+        for i, on in want.items():
+            r.set_included(i, on)
         self.rangesChanged.emit()
 
     def clear_ranges(self) -> None:
@@ -362,9 +384,14 @@ class Controller(QObject):
                       range_ids: list[str] | None = None) -> list[ExportResult]:
         return build_exports(self.ws, self.export_options(track_ids, range_ids))
 
+    def export_tracks(self, track_ids: list[str] | None = None) -> list[Track]:
+        """The tracks an export would contain: track toggles for a whole
+        export, range toggles when exporting ranges."""
+        ranges = self.ws.ranges if self.ws.ranges and self.export_mode is not ExportMode.WHOLE else None
+        return export_tracks(self.ws, track_ids, ranges)
+
     def default_export_name(self, track_ids: list[str] | None = None) -> str:
-        tracks = [self.ws.track(i) for i in track_ids] if track_ids else self.ws.enabled_tracks()
-        tracks = [t for t in tracks if t]
+        tracks = self.export_tracks(track_ids)
         if len(tracks) == 1:
             return tracks[0].name
         r = self.selected_range

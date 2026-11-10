@@ -177,6 +177,8 @@ class Workspace:
         for t in tracks:
             t.color = TRACK_COLORS[next(self._color_cycle) % len(TRACK_COLORS)]
             self.tracks.append(t)
+            for r in self.ranges:         # a new track starts with its own toggle in every range
+                r.set_included(t.id, t.enabled)
         if not source.tempo_map.is_empty:
             if self.tempo_source_id is None:
                 self.adopt_tempo_map(source.id)
@@ -247,6 +249,8 @@ class Workspace:
                   original_name=like.original_name, enabled=like.enabled,
                   color=TRACK_COLORS[next(self._color_cycle) % len(TRACK_COLORS)])
         self.tracks.insert(len(self.tracks) if index is None else index, t)
+        for r in self.ranges:             # ... and in each range, the state of the track it is like
+            r.set_included(t.id, r.includes(like.id))
         self.move_clip_to_track(clip_id, t.id)
         return t
 
@@ -323,7 +327,7 @@ class Workspace:
             "tracks": [t.copy() for t in self.tracks],
             "tempo_map": self.tempo_map,
             "tempo_source_id": self.tempo_source_id,
-            "ranges": [replace(r) for r in self.ranges],
+            "ranges": [r.copy() for r in self.ranges],
         }
 
     def restore(self, snap: dict) -> None:
@@ -331,7 +335,7 @@ class Workspace:
         self.tracks = [t.copy() for t in snap["tracks"]]
         self.tempo_map = snap["tempo_map"]
         self.tempo_source_id = snap["tempo_source_id"]
-        self.ranges = [replace(r) for r in snap["ranges"]]
+        self.ranges = [r.copy() for r in snap["ranges"]]
 
 
 def track_channels(events: list[Event]) -> tuple[int, ...]:

@@ -105,6 +105,12 @@ def test_full_workflow(win, tmp_path):
     save_exports(ctl.build_exports(), str(out))
     mf = mido.MidiFile(str(out))
     names = [m.name for t in mf.tracks for m in t if m.type == "track_name"]
+    # the range was drawn while Drums was on: the range's toggle wins
+    assert "Low End" in names and "Drums" in names
+    ctl.set_range_track_included(r.id, drums.id, False)
+    save_exports(ctl.build_exports(), str(out))
+    mf = mido.MidiFile(str(out))
+    names = [m.name for t in mf.tracks for m in t if m.type == "track_name"]
     assert "Low End" in names and "Drums" not in names
     bass_notes = notes_of(track_by_name(mf, "Low End"), mf.ticks_per_beat)
     assert bass_notes and bass_notes[0][0] == 0 and max(n[1] for n in bass_notes) <= 8

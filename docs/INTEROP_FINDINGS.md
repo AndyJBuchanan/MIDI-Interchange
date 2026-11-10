@@ -25,6 +25,17 @@ Not every combination of tracks, clips or selections has been tried.
 
 No app needed macOS file promises or any other native adapter: everything that worked did so with plain file URLs.
 
+### DAWs and their hosted plugins (tested by hand, macOS, reported 2026-11-10)
+
+Dragging MIDI between a DAW and a VST plugin running inside it (for example Scaler 3 or RapidComposer as a plugin):
+
+| Host | Plugin → host sequencer | Host sequencer → plugin | Notes |
+|---|---|---|---|
+| Cubase 16 | Works | Works | From the Project window only **one** MIDI part goes, however many are selected, the same as dragging to the desktop or to MIDI Interchange (see the Cubase section below) |
+| Reason 14 | Works | Doesn't work | Reason takes MIDI dragged out of a hosted VST into its sequencer, but can't drag sequencer MIDI into the plugin |
+
+These aren't MIDI Interchange bugs or feature requests. They are more evidence that MIDI drag-and-drop between music apps is inconsistent and often one-way, even inside a single host. See DESIGN_NOTES "Why MIDI Interchange".
+
 ## Clipboard investigation
 
 Captured on macOS with the Clip-Test utility (`../Clip-Test`), by copying clips in each app. Raw captures are in `../Clip-Test-Results` (not in this repo).
@@ -97,7 +108,7 @@ There is still no MIDI clipboard format that DAWs share in practice. Cubase, Rea
 
 ### Cubase: several selected clips drag in as one — Cubase limitation
 
-**Settled (2026-11-09): Cubase exports only one clip per drag, whatever the destination.** MIDI Interchange isn't losing anything.
+**Settled (2026-11-09): Cubase exports only one clip per drag, whatever the destination.** MIDI Interchange isn't losing anything. Confirmed again on 2026-11-10 with a VST hosted in Cubase as the destination: one part, the same as the desktop and MIDI Interchange.
 
 What the tests showed:
 

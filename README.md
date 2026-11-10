@@ -44,6 +44,7 @@ For Windows commands, a new machine, VS Code setup or troubleshooting, see [docs
 | Bypass snap | Hold Shift while dragging |
 | Precise range | Type `bar.beat.tick` (480 ticks per quarter) into Start/End in the bottom panel |
 | Delete range / cycle ranges | Backspace or Delete / Tab |
+| Leave a track out of a range | Click the range's checkbox in that track's lane (at the range's inner left edge). An excluded section is hatched. Right-click the range for the same list, plus Include All, Exclude All and Reset to Track Toggles. A new range starts with the track toggles; after that the range's checkboxes win. |
 | Move a clip | Alt/Option-drag it, in time and onto another track; drag below the last track for a new one. Shift keeps its time (track change only). A track left empty is removed (Undo restores it). |
 | Copy a clip | Alt+Ctrl / Option-⌘-drag it, or right-click ▸ Duplicate Clip (placed straight after it) |
 | Clip tools | Right-click a clip: Duplicate, Butt Against Previous Clip, Move Clip to Track (or New Track), Delete Clip |
@@ -84,6 +85,7 @@ The main design decisions:
 - The tempo and time signature in effect at `s` are written at the start of each segment.
 - Lyrics, text, markers and SysEx are included when their time falls in `[s, e)`.
 - **Preserve** mode merges overlapping or adjacent ranges and keeps positions. **Rebase** concatenates ranges in list order; it's the default. With no ranges, the whole workspace is exported. **Separate** writes one rebased file per range. End-of-track is placed at the range end so loop lengths survive.
+- **Tracks per range:** range exports use each range's own track checkboxes, not the track toggles. A track excluded from a range is silent there (the range still takes its time); a track no exported range includes is left out of the file. Whole export uses the track toggles.
 - **Trim** applies to the whole output only. It cuts to the first and last note or lyric and moves every track by the same amount, so alignment is never broken.
 
 ## Known limitations and risks (for Milestone 2)

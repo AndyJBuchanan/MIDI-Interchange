@@ -2,6 +2,18 @@
 
 Companion to [DESIGN_BRIEF.md](DESIGN_BRIEF.md), the original spec, kept verbatim. This file records how the brief was interpreted: decisions, deviations, known gaps and risks. Update it whenever direction changes.
 
+## Why MIDI Interchange
+
+The brief's aim is to remove the friction of moving MIDI between applications. Hand testing on macOS keeps confirming that the friction is real: each app supports a different, often one-way, subset of MIDI drag-and-drop, and there is no shared MIDI clipboard. Detail is in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md).
+
+- **Logic Pro** accepts dragged MIDI but doesn't drag MIDI out.
+- **Cubase 16** drags only one MIDI part at a time from its Project window, however many are selected, to any destination: the desktop, MIDI Interchange or a VST plugin it hosts. Dragged parts also lose their position.
+- **Reason 14** takes MIDI dragged from a VST plugin it hosts into its sequencer, but can't drag sequencer MIDI into that plugin. It also splits a multi-channel track into one track per channel on import.
+- **RapidComposer 6** drags only a single clip or track out.
+- **Clipboard:** Cubase, Reason and Logic keep copy and paste to themselves (a pointer, an encrypted blob, a text listing). No public MIDI clipboard format is in common use.
+
+Plain MIDI files via file URLs are the one route that works almost everywhere. MIDI Interchange builds on that: it takes whatever each app can give (one part at a time, whole files), assembles and trims it in one place, and hands it on as a file any of them can accept.
+
 ## Status by milestone (updated 2026-11-09)
 
 | Milestone | Status |
@@ -99,12 +111,18 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - Shift bypasses snap. Snap choices are off, bar, beat, 1/8, 1/16, 1/32, 1/8T and 1/16T.
   - The view scrolls automatically near the edges.
   - Double-click edits a range; Tab cycles through ranges; Backspace or Delete deletes one.
+  - Each range has an include checkbox per lane at its inner left edge (hidden when the range is under ~23 px wide; the range's right-click menu lists the same choices). A quick second click on it flips it again rather than opening the range editor.
 - Alt/Option-drag moves a clip in time and across tracks (below the last lane: a new track named after the clip's original track). Shift keeps its time. Alt+Ctrl / Option-⌘-drag copies. Empty tracks are removed when the gesture ends; one undo step per gesture.
 - Clips carry their own `source_id`, so a track can hold clips from several sources. Export chooses PPQ from every clip's source; Source Info and the track header list all of them.
 - Overlapping clips on a track are allowed: the overlap is tinted red and both clips' events are exported, merged.
 - File ▸ New empties the workspace as one undoable step, keeping export settings.
 - ⌘/Ctrl+wheel and pinch zoom around the pointer. Alt+wheel changes lane height.
 - The track panel uses absolutely positioned headers kept in sync with the timeline's vertical scroll. Drag the grip to reorder; drops onto a name field are blocked.
+- **Per-range track selection** (2026-11-10). `Range.excluded` holds the ids of tracks left out of that range.
+  - A new range is seeded from the track toggles; afterwards it is independent of them (the range wins). Track toggles still drive whole export and seed new ranges.
+  - A track created later starts with its own toggle in every range (imports); a clip moved onto a new track copies the range state of the track it came from.
+  - Export: Rebase and Preserve give each track only the segments of ranges that include it (the conductor still covers every range); Separate writes each range's file with that range's tracks and skips a range with none; a track in no exported range is left out. Trim measures content only over the tracks each range includes. An explicit track export (track header drag) follows the same range rules.
+  - Excluded lane sections are dimmed and hatched. A track switched off at track level still draws grey even where a range includes it.
 - The default export mode is Rebase & concatenate (changed from Preserve on 2026-11-10, after hand testing). If Whole is selected, creating a range switches it to Rebase. With no ranges, export is always whole.
 - Undo takes up to 200 snapshots of the workspace structure; event lists are shared, not copied. Range and clip drags record one undo step per gesture.
 - The window zooms to fit on the first import.
@@ -129,7 +147,6 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 
 ## To do (agreed, not started)
 
-- **Per-range track exclusion:** let a track be switched off within a range, overriding its own enabled setting, for more export flexibility. Next feature after clip assembly; more range-export enhancements may join it.
 - **Back burner:** decide the mixed-channel policy (Risk 9). Reason splits multi-channel tracks on import, so an export option to put each track on one channel is the likely answer. **Side effect worth keeping in mind:** because clips keep their channels, moving clips together already lets someone assemble a deliberately multi-channel track. Any policy should keep that possible.
 - **For consideration only:** changing a clip's MIDI channel in the UI (per clip), e.g. right-click ▸ Channel ▸ 1–16, rewriting channel messages on export.
 - **Export / drag filename:** always the same today. Offer decoration, at least bar numbers (range start–end) or other distinguishing details.

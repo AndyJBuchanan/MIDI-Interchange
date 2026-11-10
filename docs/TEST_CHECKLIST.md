@@ -78,6 +78,20 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 - [x] A clip moved to a track with **another MIDI channel** keeps its own channel. This is expected for now (DESIGN_NOTES Risk 9); just note how the DAW handles it. *Reason 14 splits such a track into one track per channel (2026-11-10).*
 - [x] Range export across clip joins: notes at the edges are cut cleanly, and a rebased range lands at the drop position.
 
+## 8a. Per-range track exclusion (`feature/range-track-exclusion`)
+
+- [ ] Draw a range: each lane gets a checkbox at the range's inner left edge, ticked to match the track toggles (an off track starts unticked).
+- [ ] Click a checkbox: it untick/ticks, the lane section inside the range is hatched/clear, and ⌘Z undoes it. Two quick clicks flip it twice and don't open the range editor.
+- [ ] Change a track toggle after drawing the range: the range's checkboxes don't change.
+- [ ] Turn a track off but leave it ticked in a range: its notes from that range are still exported.
+- [ ] Rebase with two ranges, a track excluded from the first: in the DAW its notes appear only in the second range's part, at the right position.
+- [ ] Separate: each file holds only the tracks ticked in its range; a range with nothing ticked gives no file.
+- [ ] A track unticked in every range is missing from the file (and from the "N of M tracks" counts).
+- [ ] Whole export ignores the range checkboxes and uses the track toggles.
+- [ ] A very narrow range shows no checkboxes; right-click it: the track list, Include All, Exclude All and Reset to Track Toggles all work.
+- [ ] Drop a new file after drawing a range: its track is ticked in the range. Option-drag a clip from an excluded track to a new track: the new track is unticked.
+- [ ] The bottom panel shows "N of M tracks" for the selected range.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.

@@ -395,8 +395,8 @@ class MainWindow(QMainWindow):
     def save_midi(self, track_ids: list[str] | None = None) -> None:
         if not isinstance(track_ids, list):
             track_ids = None
-        if not (track_ids or self.ctl.ws.enabled_tracks()):
-            self.statusBar().showMessage("No enabled tracks to export", 6000)
+        if not self.ctl.export_tracks(track_ids):
+            self.statusBar().showMessage("No tracks to export (check the track and range toggles)", 6000)
             return
         try:
             results = self.ctl.build_exports(track_ids=track_ids)
