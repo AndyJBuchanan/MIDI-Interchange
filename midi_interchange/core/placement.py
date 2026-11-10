@@ -51,15 +51,31 @@ def target_matches(target: Track | None, names: list[str]) -> bool:
     return target is not None and any(names_match(target, n) for n in names)
 
 
-def match_track(candidates: list[Track], target: Track, name: str) -> Track | None:
-    """The existing track an imported track named `name` joins, or None for a new track.
+def assign_tracks(candidates: list[Track], target: Track, names: list[str]) -> list[Track | None]:
+    """For one imported file's track names, the existing track each joins (None = new track).
 
-    Only call when target_matches() is true. The target wins a tie; otherwise
-    the first same-named track in display order.
+    Only call when target_matches() is true. Each existing track takes at most
+    one imported track per file, so a file that repeats a name (Staccato does)
+    pairs its copies in order with the existing same-named tracks: the first
+    copy joins the first such track in display order, the second the next, and
+    any extra copies become new tracks. A name the file uses only once prefers
+    the target if it matches, else the first same-named track.
     """
-    if names_match(target, name):
-        return target
-    return next((t for t in candidates if names_match(t, name)), None)
+    counts: dict[str, int] = {}
+    for n in names:
+        counts[norm_name(n)] = counts.get(norm_name(n), 0) + 1
+    used: set[str] = set()
+    out: list[Track | None] = []
+    for n in names:
+        free = [t for t in candidates if t.id not in used and names_match(t, n)]
+        if counts[norm_name(n)] == 1 and target in free:
+            dest = target
+        else:
+            dest = free[0] if free else None
+        if dest is not None:
+            used.add(dest.id)
+        out.append(dest)
+    return out
 
 
 def source_length(tracks: list[Track]) -> Fraction:
@@ -81,7 +97,9 @@ def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
     old_clips = {c.id for t in existing for c in t.clips}   # only these can be replaced
     matching = target_matches(target, [t.name for _, tracks in parsed for t in tracks])
     cursor = max(placement.time, ZERO)
-    run_tracks: dict[str, Track] = {}   # end-to-end: name -> new track made in this drop
+    # end-to-end: name -> new tracks made in this drop, in order of the name's
+    # occurrences within a file (a file may repeat a name)
+    run_tracks: dict[str, list[Track]] = {}
 
     for source, tracks in parsed:
         length = source_length(tracks)
@@ -89,8 +107,12 @@ def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
             for c in t.clips:
                 c.offset += cursor
         fresh: list[Track] = []
-        for t in tracks:
-            dest = match_track(existing, target, t.name) if matching else None
+        dests = assign_tracks(existing, target, [t.name for t in tracks]) if matching else [None] * len(tracks)
+        seen: dict[str, int] = {}       # occurrences of each name so far in this file
+        for t, dest in zip(tracks, dests):
+            key = norm_name(t.name)
+            nth = seen.get(key, 0)
+            seen[key] = nth + 1
             if dest is not None:
                 for c in t.clips:
                     same = [o for o in dest.clips
@@ -106,16 +128,16 @@ def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
                 if dest.name not in stats["onto_names"]:
                     stats["onto_names"].append(dest.name)
                 continue
-            key = norm_name(t.name)
-            if placement.end_to_end and key and key in run_tracks:
-                dest = run_tracks[key]
+            run = run_tracks.setdefault(key, []) if placement.end_to_end and key else None
+            if run is not None and nth < len(run):
+                dest = run[nth]
                 dest.clips.extend(t.clips)
                 dest.refresh_channels()
                 dest.sort_clips()
                 continue
             fresh.append(t)
-            if placement.end_to_end and key:
-                run_tracks[key] = t
+            if run is not None:
+                run.append(t)
         notes += ws.add_import(source, fresh)
         stats["new_tracks"] += len(fresh)
         if placement.end_to_end:

@@ -120,6 +120,40 @@ def test_clips_from_the_same_drop_are_not_replaced():
     assert [c.start for c in bass.clips] == [0, 8, 8]
 
 
+STACCATO_DUPES = (("Drums", 36), ("Bass", 40), ("Lead", 72), ("Drums", 38), ("Bass", 43))
+
+
+def test_round_trip_with_repeated_names_pairs_tracks_in_order():
+    """Staccato files can repeat track names; each copy must go to the next same-named track."""
+    ws = load(multi(*STACCATO_DUPES), "song.mid")
+    before = [t.id for t in ws.tracks]
+    target = ws.tracks[3]                      # dropped on the *second* Drums
+    _, stats = place_imports(ws, parse((multi(*STACCATO_DUPES), "rt.mid")), Placement(F(0), target.id))
+    assert [t.id for t in ws.tracks] == before             # no new tracks
+    assert all(len(t.clips) == 1 for t in ws.tracks)       # every clip replaced, none stacked
+    assert stats["replaced"] == 5 and stats["onto_existing"] == 5
+    # in order: first incoming Drums (pitch 36) onto the first Drums track, second onto the second
+    pitches = [t.clips[0].events[0].msg.note for t in ws.tracks]
+    assert pitches == [36, 40, 72, 38, 43]
+
+
+def test_extra_repeated_names_become_new_tracks():
+    ws = load(multi(("Bass", 40)), "song.mid")
+    bass = ws.tracks[0]
+    place_imports(ws, parse((multi(("Bass", 41), ("Bass", 42), ("Bass", 43)), "rt.mid")), Placement(F(8), bass.id))
+    assert [t.name for t in ws.tracks] == ["Bass", "Bass", "Bass"]
+    assert [len(t.clips) for t in ws.tracks] == [2, 1, 1]
+
+
+def test_end_to_end_keeps_repeated_names_apart():
+    ws = Workspace()
+    f = multi(("Bass", 40), ("Bass", 43))
+    place_imports(ws, parse((f, "1.mid"), (f, "2.mid")), Placement(end_to_end=True))
+    assert [t.name for t in ws.tracks] == ["Bass", "Bass"]
+    assert [len(t.clips) for t in ws.tracks] == [2, 2]
+    assert [c.events[0].msg.note for c in ws.tracks[0].clips] == [40, 40]
+
+
 def test_drop_on_unmatched_track_matches_nothing():
     ws = load(multi(("Bass", 40), ("Keys", 60), ("Strings", 70)), "song.mid")
     strings = ws.tracks[2]

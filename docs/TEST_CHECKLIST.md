@@ -8,23 +8,23 @@ Record interop results (does a drag work with an app at all) in the README check
 
 ## 1. Drop placement (single file, one track)
 
-- [ ] While you drag over the window, the insertion cursor and label follow the mouse and snap to beats. Holding Shift turns snapping off.
-- [ ] Drop on a lane whose track has the **same name** (try different capitals and extra spaces): the clip lands on that track at the cursor time.
-- [ ] Drop on a lane with a **different name**: you get a new track at the cursor time, and the label says *names differ*.
-- [ ] Drop on a track you've **renamed**: it still matches the original name.
-- [ ] Drop on a **track header**: it lands at bar 1 under the same name rules.
-- [ ] Drop on the **blank area below the tracks**: new track at the cursor time, shown with a dashed box.
-- [ ] Drop on the **export panel or elsewhere**: new track at bar 1.
-- [ ] Drop onto an **empty workspace**: it works, and the tempo comes from the dropped file.
+- [x] While you drag over the window, the insertion cursor and label follow the mouse and snap to beats. Holding Shift turns snapping off.
+- [x] Drop on a lane whose track has the **same name** (try different capitals and extra spaces): the clip lands on that track at the cursor time.
+- [x] Drop on a lane with a **different name**: you get a new track at the cursor time, and the label says *names differ*.
+- [x] Drop on a track you've **renamed**: it still matches the original name.
+- [x] Drop on a **track header**: it lands at bar 1 under the same name rules.
+- [x] Drop on the **blank area below the tracks**: new track at the cursor time, shown with a dashed box.
+- [x] Drop on the **export panel or elsewhere**: new track at bar 1.
+- [x] Drop onto an **empty workspace**: it works, and the tempo comes from the dropped file.
 
 ## 2. Multi-track file
 
-- [ ] Drop a Staccato round-trip file on one of its matching tracks. Every same-named track gets its clip, and any leftover tracks become new tracks. The label lists the track names.
-- [ ] Drop the same file on a **track that doesn't match**: everything becomes new tracks.
-- [ ] Drop it on a **blank area**: everything becomes new tracks.
-- [ ] At the **same position with the same lengths**, the existing clips are replaced (no red tint). The message says "replacing N".
-- [ ] At a **shifted position**, or with a **different length**, both clips stay and the overlap is tinted red.
-- [ ] One ⌘Z restores the replaced clips.
+- [x] Drop a Staccato round-trip file on one of its matching tracks. Every same-named track gets its clip, and any leftover tracks become new tracks. The label lists the track names.
+- [x] Drop the same file on a **track that doesn't match**: everything becomes new tracks.
+- [x] Drop it on a **blank area**: everything becomes new tracks.
+- [x] At the **same position with the same lengths**, the existing clips are replaced (no red tint). The message says "replacing N".
+- [x] At a **shifted position**, or with a **different length**, both clips stay and the overlap is tinted red.
+- [x] One ⌘Z restores the replaced clips.
 
 ## 3. Several files at once (Finder multi-select)
 

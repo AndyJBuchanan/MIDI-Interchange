@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMen
                                QSplitter, QToolBar, QVBoxLayout, QWidget)
 
 from ..core.import_smf import ImportError_, import_smf_bytes
-from ..core.placement import Placement, match_track, target_matches
+from ..core.placement import Placement, assign_tracks, target_matches
 from ..core.timing import ZERO
 from ..interchange.drag_import import extract_payloads
 from ..interchange.payload import Payload
@@ -94,7 +94,7 @@ class MainWindow(QMainWindow):
         self._had_tracks = False
         self._drag_payloads: list[Payload] = []
         self._drag_diagnostics: list[str] = []
-        self._drag_names: list[str] | None = None
+        self._drag_names: list[list[str]] | None = None   # per file
 
     # ------------------------------------------------------------------ actions
     def _act(self, text: str, slot, shortcut=None, tip: str | None = None) -> QAction:
@@ -283,14 +283,14 @@ class MainWindow(QMainWindow):
         self.timeline.set_drop_indicator(None)
 
     @staticmethod
-    def _payload_track_names(payloads: list[Payload]) -> list[str]:
-        names: list[str] = []
+    def _payload_track_names(payloads: list[Payload]) -> list[list[str]]:
+        names: list[list[str]] = []
         for p in payloads:
             try:
                 _src, tracks = import_smf_bytes(p.data, p.name)
             except ImportError_:
                 continue
-            names += [t.name for t in tracks]
+            names.append([t.name for t in tracks])
         return names
 
     def drop_placement(self, pos: QPointF, bypass_snap: bool = False) -> tuple[Placement, int | None]:
@@ -325,11 +325,12 @@ class MainWindow(QMainWindow):
             tgt = self.ctl.ws.track(pl.target_track_id)
             if names is None:
                 label = f"Onto “{tgt.name}” (and other tracks) at {bbt} if the names match, else new track(s)"
-            elif not target_matches(tgt, names):
+            elif not target_matches(tgt, [n for file_names in names for n in file_names]):
                 label = f"New track(s) at {bbt}: names differ from “{tgt.name}”"
                 lane = None
             else:
-                dests = [match_track(self.ctl.ws.tracks, tgt, n) for n in names]
+                dests = [d for file_names in names
+                         for d in assign_tracks(self.ctl.ws.tracks, tgt, file_names)]
                 hit_names = list(dict.fromkeys(d.name for d in dests if d is not None))
                 n_new = sum(d is None for d in dests)
                 shown = ", ".join(f"“{n}”" for n in hit_names[:3]) + (" …" if len(hit_names) > 3 else "")
