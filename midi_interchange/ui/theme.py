@@ -31,6 +31,11 @@ MARKER_COL = QColor("#ff8f8f")
 HOVER_LINE = QColor(255, 255, 255, 90)
 PANEL_BG = QColor("#26282c")
 DROP_OVERLAY = QColor(242, 177, 52, 40)
+DROP_LANE_FILL = QColor(242, 177, 52, 28)
+DROP_NEW_FILL = QColor(242, 177, 52, 18)
+DROP_LABEL_BG = QColor(20, 21, 24, 225)
+OVERLAP_FILL = QColor(255, 96, 96, 38)
+OVERLAP_EDGE = QColor(255, 110, 110, 200)
 
 
 def apply(app: QApplication) -> None:

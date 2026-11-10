@@ -73,6 +73,8 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 
 The output must include the zip, the `Installer:` line and two SHA-256 lines. `exe version` must show the new version. Install from the Setup exe and launch it from the Start menu. Then check *Settings ▸ Apps* shows the new version, and that the zip's exe runs after you extract it.
 
+Windows is only tested at release time, so do the hand tests now: section 11 of [TEST_CHECKLIST.md](TEST_CHECKLIST.md) (Alt for Option, Ctrl for ⌘), plus a quick drag in and out with the DAWs you use on Windows. Record results in the README interop table.
+
 ### 4. Collect the files on one machine
 
 Copy the two Windows files into `dist/` on the Mac, or upload from Windows instead (step 5 works from either). If you copied them, check the hashes match the ones the Windows build printed:
