@@ -6,7 +6,8 @@ from fractions import Fraction
 from PySide6.QtCore import QObject, Signal
 
 from ..core.document import Track, Workspace
-from ..core.export_smf import ExportMode, ExportOptions, ExportResult, build_exports, export_tracks
+from ..core.export_smf import (ExportMode, ExportOptions, ExportResult, build_exports, export_name,
+                               export_tracks)
 from ..core.import_smf import ImportError_, import_smf_bytes
 from ..core.placement import Placement, place_imports
 from ..core.ranges import Range
@@ -197,12 +198,22 @@ class Controller(QObject):
             self.tracksChanged.emit()
 
     # -- tracks --------------------------------------------------------------
-    def set_track_enabled(self, track_id: str, enabled: bool) -> None:
+    def set_track_enabled(self, track_id: str, enabled: bool, ranges_too: bool = False) -> None:
+        """Switch a track on/off. ``ranges_too`` (Option/Alt-click) also sets the
+        track's toggle in every range to match, as one undo step."""
         t = self.ws.track(track_id)
-        if t and t.enabled != enabled:
-            self.checkpoint()
-            t.enabled = enabled
-            self.tracksChanged.emit()
+        if t is None:
+            return
+        ranges = [r for r in self.ws.ranges if r.includes(track_id) != enabled] if ranges_too else []
+        if t.enabled == enabled and not ranges:
+            return
+        self.checkpoint()
+        t.enabled = enabled
+        for r in ranges:
+            r.set_included(track_id, enabled)
+        self.tracksChanged.emit()
+        if ranges:
+            self.rangesChanged.emit()
 
     def rename_track(self, track_id: str, name: str) -> None:
         t = self.ws.track(track_id)
@@ -391,10 +402,5 @@ class Controller(QObject):
         return export_tracks(self.ws, track_ids, ranges)
 
     def default_export_name(self, track_ids: list[str] | None = None) -> str:
-        tracks = self.export_tracks(track_ids)
-        if len(tracks) == 1:
-            return tracks[0].name
-        r = self.selected_range
-        if r and r.name and self.export_mode is not ExportMode.WHOLE:
-            return r.name
-        return "MIDI Interchange Export"
+        ranges = None if self.export_mode is ExportMode.WHOLE or not self.ws.ranges else self.ws.ranges
+        return export_name(self.export_tracks(track_ids), ranges)

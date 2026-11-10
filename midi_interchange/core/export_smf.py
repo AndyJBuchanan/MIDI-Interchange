@@ -149,15 +149,33 @@ def export_tracks(ws: Workspace, track_ids: list[str] | None = None,
     return [t for t in pool if t.id in wanted]
 
 
+def export_name(tracks: list[Track], ranges: list[Range] | None) -> str:
+    """Suggested name for a single export: the track's name when there is one
+    track, else the names of the ranges used (in export order), else a default.
+    ``ranges`` None = whole export."""
+    if len(tracks) == 1:
+        return tracks[0].name
+    ids = {t.id for t in tracks}
+    names: list[str] = []
+    for r in ranges or []:
+        if r.name and not r.is_empty and any(r.includes(i) for i in ids) and r.name not in names:
+            names.append(r.name)
+    return " + ".join(names) or "MIDI Interchange Export"
+
+
 def save_exports(results: list[ExportResult], path: str) -> list[str]:
-    """Write results; multiple results get the range label appended."""
+    """Write results; multiple results get the range label appended
+    ("out - Verse.mid"). Clashing names get a number."""
     import os
 
     paths = []
     stem, ext = os.path.splitext(path)
     ext = ext or ".mid"
     for res in results:
-        p = f"{stem}{ext}" if len(results) == 1 else f"{stem} - {_safe(res.label)}{ext}"
+        base = stem if len(results) == 1 else f"{stem} - {_safe(res.label)}"
+        p, n = f"{base}{ext}", 2
+        while p in paths:
+            p, n = f"{base} ({n}){ext}", n + 1
         res.midi.save(p)
         paths.append(p)
     return paths
@@ -404,4 +422,4 @@ def _to_mido_track(items: list[_Item], end: Fraction, ppq: int, name: str | None
 
 
 def _safe(label: str) -> str:
-    return "".join(c if c.isalnum() or c in " -_()" else "_" for c in label).strip() or "range"
+    return "".join(c if c.isalnum() or c in " -_()+" else "_" for c in label).strip() or "range"

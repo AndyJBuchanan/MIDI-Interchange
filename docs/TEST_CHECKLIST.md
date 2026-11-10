@@ -80,17 +80,26 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 
 ## 8a. Per-range track exclusion (`feature/range-track-exclusion`)
 
-- [ ] Draw a range: each lane gets a checkbox at the range's inner left edge, ticked to match the track toggles (an off track starts unticked).
-- [ ] Click a checkbox: it untick/ticks, the lane section inside the range is hatched/clear, and ⌘Z undoes it. Two quick clicks flip it twice and don't open the range editor.
-- [ ] Change a track toggle after drawing the range: the range's checkboxes don't change.
-- [ ] Turn a track off but leave it ticked in a range: its notes from that range are still exported.
-- [ ] Rebase with two ranges, a track excluded from the first: in the DAW its notes appear only in the second range's part, at the right position.
-- [ ] Separate: each file holds only the tracks ticked in its range; a range with nothing ticked gives no file.
-- [ ] A track unticked in every range is missing from the file (and from the "N of M tracks" counts).
-- [ ] Whole export ignores the range checkboxes and uses the track toggles.
-- [ ] A very narrow range shows no checkboxes; right-click it: the track list, Include All, Exclude All and Reset to Track Toggles all work.
-- [ ] Drop a new file after drawing a range: its track is ticked in the range. Option-drag a clip from an excluded track to a new track: the new track is unticked.
-- [ ] The bottom panel shows "N of M tracks" for the selected range.
+- [x] Draw a range: each lane gets a checkbox at the range's inner left edge, ticked to match the track toggles (an off track starts unticked).
+- [x] Click a checkbox: it untick/ticks, the lane section inside the range is hatched/clear, and ⌘Z undoes it. Two quick clicks flip it twice and don't open the range editor.
+- [x] Change a track toggle after drawing the range: the range's checkboxes don't change.
+- [x] Turn a track off but leave it ticked in a range: its notes from that range are still exported.
+- [x] Rebase with two ranges, a track excluded from the first: in the DAW its notes appear only in the second range's part, at the right position.
+- [x] Separate: each file holds only the tracks ticked in its range; a range with nothing ticked gives no file.
+- [x] A track unticked in every range is missing from the file (and from the "N of M tracks" counts).
+- [x] Whole export ignores the range checkboxes and uses the track toggles.
+- [x] A very narrow range shows no checkboxes; right-click it: the track list, Include All, Exclude All and Reset to Track Toggles all work.
+- [x] Drop a new file after drawing a range: its track is ticked in the range. Option-drag a clip from an excluded track to a new track: the new track is unticked.
+- [x] The bottom panel shows "N of M tracks" for the selected range.
+
+## 8b. Studio round fixes (2026-11-10)
+
+- [ ] Two named ranges, several tracks, Rebase: the Save dialog and the dragged file are named "Verse + Chorus".
+- [ ] Two ranges with the same name, Separate drag: both files arrive (the second gets " (2)").
+- [ ] Switch a track off while a range includes it: its clips are in colour inside the range, grey outside.
+- [ ] Option-click a track toggle: the track and its checkbox in every range change together; ⌘Z undoes both. A plain click still changes only the track.
+- [ ] Round trip (studio report, not reproduced on the dev Mac): open `samples/assembly/seven_tracks_A-G.mid`, draw three ranges, tick A B / C D / E F, Separate, drag out to Finder, ⌘N, then drop each file in turn onto track A. Expect A B, then C D added, then E F added, each with its own notes. If it goes wrong, keep the files and note the exact drop spot.
+- [ ] Scroll the track list vertically: headers disappear under the "TRACKS n/m" band instead of drawing over it.
 
 ## 9. New document
 

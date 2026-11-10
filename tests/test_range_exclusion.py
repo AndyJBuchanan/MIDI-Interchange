@@ -299,3 +299,141 @@ def test_excluded_section_is_drawn_dimmed_with_toggle_states(song):
     off = img.pixelColor(tl.toggle_rect(r, LEAD).toRect().topLeft() + QPoint(10, 10))   # clear of the tick
     assert on.red() > 200 and on.blue() < 120, f"included toggle not filled: {on.name()}"
     assert off.lightness() < 60, f"excluded toggle filled: {off.name()}"
+
+
+# -- studio test round 2026-11-10 ---------------------------------------------------
+def _drag_names(win, monkeypatch) -> list[str]:
+    import os
+    import tempfile
+    from PySide6.QtGui import QDrag
+    from midi_interchange.interchange import drag_export
+    from midi_interchange.ui.export_panel import start_file_drag
+    monkeypatch.setattr(drag_export, "_DIR", tempfile.mkdtemp(prefix="drag-test-"))
+    urls: list = []
+    monkeypatch.setattr(QDrag, "exec", lambda self, *a, **k: urls.extend(self.mimeData().urls()) or Qt.CopyAction)
+    start_file_drag(win.export_panel, win.ctl, None, pytest.fail, lambda _p: None)
+    return [os.path.basename(u.toLocalFile()) for u in urls]
+
+
+def test_export_name_joins_the_range_names(song):
+    ctl = song.ctl
+    r1, r2, r3, r4 = add_ranges(song, ExportMode.REBASE, [(0, 4), (4, 8), (8, 12), (12, 16)])
+    ctl.update_range(r1.id, name="Verse")
+    ctl.update_range(r2.id, name="Chorus")
+    ctl.update_range(r3.id, name="Verse")          # repeated: named once
+    ctl.update_range(r4.id, name="Outro")
+    ctl.set_range_tracks(r4.id, False)             # contributes no tracks: not named
+    ctl.select_range(r2.id)
+    assert ctl.default_export_name() == "Verse + Chorus"
+    ctl.set_export_mode(ExportMode.WHOLE)          # whole export ignores ranges
+    assert ctl.default_export_name() == "MIDI Interchange Export"
+
+
+def test_separate_drag_files_with_the_same_range_name_all_arrive(song, monkeypatch):
+    ctl = song.ctl
+    r1, r2, r3 = add_ranges(song, ExportMode.SEPARATE, [(0, 4), (4, 8), (8, 12)])
+    for r, n in ((r1, "Verse"), (r2, "Chorus"), (r3, "Chorus")):
+        ctl.update_range(r.id, name=n)
+    ctl.set_range_tracks(r1.id, False)
+    ctl.set_range_track_included(r1.id, ctl.ws.tracks[LEAD].id, True)
+    assert _drag_names(song, monkeypatch) == ["Verse + Chorus - Verse.mid", "Verse + Chorus - Chorus.mid",
+                                            "Verse + Chorus - Chorus (2).mid"]
+
+
+def test_alt_click_track_toggle_sets_every_range(song):
+    ctl = song.ctl
+    rs = add_ranges(song, ExportMode.REBASE, [(0, 4), (8, 12)])
+    lead = ctl.ws.tracks[LEAD].id
+    cb = song.track_panel.header(lead).enabled_cb
+    QTest.mouseClick(cb, Qt.LeftButton, Qt.NoModifier, cb.rect().center())
+    assert not ctl.ws.track(lead).enabled and all(r.includes(lead) for r in rs)   # plain click: track only
+    ctl.set_track_enabled(lead, True)
+    depth = len(ctl._undo)
+    QTest.mouseClick(cb, Qt.LeftButton, Qt.AltModifier, cb.rect().center())
+    assert not ctl.ws.track(lead).enabled and not any(r.includes(lead) for r in rs)
+    assert len(ctl._undo) == depth + 1, "one undo step"
+    ctl.undo()
+    assert ctl.ws.track(lead).enabled and all(r.includes(lead) for r in ctl.ws.ranges)
+    # Alt-click on a track already in that state still brings the ranges in line
+    ctl.set_range_track_included(ctl.ws.ranges[0].id, lead, False)
+    ctl.set_track_enabled(lead, True, ranges_too=True)
+    assert all(r.includes(lead) for r in ctl.ws.ranges)
+
+
+def test_off_track_is_drawn_normally_inside_ranges_that_include_it(song):
+    ctl = song.ctl
+    ctl.add_range(F(4), F(12))
+    ctl.set_track_enabled(ctl.ws.tracks[LEAD].id, False)       # still included by the range
+    tl = _prepare(song)
+    img = tl.viewport().grab().toImage()
+
+    def max_sat(x0, x1, lane):
+        top = tl.lane_top(lane)
+        return max(QColor(img.pixelColor(x, y)).hsvSaturation()
+                   for x in range(int(x0), int(x1)) for y in range(top + 4, top + tl.lane_h - 4))
+
+    inside = max_sat(tl.x_of(5.0), tl.x_of(11.8), LEAD)           # clear of the range toggle
+    outside = max_sat(tl.x_of(0.1), tl.x_of(3.8), LEAD)
+    assert outside < 60, "off track should be grey outside the range"
+    assert inside > 120, "off track should be in colour inside a range that includes it"
+
+
+def test_track_headers_are_clipped_below_the_title_band(song):
+    from midi_interchange.ui.timeline import HEADER_H
+    tp = song.track_panel
+    tp._set_offset(song.timeline.lane_h // 2)       # first header half scrolled under the band
+    QApplication.processEvents()
+    h = tp.header(song.ctl.ws.tracks[0].id)
+    assert h.isVisible()
+    top = h.mapTo(tp, h.visibleRegion().boundingRect().topLeft()).y()
+    assert top >= HEADER_H, f"header visible from y={top}, inside the title band"
+
+
+def _window_drop(win, path: str, lane: int | None) -> None:
+    """Drop a file on the window the way Finder does (drag-enter, then drop)."""
+    from PySide6.QtCore import QMimeData, QPointF, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+    from midi_interchange.ui.timeline import HEADER_H
+    tl = win.timeline
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(path)])
+    y = HEADER_H + (lane if lane is not None else len(win.ctl.ws.tracks) + 1) * tl.lane_h + tl.lane_h // 2
+    pt = tl.viewport().mapTo(win, QPoint(int(tl.x_of(0.2)), y))
+    win.dragEnterEvent(QDragEnterEvent(pt, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+    win.dropEvent(QDropEvent(QPointF(pt), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+    QApplication.processEvents()
+
+
+def test_separate_files_dropped_back_one_by_one_keep_their_tracks(win, monkeypatch):
+    """Studio report 2026-11-10: tracks A-G, ranges with A B / C D / E F, drag out
+    as separate files, New, drop each file back onto track A in turn. Every
+    file's tracks must arrive under their own names with their own notes."""
+    import tempfile
+    from PySide6.QtGui import QDrag
+    from midi_interchange.interchange import drag_export
+    from midi_interchange.ui.export_panel import start_file_drag
+    ctl = win.ctl
+    drop(win, gen.SEVEN_FILE)
+    assert [t.name for t in ctl.ws.tracks] == list("ABCDEFG")
+    rs = add_ranges(win, ExportMode.SEPARATE, [(0, 4), (4, 8), (8, 12)])
+    for k, r in enumerate(rs):
+        ctl.set_range_tracks(r.id, False)
+        for t in ctl.ws.tracks[2 * k:2 * k + 2]:
+            ctl.set_range_track_included(r.id, t.id, True)
+    monkeypatch.setattr(drag_export, "_DIR", tempfile.mkdtemp(prefix="drag-test-"))
+    urls: list = []
+    monkeypatch.setattr(QDrag, "exec", lambda self, *a, **k: urls.extend(self.mimeData().urls()) or Qt.CopyAction)
+    start_file_drag(win.export_panel, ctl, None, pytest.fail, lambda _p: None)
+    paths = [u.toLocalFile() for u in urls]
+    assert len(paths) == 3
+
+    win.a_new.trigger()
+    QApplication.processEvents()
+    pitches = {p.track_name: {n[2] for n in p.notes} for p in gen.SEVEN}
+    for k, path in enumerate(paths):
+        _window_drop(win, path, 0 if ctl.ws.tracks else None)       # onto track A once it exists
+        want = list("ABCDEF")[:2 * k + 2]
+        assert [t.name for t in ctl.ws.tracks] == want, f"after file {k + 1}"
+    for t in ctl.ws.tracks:
+        got = {e.msg.note for c in t.clips for e in c.events if e.msg.type == "note_on"}
+        assert got and got <= pitches[t.name], f"track {t.name} holds another track's notes"

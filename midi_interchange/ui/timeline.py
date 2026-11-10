@@ -34,7 +34,7 @@ from fractions import Fraction
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QBrush, QColor, QCursor, QFont, QFontMetrics, QKeyEvent, QMouseEvent,
-                           QNativeGestureEvent, QPainter, QPainterPath, QPen, QWheelEvent)
+                           QNativeGestureEvent, QPainter, QPainterPath, QPen, QRegion, QWheelEvent)
 from PySide6.QtWidgets import QAbstractScrollArea, QMenu
 
 from ..core.document import Clip, Track
@@ -241,7 +241,7 @@ class Timeline(QAbstractScrollArea):
             top = self.lane_top(i)
             if top + self.lane_h < HEADER_H or top > h:
                 continue
-            self._paint_track(p, track, top, t0, t1, w)
+            self._paint_track_regions(p, track, top, t0, t1, w)
         self._paint_range_overlays(p, HEADER_H, h)
         if self._drop_ind is not None:
             self._paint_drop_indicator(p, w, h)
@@ -304,9 +304,31 @@ class Timeline(QAbstractScrollArea):
                         p.drawLine(QPointF(xs, y0), QPointF(xs, y1))
                     s += sub
 
-    def _paint_track(self, p: QPainter, track: Track, top: int, t0: float, t1: float, w: int) -> None:
-        base = QColor(track.color)
+    def _paint_track_regions(self, p: QPainter, track: Track, top: int, t0: float, t1: float, w: int) -> None:
+        """An off track is greyed except inside the ranges that include it: a
+        range shows what it exports."""
+        on = QRegion()
         if not track.enabled:
+            for r in self.ctl.ws.ranges:
+                if r.includes(track.id) and not r.is_empty:
+                    x0, x1 = round(self.x_of(float(r.start))), round(self.x_of(float(r.end)))
+                    on += QRegion(x0, top, max(x1 - x0, 0), self.lane_h)
+        if on.isEmpty():
+            self._paint_track(p, track, top, t0, t1, w, track.enabled)
+            return
+        off = QRegion(0, top, w, self.lane_h) - on
+        for region, enabled in ((off, False), (on, True)):
+            if region.isEmpty():
+                continue
+            p.save()
+            p.setClipRegion(region, Qt.IntersectClip)
+            self._paint_track(p, track, top, t0, t1, w, enabled)
+            p.restore()
+
+    def _paint_track(self, p: QPainter, track: Track, top: int, t0: float, t1: float, w: int,
+                     enabled: bool) -> None:
+        base = QColor(track.color)
+        if not enabled:
             base = QColor(theme.DISABLED)
         lane_h = self.lane_h
         name_h = 13 if lane_h >= 44 else 0
@@ -323,15 +345,15 @@ class Timeline(QAbstractScrollArea):
                 continue
             cr = QRectF(x0, top + 2, max(x1 - x0, 3), lane_h - 5)
             fill = QColor(base)
-            fill.setAlpha(46 if track.enabled else 28)
+            fill.setAlpha(46 if enabled else 28)
             border = QColor(base)
-            border.setAlpha(150 if track.enabled else 70)
+            border.setAlpha(150 if enabled else 70)
             p.setPen(QPen(border, 1))
             p.setBrush(fill)
             p.drawRoundedRect(cr, 3, 3)
             if name_h and cr.width() > 30:
                 p.setFont(self.font_small)
-                p.setPen(theme.TEXT if track.enabled else theme.TEXT_DIM)
+                p.setPen(theme.TEXT if enabled else theme.TEXT_DIM)
                 lx = max(cr.left(), 0) + 5
                 fm = QFontMetrics(self.font_small)
                 label = fm.elidedText(clip.name or track.name, Qt.ElideRight, int(cr.right() - lx - 4))
@@ -340,8 +362,8 @@ class Timeline(QAbstractScrollArea):
             render = self.render_for(clip)
             off = float(clip.offset)
             p.save()
-            p.setClipRect(cr.adjusted(1, 1, -1, -1))          # notes never paint outside their clip
-            note_col = base.lighter(135) if track.enabled else base
+            p.setClipRect(cr.adjusted(1, 1, -1, -1), Qt.IntersectClip)          # notes never paint outside their clip
+            note_col = base.lighter(135) if enabled else base
             p.setPen(Qt.NoPen)
             a, b = t0 - off, t1 - off
             i = bisect.bisect_left(render.starts, a - render.max_len)
@@ -360,12 +382,12 @@ class Timeline(QAbstractScrollArea):
                 nw = max((e - s) * ppb - (1 if ppb > 30 else 0), 1.5)
                 ny = y_base + (pmax - pitch) * note_h
                 c = QColor(note_col)
-                c.setAlpha(int(140 + vel * 115 / 127) if track.enabled else 110)
+                c.setAlpha(int(140 + vel * 115 / 127) if enabled else 110)
                 p.fillRect(QRectF(nx, ny, nw, draw_h), c)
             p.restore()
 
             if render.texts:
-                self._paint_texts(p, render, off, top, lane_h, t0, t1, base, track.enabled)
+                self._paint_texts(p, render, off, top, lane_h, t0, t1, base, enabled)
 
         if len(track.clips) > 1:
             for lo, hi in track.overlaps():

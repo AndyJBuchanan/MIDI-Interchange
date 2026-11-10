@@ -1,8 +1,10 @@
 """Left track panel: one header per timeline lane, vertically locked to the timeline."""
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPen, QWheelEvent
+from PySide6.QtGui import QColor, QGuiApplication, QMouseEvent, QPainter, QPen, QWheelEvent
 from PySide6.QtWidgets import (QCheckBox, QColorDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
                                QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
@@ -53,8 +55,9 @@ class TrackHeader(QFrame):
         self.color_btn.setToolTip("Track colour")
         self.color_btn.clicked.connect(self._pick_color)
         self.enabled_cb = QCheckBox(self)
-        self.enabled_cb.setToolTip("Include in export")
-        self.enabled_cb.toggled.connect(lambda on: ctl.set_track_enabled(track_id, on))
+        self.enabled_cb.setToolTip("Include in export\n" + ("⌥" if sys.platform == "darwin" else "Alt+")
+                                   + "click: set this track in every range too")
+        self.enabled_cb.toggled.connect(self._toggled)
         self.name_edit = QLineEdit(self)
         self.name_edit.setFrame(False)
         self.name_edit.setAcceptDrops(False)
@@ -107,6 +110,10 @@ class TrackHeader(QFrame):
             "QLineEdit { background: transparent; font-weight: 600; color: %s; }"
             "QLineEdit:focus { background: #1b1c1f; }" % (theme.TEXT.name() if track.enabled else theme.TEXT_DIM.name()))
 
+    def _toggled(self, on: bool) -> None:
+        alt = bool(QGuiApplication.keyboardModifiers() & Qt.AltModifier)
+        self.ctl.set_track_enabled(self.track_id, on, ranges_too=alt)
+
     def _commit_name(self) -> None:
         self.ctl.rename_track(self.track_id, self.name_edit.text())
         t = self.ctl.ws.track(self.track_id)
@@ -144,6 +151,9 @@ class TrackPanel(QWidget):
         self.setMinimumWidth(170)
         self.setAcceptDrops(False)
 
+        # headers live in a container below the title band, which clips them
+        self.lanes = QWidget(self)
+
         self.title = QLabel("TRACKS", self)
         self.title.setStyleSheet(f"color: {theme.TEXT_DIM.name()}; font-weight: 600; letter-spacing: 1px;")
 
@@ -165,7 +175,7 @@ class TrackPanel(QWidget):
         for t in ws.tracks:
             h = self.headers.get(t.id)
             if h is None:
-                h = self.headers[t.id] = TrackHeader(self.ctl, t.id, self)
+                h = self.headers[t.id] = TrackHeader(self.ctl, t.id, self.lanes)
                 h.contextMenuRequested.connect(self.trackContextMenuRequested)
                 h.grip.pressed.connect(lambda gp, tid=t.id: self._grip_press(tid, gp))
                 h.grip.moved.connect(self._grip_move)
@@ -184,13 +194,14 @@ class TrackPanel(QWidget):
     def _layout(self) -> None:
         lane_h = self.timeline.lane_h
         w = self.width()
+        self.lanes.setGeometry(0, HEADER_H, w, max(self.height() - HEADER_H, 0))
         for i, t in enumerate(self.ctl.ws.tracks):
             h = self.headers.get(t.id)
             if h is None:
                 continue
-            y = HEADER_H + i * lane_h - self._voffset
+            y = i * lane_h - self._voffset
             h.setGeometry(0, y, w, lane_h)
-            h.setVisible(y + lane_h > HEADER_H and y < self.height())
+            h.setVisible(y + lane_h > 0 and y < self.lanes.height())
         self.title.setGeometry(10, 0, w - 20, HEADER_H)
         self.title.raise_()
         self.update()
@@ -241,7 +252,7 @@ class TrackPanel(QWidget):
         self._drop_index = self._index_at_global(gp)
         self.update()
         # Draw indicator above child headers.
-        self._indicator().setGeometry(QRect(0, HEADER_H + self._drop_index * self.timeline.lane_h
+        self._indicator().setGeometry(QRect(0, self._drop_index * self.timeline.lane_h
                                             - self._voffset - 1, self.width(), 2))
         self._indicator().show()
         self._indicator().raise_()
@@ -261,7 +272,7 @@ class TrackPanel(QWidget):
     def _indicator(self) -> QFrame:
         ind = getattr(self, "_ind", None)
         if ind is None:
-            ind = self._ind = QFrame(self)
+            ind = self._ind = QFrame(self.lanes)
             ind.setStyleSheet(f"background: {theme.ACCENT.name()};")
             ind.hide()
         return ind

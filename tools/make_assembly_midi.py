@@ -52,6 +52,11 @@ SONG: list[Part] = [
     Part("Bass", 4, 960, 16, _run(110, 16, dur=0.25)),
 ]
 
+# Seven distinctly named tracks (A-G, channels 1-7), for range round trips:
+# export ranges as separate files, drop them back into a new workspace.
+SEVEN_FILE = "seven_tracks_A-G.mid"
+SEVEN: list[Part] = [Part(n, i, 480, 16, _run(30 + 10 * i, 16, dur=0.5)) for i, n in enumerate("ABCDEFG")]
+
 
 def _ticks(beats: float, ppq: int) -> int:
     t = beats * ppq
@@ -95,6 +100,7 @@ def build(parts: list[Part]) -> mido.MidiFile:
 def all_files() -> dict[str, mido.MidiFile]:
     out = {name: build([p]) for name, p in PARTS.items()}
     out[SONG_FILE] = build(SONG)
+    out[SEVEN_FILE] = build(SEVEN)
     return out
 
 

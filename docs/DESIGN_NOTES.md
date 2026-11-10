@@ -122,7 +122,9 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - A new range is seeded from the track toggles; afterwards it is independent of them (the range wins). Track toggles still drive whole export and seed new ranges.
   - A track created later starts with its own toggle in every range (imports); a clip moved onto a new track copies the range state of the track it came from.
   - Export: Rebase and Preserve give each track only the segments of ranges that include it (the conductor still covers every range); Separate writes each range's file with that range's tracks and skips a range with none; a track in no exported range is left out. Trim measures content only over the tracks each range includes. An explicit track export (track header drag) follows the same range rules.
-  - Excluded lane sections are dimmed and hatched. A track switched off at track level still draws grey even where a range includes it.
+  - Excluded lane sections are dimmed and hatched. A track switched off at track level is drawn grey except inside the ranges that include it, where it is drawn normally: a range shows what it exports (changed after studio testing, 2026-11-10).
+  - Option/Alt-click on a track toggle also sets that track's checkbox in every range to match (one undo step).
+- **Export names** (revised 2026-11-10 after studio testing). One file: the track's name if it holds one track, else the names of the ranges used joined with " + " (in export order, each once, skipping unnamed ranges and ranges that contribute no tracks), else "MIDI Interchange Export". Separate files add each range's label to that name ("name - Range.mid"); clashing names get " (2)" etc. instead of overwriting.
 - The default export mode is Rebase & concatenate (changed from Preserve on 2026-11-10, after hand testing). If Whole is selected, creating a range switches it to Rebase. With no ranges, export is always whole.
 - Undo takes up to 200 snapshots of the workspace structure; event lists are shared, not copied. Range and clip drags record one undo step per gesture.
 - The window zooms to fit on the first import.
