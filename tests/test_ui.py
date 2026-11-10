@@ -170,3 +170,29 @@ def test_alt_wheel_lane_height_is_gentle(win):
     assert tl.lane_h == 72
     wheel(-240)
     assert tl.lane_h == 66
+
+
+def test_drop_preview_knows_song_titles(win):
+    """Studio 2026-11-10: the drop preview still compared exact names, so over a
+    matching row it said 'names differ' for a new Staccato generation."""
+    from PySide6.QtCore import QMimeData, QUrl
+    from PySide6.QtGui import QDragEnterEvent
+    from midi_interchange.ui.timeline import HEADER_H
+    win.import_paths([str(SAMPLES / "non-synthetic" / "Industrial EBM Anthem_1793561268176.mid")])
+    QApplication.processEvents()
+    tl = win.timeline
+    tl.set_zoom(20.0, 0)
+    tl.horizontalScrollBar().setValue(0)
+    tl.verticalScrollBar().setValue(0)
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(SAMPLES / "non-synthetic" / "Staccato Generation_1794336609801.mid"))])
+
+    def preview(lane):
+        y = HEADER_H + lane * tl.lane_h + tl.lane_h // 2
+        pt = tl.viewport().mapTo(win, QPoint(int(tl.x_of(8.1)), y))
+        win.dragEnterEvent(QDragEnterEvent(pt, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+        return tl._drop_ind[2]
+
+    assert preview(0).startswith("Onto “Heavy EBM Drums - Industrial EBM Anthem”")
+    assert "nothing matches “Piercing Lead - Industrial EBM Anthem”" in preview(2)   # not in the new generation
+    win.dragLeaveEvent(None)

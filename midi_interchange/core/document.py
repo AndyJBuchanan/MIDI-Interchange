@@ -38,7 +38,7 @@ class Source:
     app: str | None = None       # source application, when known
     track_names: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
-    song: str = ""              # song title, when known (see import_smf.song_title)
+    song: str = ""              # song title, when known (see names.song_title)
 
     def describe(self) -> str:
         lines = [

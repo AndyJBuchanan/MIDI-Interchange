@@ -8,7 +8,7 @@ from helpers import conductor, load, note, notes_of, reparse, smf, track, track_
 from midi_interchange.core.document import Workspace
 from midi_interchange.core.export_smf import ExportMode, ExportOptions, build_exports
 from midi_interchange.core.import_smf import import_smf_bytes
-from midi_interchange.core.placement import Placement, end_to_end_names, names_match, place_imports
+from midi_interchange.core.placement import Placement, names_match, place_imports, plan_drop
 
 
 def part(name: str, pitch: int = 60, beats: int = 4, ppq: int = 480, ch: int = 0) -> bytes:
@@ -208,8 +208,13 @@ def test_end_to_end_ignores_matching_tracks():
 
 
 def test_end_to_end_names():
-    assert end_to_end_names([["Bass"], ["Keys"], ["Pad"]]) == ["Bass"]
-    assert end_to_end_names([["A", "B"], ["C", "D", "E"]]) == ["A", "B", "E"]
+    """The several-files dialog names the tracks from plan_drop, the same plan the drop carries out."""
+    def e2e(*files):
+        return plan_drop(Workspace(), parse(*((multi(*((n, 60) for n in names)), f"{k}.mid")
+                                              for k, names in enumerate(files))),
+                         Placement(end_to_end=True)).new_names
+    assert e2e(["Bass"], ["Keys"], ["Pad"]) == ["Bass"]
+    assert e2e(["A", "B"], ["C", "D", "E"]) == ["A", "B", "E"]
 
 
 def test_all_at_cursor_keeps_files_on_separate_tracks():

@@ -16,7 +16,8 @@ from helpers import conductor, note, reparse, smf, track
 
 from midi_interchange.core.document import Workspace
 from midi_interchange.core.export_smf import ExportMode, ExportOptions, build_exports
-from midi_interchange.core.import_smf import import_smf_bytes, song_title
+from midi_interchange.core.import_smf import import_smf_bytes
+from midi_interchange.core.names import song_title
 from midi_interchange.core.placement import Placement, place_imports
 
 SONG = Path(__file__).resolve().parent.parent / "samples" / "non-synthetic" / "Industrial EBM Anthem_1793561268176.mid"
@@ -140,3 +141,51 @@ def test_export_of_mixed_songs_writes_no_title():
     ws.add_import(*import_smf_bytes(parts("Drums"), "d.mid"))
     mf = reparse(build_exports(ws, ExportOptions(mode=ExportMode.WHOLE))[0].midi)
     assert not [m for m in mf.tracks[0] if m.type == "track_name"]
+
+
+# -- the real files from the studio (2026-11-10) -----------------------------------------
+REAL_GEN = SONG.parent / "Staccato Generation_1794336609801.mid"
+CUBASE = SONG.parent.parent / "cubase-check"
+
+
+def test_real_staccato_generation_matches_on_every_row_it_has():
+    """The real new generation (no Piercing Lead) dropped on each row of the song.
+    Rows it has: all four parts join their tracks. Piercing Lead rows: no match
+    under the cursor, so new tracks (the 2026-11-09 rule)."""
+    src, tracks = import_smf_bytes(REAL_GEN.read_bytes(), REAL_GEN.name)
+    assert src.song == NEW and len(tracks) == 4
+    for lane in range(10):
+        ws = song_workspace()
+        target = ws.tracks[lane]
+        _, stats = place_imports(ws, [import_smf_bytes(REAL_GEN.read_bytes(), REAL_GEN.name)],
+                                 Placement(F(8), target.id))
+        if target.name.startswith("Piercing Lead"):
+            assert stats["onto_existing"] == 0 and stats["new_tracks"] == 4
+        else:
+            assert stats["onto_existing"] == 4 and stats["new_tracks"] == 0, target.name
+
+
+def test_real_cubase_section_clips_never_match_by_song():
+    for name in ("Lead - Verse.mid", "Lead - Chorus.mid", "Verse.mid", "Chorus.mid"):
+        src, _ = import_smf_bytes((CUBASE / name).read_bytes(), name)
+        assert src.song == "", name
+    ws = Workspace()
+    ws.add_import(*import_smf_bytes((CUBASE / "Lead - Verse.mid").read_bytes(), "Lead - Verse.mid"))
+    _, stats = place_imports(ws, [import_smf_bytes((CUBASE / "Lead - Chorus.mid").read_bytes(), "Lead - Chorus.mid")],
+                             Placement(F(8), ws.tracks[0].id))
+    assert stats["onto_existing"] == 0 and len(ws.tracks) == 2
+
+
+def test_a_drop_that_matches_nothing_says_why(qapp=None):
+    """The status bar names the reason, so a failed studio drop explains itself."""
+    from midi_interchange.interchange.payload import Payload
+    from midi_interchange.ui.controller import Controller
+    ctl = Controller()
+    msgs: list[str] = []
+    ctl.message.connect(msgs.append)
+    ctl.import_payloads([Payload(SONG.name, SONG.read_bytes())])
+    lead = next(t for t in ctl.ws.tracks if t.name.startswith("Piercing Lead"))
+    ctl.import_payloads([Payload(REAL_GEN.name, REAL_GEN.read_bytes())], Placement(F(8), lead.id))
+    assert "new because nothing matches “Piercing Lead - Industrial EBM Anthem”" in msgs[-1]
+    assert "its song title is “Staccato Generation”" in msgs[-1]
+    assert "the track's song title is “Industrial EBM Anthem”" in msgs[-1]

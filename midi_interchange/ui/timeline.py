@@ -39,6 +39,7 @@ from PySide6.QtWidgets import QAbstractScrollArea, QMenu
 
 from ..core.document import Clip, Track
 from ..core.events import TEXT_META, display_text, pair_notes
+from ..core.names import range_label
 from ..core.timing import ZERO, quantize
 from .controller import Controller
 from . import theme
@@ -573,7 +574,7 @@ class Timeline(QAbstractScrollArea):
             p.setPen(QPen(theme.ACCENT if selected else theme.RANGE_EDGE, 1))
             p.setBrush(theme.RANGE_BODY_SEL if selected else theme.RANGE_BODY)
             p.drawRoundedRect(rect, 3, 3)
-            label = r.name or f"Range {i + 1}"
+            label = range_label(r.name, i)
             label += f"   {tm.format_bbt(r.start)} – {tm.format_bbt(r.end)}"
             p.setPen(theme.TEXT if selected else theme.TEXT_DIM)
             vis_left = max(rect.left(), 0) + 5
@@ -829,7 +830,7 @@ class Timeline(QAbstractScrollArea):
             vp.setCursor(Qt.PointingHandCursor)
             r, t = self.ctl.ws.range(hit[1]), self.ctl.ws.track(hit[2])
             if r is not None and t is not None:
-                label = r.name or f"Range {self.ctl.ws.ranges.index(r) + 1}"
+                label = range_label(r.name, self.ctl.ws.ranges.index(r))
                 tip = (f"“{t.name}” is {'included in' if r.includes(t.id) else 'excluded from'} {label}"
                        f" — click to {'exclude' if r.includes(t.id) else 'include'}")
         elif hit[0] == "edge":

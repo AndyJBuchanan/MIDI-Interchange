@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame, QHBox
                                QLineEdit, QPushButton, QToolButton, QVBoxLayout, QWidget)
 
 from ..core.export_smf import ExportMode
+from ..core.names import range_label
 from ..interchange.drag_export import write_temp
 from . import theme
 from .controller import Controller
@@ -198,7 +199,7 @@ class ExportPanel(QFrame):
         if not ws.ranges:
             self.range_combo.addItem("No ranges", None)
         for i, r in enumerate(ws.ranges):
-            self.range_combo.addItem(f"{r.name or f'Range {i + 1}'}", r.id)
+            self.range_combo.addItem(range_label(r.name, i), r.id)
         sel = self.ctl.selected_range
         idx = next((i for i, r in enumerate(ws.ranges) if sel and r.id == sel.id), -1)
         if idx < 0 and ws.ranges:

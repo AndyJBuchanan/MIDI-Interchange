@@ -46,6 +46,7 @@ import mido
 
 from .document import Track, Workspace
 from .events import MODE_CCS, Event, Msg, display_text, is_note_off, is_note_on, pair_notes
+from .names import range_label, safe_filename
 from .ranges import Range, merge_ranges
 from .timing import TempoMap, ZERO
 
@@ -130,7 +131,7 @@ def build_exports(ws: Workspace, opts: ExportOptions | None = None) -> list[Expo
         if not in_range:
             continue
         segs, end, _own = _concat_segments([r], in_range, opts.trim)
-        label = r.name or f"Range {i + 1}"
+        label = range_label(r.name, i)
         results.append(ExportResult(label, _segmented(ws, in_range, segs, opts, preserve=False, end=end)))
     return results
 
@@ -176,9 +177,9 @@ def save_exports(results: list[ExportResult], path: str, label_only: bool = Fals
         if len(results) == 1:
             base = stem
         elif label_only:
-            base = os.path.join(os.path.dirname(stem), _safe(res.label) or "MIDI")
+            base = os.path.join(os.path.dirname(stem), safe_filename(res.label))
         else:
-            base = f"{stem} - {_safe(res.label)}"
+            base = f"{stem} - {safe_filename(res.label, 'range')}"
         p, n = f"{base}{ext}", 2
         while p in paths:
             p, n = f"{base} ({n}){ext}", n + 1
@@ -439,6 +440,3 @@ def _to_mido_track(items: list[_Item], end: Fraction, ppq: int, name: str | None
     trk.append(mido.MetaMessage("end_of_track", time=max(_tick(end, ppq), prev) - prev))
     return trk
 
-
-def _safe(label: str) -> str:
-    return "".join(c if c.isalnum() or c in " -_()+" else "_" for c in label).strip() or "range"
