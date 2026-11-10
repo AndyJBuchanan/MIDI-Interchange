@@ -17,9 +17,12 @@ Rules (agreed 2026-11-09, modelled on Cubase/Reason):
   are kept and tinted. Clips added by the same drop are never replaced.
 * Dropped anywhere else: every imported track becomes a new track (the way to
   avoid matching).
-* Several *files* may be laid end to end: each file starts where the previous
-  one ended. Same-named tracks from those files then share one new track, so a
-  run of parts from one DAW track assembles into one track.
+* Several *files* may be laid end to end (revised 2026-11-10): each file starts
+  where the previous one ended, and the files' tracks line up by position, so
+  single-track files (DAW parts) become **one** new track named after the first
+  file's track; for multi-track files the first tracks share a track, the
+  second tracks share another, and so on. Names are ignored and nothing is
+  matched to existing tracks (re-dropping an end-to-end run isn't supported).
 """
 from __future__ import annotations
 
@@ -78,6 +81,15 @@ def assign_tracks(candidates: list[Track], target: Track, names: list[str]) -> l
     return out
 
 
+def end_to_end_names(names_per_file: list[list[str]]) -> list[str]:
+    """Names of the tracks an end-to-end drop creates: one per track position,
+    named after the first file that has a track there."""
+    out: list[str] = []
+    for names in names_per_file:
+        out += names[len(out):]
+    return out
+
+
 def source_length(tracks: list[Track]) -> Fraction:
     return max((c.offset + c.length for t in tracks for c in t.clips), default=ZERO)
 
@@ -95,11 +107,10 @@ def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
     target = ws.track(placement.target_track_id) if placement.target_track_id else None
     existing = list(ws.tracks)           # tracks made by this drop are never match candidates
     old_clips = {c.id for t in existing for c in t.clips}   # only these can be replaced
-    matching = target_matches(target, [t.name for _, tracks in parsed for t in tracks])
+    matching = not placement.end_to_end and target_matches(
+        target, [t.name for _, tracks in parsed for t in tracks])
     cursor = max(placement.time, ZERO)
-    # end-to-end: name -> new tracks made in this drop, in order of the name's
-    # occurrences within a file (a file may repeat a name)
-    run_tracks: dict[str, list[Track]] = {}
+    run: list[Track] = []               # end-to-end: the new track for each track position
 
     for source, tracks in parsed:
         length = source_length(tracks)
@@ -108,11 +119,7 @@ def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
                 c.offset += cursor
         fresh: list[Track] = []
         dests = assign_tracks(existing, target, [t.name for t in tracks]) if matching else [None] * len(tracks)
-        seen: dict[str, int] = {}       # occurrences of each name so far in this file
-        for t, dest in zip(tracks, dests):
-            key = norm_name(t.name)
-            nth = seen.get(key, 0)
-            seen[key] = nth + 1
+        for i, (t, dest) in enumerate(zip(tracks, dests)):
             if dest is not None:
                 for c in t.clips:
                     same = [o for o in dest.clips
@@ -128,15 +135,14 @@ def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
                 if dest.name not in stats["onto_names"]:
                     stats["onto_names"].append(dest.name)
                 continue
-            run = run_tracks.setdefault(key, []) if placement.end_to_end and key else None
-            if run is not None and nth < len(run):
-                dest = run[nth]
+            if placement.end_to_end and i < len(run):
+                dest = run[i]
                 dest.clips.extend(t.clips)
                 dest.refresh_channels()
                 dest.sort_clips()
                 continue
             fresh.append(t)
-            if run is not None:
+            if placement.end_to_end:
                 run.append(t)
         notes += ws.add_import(source, fresh)
         stats["new_tracks"] += len(fresh)

@@ -28,43 +28,48 @@ Record interop results (does a drag work with an app at all) in the README check
 
 ## 3. Several files at once (Finder multi-select)
 
-- [ ] The dialog appears only for several **files**, not for one file with several tracks.
-- [ ] **End to End**: the files are laid in sequence from the cursor, and same-named tracks share one track.
-- [ ] **All at Cursor**: each file starts at the cursor on its own tracks.
-- [ ] **Cancel** imports nothing. Check the source app isn't left hanging.
-- [ ] Dropped on a matching lane: the name-matching rules from sections 1 and 2 still apply.
+- [x] The dialog appears only for several **files**, not for one file with several tracks.
+- [ ] **End to End** (changed 2026-11-10): the files are laid in sequence from the cursor on **one** new track named after the first file's track, whatever the names. The dialog says the track's name. Multi-track files line up by position (first tracks together, second tracks together, …).
+- [x] **All at Cursor**: each file starts at the cursor on its own tracks.
+- [x] **Cancel** imports nothing. Check the source app isn't left hanging.
+- [x] Dropped on a matching lane: the name-matching rules from sections 1 and 2 still apply.
 
 ## 4. DAW workflow (the real use case)
 
-- [ ] Drag parts out of Cubase **one at a time** and drop each on its matching track at the right bar. Do this for several tracks.
-- [ ] Do the same with **Reason** and **RapidComposer** parts.
+- [x] Drag parts out of Cubase **one at a time** and drop each on its matching track at the right bar. Do this for several tracks.
+
+Reason and RapidComposer can't drag MIDI out (they only export files), so they have no drag test here.
 
 ## 5. Moving and copying clips
 
-- [ ] **Option-drag** moves a clip in time, and onto another track.
-- [ ] **Option-drag below the last track** creates a new track. Also drag through another lane first; the new track should keep the **original** track's name.
-- [ ] **Option-Shift-drag** changes track but keeps the clip's time.
-- [ ] **Option-⌘-drag** copies; the original stays put.
-- [ ] A track left with no clips is removed, and ⌘Z brings it back.
-- [ ] Dragging near the edge of the view scrolls it.
-- [ ] Try all of the above with a **trackpad** as well as a mouse.
-- [ ] A plain drag (no modifiers) still behaves as before.
+- [x] **Option-drag** moves a clip in time, and onto another track.
+- [ ] **Option-drag below the last track** creates a new track. Also drag through another lane first; the new track should keep the **original** track's name. A clip that is alone on the last track stays put (a new track would look identical); Option-⌘ (copy) still makes one.
+- [x] **Option-Shift-drag** changes track but keeps the clip's time.
+- [x] **Option-⌘-drag** copies; the original stays put.
+- [x] A track left with no clips is removed, and ⌘Z undoes the whole move (the track comes back with its clip).
+- [x] Dragging near the edge of the view scrolls it.
+- [x] Try all of the above with a **trackpad** as well as a mouse.
+- [x] A plain drag (no modifiers) still creates and edits ranges as before.
 
 ## 6. Clip right-click menu
 
-- [ ] **Duplicate Clip** places the copy straight after the original.
-- [ ] **Butt Against Previous Clip** closes the gap. It does nothing on the first clip.
-- [ ] **Move Clip to Track ▸** moves it to an existing track, or to a **New Track**.
-- [ ] **Delete Clip** removes it. Deleting the last clip removes the track.
-- [ ] The **Track ▸** submenu offers the usual track operations.
+- [x] **Duplicate Clip** places the copy straight after the original.
+- [x] **Butt Against Previous Clip** closes the gap. It does nothing on the first clip.
+- [x] **Move Clip to Track ▸** moves it to an existing track, or to a **New Track**.
+- [x] **Delete Clip** removes it. Deleting the last clip removes the track.
+- [x] The **Track ▸** submenu offers the usual track operations.
+- [ ] **Solo for Export**, then right-click the soloed track ▸ **Unsolo**: the previous track selection comes back. Soloing another track in between still restores the original selection.
 
 ## 7. Track operations
 
-- [ ] **Merge Into ▸** another track puts all the clips on the target track and removes the source track.
-- [ ] The track header shows "N clips · M sources" for a mixed track, and **Source Info** lists every source.
-- [ ] Rename, reorder, remove, solo and the export checkbox still work on assembled tracks.
+- [x] **Merge Into ▸** another track puts all the clips on the target track and removes the source track.
+- [x] The track header shows "N clips · M sources" for a mixed track.
+- [ ] **Source Info** is a proper dialog: track summary, a table of clips (position, channels, notes, source), and the sources with their details. Clicking a clip selects its source; Show in Folder opens the file's folder.
+- [x] Rename, reorder, remove, solo and the export checkbox still work on assembled tracks.
 
 ## 8. Export of assembled tracks
+
+The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). Check the export mode before each test.
 
 - [ ] Use **Save MIDI…** and **Drag MIDI out** into Cubase and Staccato. Clips from several sources arrive on one track, in the right places.
 - [ ] Overlapping clips export with both clips' notes merged, and there are no stuck notes.
@@ -74,15 +79,15 @@ Record interop results (does a drag work with an app at all) in the README check
 
 ## 9. New document
 
-- [ ] **⌘N**, the toolbar button and File ▸ New all clear the workspace.
-- [ ] ⌘Z restores everything, including tracks, ranges and tempo.
-- [ ] Export settings survive ⌘N.
-- [ ] ⌘N on an empty workspace does nothing and adds no undo step.
+- [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.
+- [x] ⌘Z restores everything, including tracks, ranges and tempo.
+- [x] Export settings survive ⌘N.
+- [x] ⌘N on an empty workspace does nothing and adds no undo step.
 
 ## 10. Quick regression
 
-- [ ] File ▸ Open, command-line paths and folder drops still import as new tracks at bar 1.
-- [ ] Ranges: create, resize, move, Tab to cycle, delete, and type positions as bar.beat.tick.
+- [x] File ▸ Open, command-line paths and folder drops still import as new tracks at bar 1.
+- [x] Ranges: create, resize, move, Tab to cycle, delete, and type positions as bar.beat.tick.
 - [ ] Zoom, lane height and the tempo map dialog.
 - [ ] A long undo/redo chain mixing drops, moves and the clip menu.
 

@@ -37,7 +37,7 @@ For Windows commands, a new machine, VS Code setup or troubleshooting, see [docs
 |---|---|
 | Import | Drop `.mid` files or folders onto the window, use File ▸ Open (⌘O), or pass paths on the command line. Each import adds to the workspace. |
 | Place a drop | While dragging in, an insertion cursor shows where it lands. **Over a track lane:** at the cursor's (snapped) time on that track, but **only if the track names match**; otherwise everything arrives as new track(s) at that time. When it does match, the dropped file's other tracks also join existing tracks with the same names, so a multi-track round trip (e.g. from Staccato.ai) dropped on one of its tracks lands back on all of them; unmatched tracks become new tracks. If a file repeats a track name (Staccato.ai files can), the copies pair up in order with the existing same-named tracks; extra copies become new tracks. A dropped clip with exactly the same start and end as a clip already on that track **replaces** it; partial overlaps are kept (and tinted). **Over a track header:** the same, at the start (bar 1). **Anywhere else:** new track(s), at the cursor time over the timeline or at bar 1 elsewhere. Dropped DAW clips carry no position of their own, so this is how you put them where they belong. |
-| Drop several files | You're asked: **End to End** (each file starts where the previous one ends; same-named tracks share one new track) or **All at Cursor**. |
+| Drop several files | You're asked: **End to End** (each file starts where the previous one ends, all on **one** new track named after the first file's track; multi-track files line up by track position) or **All at Cursor** (each file at the cursor, with the usual name matching). |
 | New | File ▸ New (⌘N) clears the workspace. Undo brings it back. Export settings are kept. |
 | Create a range | Drag across empty timeline space (in the ruler or in the lanes) |
 | Resize / move a range | Drag an edge (in any row) / drag the body in the range strip |
@@ -50,7 +50,7 @@ For Windows commands, a new machine, VS Code setup or troubleshooting, see [docs
 | Overlaps | Clips may overlap on a track; the overlap is tinted red and both clips' notes are exported, merged |
 | Zoom | ⌘/Ctrl + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit) |
 | Lane height | Alt + wheel, ⌘⇧= / ⌘⇧- |
-| Track ops | Checkbox = include in export, click the name to rename, drag ⋮⋮ to reorder, ✕ to remove, right-click for Solo, Merge Into (another track), Save This Track and Source Info |
+| Track ops | Checkbox = include in export, click the name to rename, drag ⋮⋮ to reorder, ✕ to remove, right-click for Solo / Unsolo (restores the previous selection), Merge Into (another track), Save This Track and Source Info |
 | Export | Save MIDI… (⌘S), or drag the **Drag MIDI out** tile into a DAW or Finder/Explorer |
 | Tempo map | Timing ▸ Tempo Map lets you adopt any imported source's map |
 
@@ -83,7 +83,7 @@ The main design decisions:
 - At `s`, the exporter re-emits the last program change, CCs (except 120–127), pitch bend, channel pressure and key signature that came before `s`, **in their original order**. That keeps bank-select→program and RPN/NRPN sequences valid. SysEx and poly aftertouch are not carried.
 - The tempo and time signature in effect at `s` are written at the start of each segment.
 - Lyrics, text, markers and SysEx are included when their time falls in `[s, e)`.
-- **Preserve** mode merges overlapping or adjacent ranges and keeps positions. **Rebase** concatenates ranges in list order. **Separate** writes one rebased file per range. End-of-track is placed at the range end so loop lengths survive.
+- **Preserve** mode merges overlapping or adjacent ranges and keeps positions. **Rebase** concatenates ranges in list order; it's the default. With no ranges, the whole workspace is exported. **Separate** writes one rebased file per range. End-of-track is placed at the range end so loop lengths survive.
 - **Trim** applies to the whole output only. It cuts to the first and last note or lyric and moves every track by the same amount, so alignment is never broken.
 
 ## Known limitations and risks (for Milestone 2)

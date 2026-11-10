@@ -37,8 +37,9 @@ class Controller(QObject):
         self.ws = Workspace()
         self.selected_range_id: str | None = None
         self.snap: SnapSetting = "beat"
-        self.export_mode = ExportMode.WHOLE
+        self.export_mode = ExportMode.REBASE   # default (2026-11-10); with no ranges, export is whole
         self.trim = False
+        self.solo: tuple[str, dict[str, bool]] | None = None   # (soloed track id, enabled states before)
         self._undo: list[tuple[dict, str | None]] = []
         self._redo: list[tuple[dict, str | None]] = []
 
@@ -120,6 +121,7 @@ class Controller(QObject):
             return
         self.checkpoint()
         self.ws.clear()
+        self.solo = None
         self.selected_range_id = None
         self.tracksChanged.emit()
         self.tempoChanged.emit()
@@ -233,6 +235,36 @@ class Controller(QObject):
             self.ws.remove_track(track_id)
             self.tracksChanged.emit()
 
+    def solo_track(self, track_id: str) -> None:
+        """Enable only this track for export; unsolo() restores the previous selection."""
+        if self.ws.track(track_id) is None:
+            return
+        self.checkpoint()
+        # soloing another track while one is soloed keeps the original selection to restore
+        still = self.solo is not None and self.is_soloed(self.solo[0])
+        before = self.solo[1] if still else {t.id: t.enabled for t in self.ws.tracks}
+        for t in self.ws.tracks:
+            t.enabled = t.id == track_id
+        self.solo = (track_id, before)
+        self.tracksChanged.emit()
+
+    def is_soloed(self, track_id: str) -> bool:
+        """True while `track_id` is soloed and its solo hasn't been changed by hand since."""
+        if self.solo is None or self.solo[0] != track_id:
+            return False
+        return all(t.enabled == (t.id == track_id) for t in self.ws.tracks)
+
+    def unsolo(self) -> None:
+        """Restore the track selection from before the solo (tracks added since stay enabled)."""
+        if self.solo is None:
+            return
+        self.checkpoint()
+        before = self.solo[1]
+        for t in self.ws.tracks:
+            t.enabled = before.get(t.id, True)
+        self.solo = None
+        self.tracksChanged.emit()
+
     def set_all_enabled(self, enabled: bool) -> None:
         self.checkpoint()
         for t in self.ws.tracks:
@@ -255,7 +287,7 @@ class Controller(QObject):
         r = Range(start, end)
         self.ws.ranges.append(r)
         if self.export_mode is ExportMode.WHOLE:
-            self.export_mode = ExportMode.PRESERVE
+            self.export_mode = ExportMode.REBASE
             self.exportSettingsChanged.emit()
         self.selected_range_id = r.id
         self.rangesChanged.emit()

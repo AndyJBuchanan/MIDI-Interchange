@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMen
                                QSplitter, QToolBar, QVBoxLayout, QWidget)
 
 from ..core.import_smf import ImportError_, import_smf_bytes
-from ..core.placement import Placement, assign_tracks, target_matches
+from ..core.placement import Placement, assign_tracks, end_to_end_names, target_matches
 from ..core.timing import ZERO
 from ..interchange.drag_import import extract_payloads
 from ..interchange.payload import Payload
@@ -367,8 +367,15 @@ class MainWindow(QMainWindow):
             box = QMessageBox(self)
             box.setWindowTitle("Place dropped files")
             box.setText(f"{len(payloads)} files were dropped.")
-            box.setInformativeText("Lay them end to end from the cursor, in the order dropped, "
-                                   "or place them all at the cursor?")
+            run = end_to_end_names(self._payload_track_names(payloads))
+            if len(run) == 1:
+                e2e = f"End to End joins them on one new track, “{run[0]}”, in the order dropped."
+            else:
+                shown = ", ".join(f"“{n}”" for n in run[:4]) + (" …" if len(run) > 4 else "")
+                e2e = (f"End to End lays them in the order dropped on {len(run)} new tracks ({shown}), "
+                       "lining up each file's tracks by position.")
+            box.setInformativeText(e2e + "\n\nAll at Cursor places each file at the cursor "
+                                   "on its own track(s), matching track names as usual.")
             seq = box.addButton("End to End", QMessageBox.AcceptRole)
             same = box.addButton("All at Cursor", QMessageBox.AcceptRole)
             box.addButton(QMessageBox.Cancel)
@@ -451,7 +458,10 @@ class MainWindow(QMainWindow):
         m.addAction("Disable" if t.enabled else "Enable",
                     lambda: self.ctl.set_track_enabled(track_id, not t.enabled))
         m.addAction("Rename", lambda: self.track_panel.header(track_id) and self.track_panel.header(track_id).focus_name())
-        m.addAction("Solo for Export", lambda: self._solo(track_id))
+        if self.ctl.is_soloed(track_id):
+            m.addAction("Unsolo (Restore Track Selection)", self.ctl.unsolo)
+        else:
+            m.addAction("Solo for Export", lambda: self.ctl.solo_track(track_id))
         m.addSeparator()
         a = m.addAction("Move Up", lambda: self.ctl.move_track(track_id, idx - 1))
         a.setEnabled(idx > 0)
@@ -469,23 +479,9 @@ class MainWindow(QMainWindow):
         m.addAction("Remove Track", lambda: self.ctl.remove_track(track_id))
         return True
 
-    def _solo(self, track_id: str) -> None:
-        self.ctl.checkpoint()
-        for t in self.ctl.ws.tracks:
-            t.enabled = t.id == track_id
-        self.ctl.tracksChanged.emit()
-
     def _source_info(self, track_id: str) -> None:
         t = self.ctl.ws.track(track_id)
         if t is None:
             return
-        srcs = [s for s in (self.ctl.ws.source(sid) for sid in t.source_ids()) if s]
-        if not srcs:
-            return
-        n_events = sum(len(c.events) for c in t.clips)
-        head = "\n\n".join(s.describe() for s in srcs)
-        QMessageBox.information(self, f"Source — {t.name}",
-                                f"{head}\n\nTrack: {t.name}\nOriginal name: {t.original_name or '—'}"
-                                f"\nClips: {len(t.clips)} from {len(srcs)} source(s)"
-                                f"\nChannels: {', '.join(str(c + 1) for c in t.channels) or '—'}"
-                                f"\nEvents: {n_events}")
+        from .source_info import SourceInfoDialog
+        SourceInfoDialog(self.ctl.ws, t, self).exec()

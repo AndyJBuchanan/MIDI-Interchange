@@ -118,3 +118,38 @@ def test_new_document_is_undoable(win):
     assert not ctl.ws.tracks and not ctl.ws.sources
     ctl.undo()
     assert [t.name for t in ctl.ws.tracks] == ["Bass", "Keys"]
+
+
+
+def _below_last(win, from_lane, mods):
+    tl = win.timeline
+    p0 = QPoint(int(tl.x_of(1.0)), HEADER_H + from_lane * tl.lane_h + tl.lane_h // 2)
+    p1 = QPoint(int(tl.x_of(1.0)), HEADER_H + len(win.ctl.ws.tracks) * tl.lane_h + tl.lane_h // 2)
+    _alt_drag(tl, p0, p1, mods)
+    return [(t.name, len(t.clips)) for t in win.ctl.ws.tracks]
+
+
+def test_alt_drag_below_last_lane_from_last_track_with_several_clips(win):
+    win.ctl.import_payloads([Payload("k2.mid", part("Keys", 72))], Placement(F(8), win.ctl.ws.tracks[1].id))
+    assert _below_last(win, 1, Qt.AltModifier) == [("Bass", 1), ("Keys", 1), ("Keys", 1)]
+
+
+def test_alt_drag_lone_clip_below_last_lane_is_a_no_op(win):
+    undo_depth = len(win.ctl._undo)
+    assert _below_last(win, 1, Qt.AltModifier) == [("Bass", 1), ("Keys", 1)]
+    assert len(win.ctl._undo) == undo_depth
+
+
+def test_copy_lone_clip_below_last_lane_makes_new_track(win):
+    assert _below_last(win, 1, Qt.AltModifier | Qt.ControlModifier) == [("Bass", 1), ("Keys", 1), ("Keys", 1)]
+
+
+def test_solo_and_unsolo(win):
+    ctl = win.ctl
+    bass, keys = ctl.ws.tracks
+    ctl.set_track_enabled(keys.id, False)
+    ctl.solo_track(keys.id)
+    assert (bass.enabled, keys.enabled) == (False, True) and ctl.is_soloed(keys.id)
+    ctl.solo_track(bass.id)                       # switch solo: the original selection is kept
+    ctl.unsolo()
+    assert (bass.enabled, keys.enabled) == (True, False) and ctl.solo is None

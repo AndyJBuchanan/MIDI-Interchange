@@ -8,7 +8,7 @@ from helpers import conductor, load, note, notes_of, reparse, smf, track, track_
 from midi_interchange.core.document import Workspace
 from midi_interchange.core.export_smf import ExportMode, ExportOptions, build_exports
 from midi_interchange.core.import_smf import import_smf_bytes
-from midi_interchange.core.placement import Placement, names_match, place_imports
+from midi_interchange.core.placement import Placement, end_to_end_names, names_match, place_imports
 
 
 def part(name: str, pitch: int = 60, beats: int = 4, ppq: int = 480, ch: int = 0) -> bytes:
@@ -145,7 +145,7 @@ def test_extra_repeated_names_become_new_tracks():
     assert [len(t.clips) for t in ws.tracks] == [2, 1, 1]
 
 
-def test_end_to_end_keeps_repeated_names_apart():
+def test_end_to_end_lines_up_multi_track_files_by_position():
     ws = Workspace()
     f = multi(("Bass", 40), ("Bass", 43))
     place_imports(ws, parse((f, "1.mid"), (f, "2.mid")), Placement(end_to_end=True))
@@ -189,15 +189,27 @@ def test_match_uses_original_name_after_rename():
     assert names_match(ws.tracks[0], "BASS")
 
 
-def test_end_to_end_lays_files_in_sequence_and_joins_same_names():
+def test_end_to_end_puts_single_track_files_on_one_track():
     ws = Workspace()
-    parsed = parse((part("Bass", beats=4), "1.mid"), (part("Bass", beats=8), "2.mid"),
+    parsed = parse((part("Bass", beats=4), "1.mid"), (part("Bass 2", beats=8), "2.mid"),
                    (part("Keys", beats=4), "3.mid"))
-    place_imports(ws, parsed, Placement(F(4), end_to_end=True))
-    assert [t.name for t in ws.tracks] == ["Bass", "Keys"]
-    bass, keys = ws.tracks
-    assert [c.start for c in bass.clips] == [4, 4 + bass.clips[0].length]
-    assert keys.clips[0].start == bass.clips[1].end
+    _, stats = place_imports(ws, parsed, Placement(F(4), end_to_end=True))
+    assert [t.name for t in ws.tracks] == ["Bass"] and stats["new_tracks"] == 1
+    a, b, c = ws.tracks[0].clips
+    assert a.start == 4 and b.start == a.end and c.start == b.end
+    assert len(ws.sources) == 3                # each clip still knows its own source
+
+
+def test_end_to_end_ignores_matching_tracks():
+    ws = load(part("Bass"), "song.mid")
+    place_imports(ws, parse((part("Bass"), "1.mid"), (part("Bass"), "2.mid")),
+                  Placement(F(8), ws.tracks[0].id, end_to_end=True))
+    assert [len(t.clips) for t in ws.tracks] == [1, 2]
+
+
+def test_end_to_end_names():
+    assert end_to_end_names([["Bass"], ["Keys"], ["Pad"]]) == ["Bass"]
+    assert end_to_end_names([["A", "B"], ["C", "D", "E"]]) == ["A", "B", "E"]
 
 
 def test_all_at_cursor_keeps_files_on_separate_tracks():

@@ -661,9 +661,11 @@ class Timeline(QAbstractScrollArea):
             if lane >= 0:
                 dest_id = ws.tracks[lane].id
             elif y >= self.lane_top(len(ws.tracks)):
-                # below the last lane: a new track, unless the clip already sits alone on the last one
+                # below the last lane: a new track, unless the clip already sits alone on the
+                # last one (a new track there would look identical once the old one is removed)
                 last = ws.tracks[-1] if ws.tracks else None
-                to_new = not (last is cur_track and len(cur_track.clips) == 1 and d.get("made_track"))
+                pending_copy = d["copy"] and not d["checkpointed"]   # the copy isn't made yet
+                to_new = not (last is cur_track and len(cur_track.clips) == 1 and not pending_copy)
                 dest_id = None if to_new else cur_track.id
         if new_off == clip.offset and dest_id == cur_track.id and not to_new:
             return
@@ -677,7 +679,6 @@ class Timeline(QAbstractScrollArea):
                 d["cid"] = dup
         if to_new:
             ws.new_track_for_clip(d["cid"], like=d["origin"])
-            d["made_track"] = True
             self.ctl.move_clip_live(d["cid"], new_off)
             self.ctl.tracksChanged.emit()
         else:
