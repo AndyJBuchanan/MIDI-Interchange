@@ -24,6 +24,20 @@ function Invoke-Checked {
     if ($LASTEXITCODE -ne 0) { throw "$What failed (exit code $LASTEXITCODE)" }
 }
 
+# Endpoint security agents (CrowdStrike Falcon, Defender, etc.) briefly lock a file right
+# after PyInstaller writes it while they scan it, which fails Compress-Archive/ISCC/Get-FileHash
+# with "being used by another process". Retry with backoff instead of failing the build.
+function Invoke-WithRetry {
+    param([string]$What, [scriptblock]$Cmd, [int]$Attempts = 6, [int]$DelayMs = 1500)
+    for ($i = 1; $i -le $Attempts; $i++) {
+        try { & $Cmd; return } catch {
+            if ($i -eq $Attempts) { throw }
+            Write-Warning "$What locked (attempt $i/$Attempts): $($_.Exception.Message). Retrying in $($DelayMs)ms..."
+            Start-Sleep -Milliseconds $DelayMs
+        }
+    }
+}
+
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     throw "The Python launcher 'py' was not found. Install Python 3.12 from python.org (winget install Python.Python.3.12) and open a new terminal."
 }
@@ -49,7 +63,7 @@ $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
 $zip = "dist\MIDI-Interchange-$version-Windows-$arch.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 # Zip the folder itself so users extract a single "MIDI Interchange" directory.
-Compress-Archive -Path $appDir -DestinationPath $zip -CompressionLevel Optimal
+Invoke-WithRetry "Compress-Archive" { Compress-Archive -Path $appDir -DestinationPath $zip -CompressionLevel Optimal }
 
 $exeVersion = (Get-Item $exe).VersionInfo.ProductVersion
 $sizeMB = [math]::Round((Get-Item $zip).Length / 1MB, 1)
@@ -74,7 +88,7 @@ if (-not $iscc) {
     exit 0
 }
 $root = (Get-Location).Path
-Invoke-Checked "Inno Setup" { & $iscc /Q "/DAppVersion=$version" "/DAppSourceDir=$root\$appDir" "/DOutputDir=$root\dist" scripts\installer.iss }
+Invoke-WithRetry "Inno Setup" { Invoke-Checked "Inno Setup" { & $iscc /Q "/DAppVersion=$version" "/DAppSourceDir=$root\$appDir" "/DOutputDir=$root\dist" scripts\installer.iss } }
 $setup = "dist\MIDI-Interchange-$version-Windows-$arch-Setup.exe"
 if (-not (Test-Path $setup)) { throw "Inno Setup finished but $setup is missing" }
 $setupMB = [math]::Round((Get-Item $setup).Length / 1MB, 1)
