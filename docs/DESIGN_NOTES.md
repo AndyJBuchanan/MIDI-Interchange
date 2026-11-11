@@ -152,10 +152,10 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 
 Planned features (decided 2026-11-10), each on its own branch:
 
-- **Clip edge trims:** drag a clip's left or right edge to trim it, limited to the clip's original extent.
+- **Clip edge trims:** Option-drag a clip's left or right edge to trim it, limited to the clip's original extent. Planned in detail: [plans/clip-edge-trims.md](plans/clip-edge-trims.md).
 - **Export / drag filename decoration:** names are mostly fixed today (a range-name join, "Verse + Chorus", was added 2026-11-10). Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
 - **Track export channel (one feature, design still open):** covers both the mixed-channel policy (Risk 9; Reason splits multi-channel tracks on import) and changing a clip's channel. Likely shape: a control in the track header that sets the export channel for every clip on the track, whatever the clips' or the track's original channels. Keep a way to leave channels as they are, since a deliberately multi-channel track is possible today.
-- **Session persistence (not save/load):** keep the one current workspace between runs. Write it to disk on exit, restore it at startup, and say so if it couldn't be restored cleanly, e.g. after a crash or a crash on exit. No project files, no Save/Open of workspaces. (Open question: also write it periodically, so a crash loses little?)
+- **Session persistence (not save/load):** keep the one current workspace between runs. Write it to disk on exit, restore it at startup, and say so if it couldn't be restored cleanly, e.g. after a crash or a crash on exit. No project files, no Save/Open of workspaces. (Open question: also write it periodically, so a crash loses little?) It must keep clip trims (`trim_start`, `trim_end`) once those exist.
 
 Suggested (studio, 2026-11-10), not yet agreed:
 
@@ -164,6 +164,13 @@ Suggested (studio, 2026-11-10), not yet agreed:
 Later, after more real-world use:
 
 - **Keys and modifiers:** review the UI's keyboard shortcuts and drag modifiers as a whole, including Shift on clip drags. Shift currently keeps the clip's time (track change only), unlike range drags, where Shift bypasses snap; kept for now.
+
+## Future settings page
+
+Not planned yet. Options that already exist in code, or are planned, without any UI, collected so a settings page can expose them later:
+
+- **Notes that started before an edge** (`ExportOptions.partial_notes`, default on): sound from a range or clip-trim edge, or are dropped.
+- **Replace on drop compares** (planned with clip edge trims, default visible edges): a dropped clip replaces one whose trimmed start and end match, or whose full extent matches.
 
 ## Issues found and fixed during development
 
