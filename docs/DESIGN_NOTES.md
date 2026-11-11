@@ -140,7 +140,8 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 6. **Workspace persistence.** Not built. QSettings stores only window and splitter state. Keeping one session between runs is planned (To do).
 7. **Packaging.**
    - **macOS:** the DMG is Developer ID signed, notarised and stapled, using a git-ignored local config.
-   - **Still missing:** an app icon, an Intel or universal2 build (arm64 only for now) and stapling the app inside the DMG.
+   - **Still missing:** an Intel or universal2 build (arm64 only for now) and stapling the app inside the DMG.
+   - **App icon (2026-11-11, first draft):** the master is `assets/icon/icon.png` (1024 px RGBA, transparent around the rounded square); `tools/make_icons.py` (needs Pillow and numpy, not in the requirements) makes the `.icns`, `.ico` and window PNGs, which are committed so the builds don't need Pillow. New artwork drawn on black goes through `--import`, which makes the outside transparent, crops and centres it and writes the master. Windows icons fill the canvas; the macOS one follows Apple's 824-in-1024 grid, and macOS 26 shows it at the normal size without a grey frame.
    - **Size:** about 100 MB, because Qt plugins pull in QML/Quick, VirtualKeyboard and Pdf despite the spec's exclude list. Trimming those plugins could save a lot.
    - **Windows:** builds and launches on Windows 11 x64. It's unsigned, so SmartScreen warns. The Inno Setup installer (`scripts/installer.iss`) registers the app under *Open with* for MIDI files but deliberately doesn't claim the default handler. With no single-instance handoff, opening several files from Explorer starts several windows. Drag-in/drag-out against DAWs isn't tested yet. User-facing shortcut hints are platform-aware (`⌘`/`⌥` on macOS, `Ctrl+`/`Alt+` elsewhere); keep any new ones that way.
 8. **Clip moves** apply to whole clips only; there's no splitting.

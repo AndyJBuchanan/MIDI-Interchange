@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from midi_interchange.interchange.drag_export import prune_old
 from midi_interchange.ui import theme
+from midi_interchange.ui.app_icon import app_icon
 from midi_interchange.ui.main_window import APP_NAME, MainWindow
 
 
@@ -31,6 +32,9 @@ def main() -> int:
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(APP_NAME)
     theme.apply(app)
+    icon = app_icon()
+    if icon:
+        app.setWindowIcon(icon)
     prune_old()
     win = MainWindow()
     filt = _FileOpenFilter(win)

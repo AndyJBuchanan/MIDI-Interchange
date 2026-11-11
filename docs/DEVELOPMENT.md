@@ -242,7 +242,6 @@ Not done yet on Windows:
 - **No code signing.** Windows SmartScreen shows "Windows protected your PC" for a downloaded zip; users click **More info ▸ Run anyway**, or unblock the zip first (file Properties ▸ Unblock). Signing needs an Authenticode certificate (OV/EV, or Azure Trusted Signing) and `signtool sign /fd sha256 /tr <timestamp-url> /td sha256` on the exe before zipping.
 - **Opening several files from Explorer opens several windows.** Selecting more than one file and using *Open with* starts one app instance per file, because there's no single-instance handoff yet. Command-line paths do load into one window (`"MIDI Interchange.exe" a.mid b.mid`), and so does dropping files onto the window.
 - **The installer isn't signed either.** It needs the same certificate as the exe (sign the exe before running Inno Setup, then sign the Setup exe; Inno's `SignTool` directive can automate both).
-- **No app icon** (same as macOS).
 - Drag-in/drag-out against Windows DAWs hasn't been tested (see the README checklist).
 
 **Windows build status (2026-11-09):** Windows 11 Pro x64, Python 3.12.10 (python.org, per-user), PySide6 6.12.0, PyInstaller 6.22.3. All 55 tests pass. The zip was extracted to a clean folder, and the exe started both empty and with the four `samples/` files on the command line. It rendered correctly at high DPI. PyInstaller's warnings file listed nothing relevant. The installer (Inno Setup 6.7.3) was tested with a silent per-user install. It created the files, the Start-menu shortcut, the *Open with* registry entries and the *Apps* entry. The app started through the registered open command with a sample file. A silent uninstall then removed the folder, shortcut and every registry key. The interactive wizard and the all-users install haven't been tested yet.
@@ -309,7 +308,6 @@ Notes:
 - The app is Developer ID signed (team 729JFYTH57), with the hardened runtime and timestamp, and needs no extra entitlements.
 - The first notarisation submission was **Accepted** with no issues (207 binaries ticketed). The ticket is stapled to both the DMG and `dist/` app, and `spctl` reports **Notarized Developer ID** for each.
 - A copy of the DMG marked with the quarantine flag, as if downloaded, opens and the app inside passes Gatekeeper and launches.
-- There's no app icon yet.
 
 ## Project layout and conventions
 

@@ -196,3 +196,16 @@ def test_drop_preview_knows_song_titles(win):
     assert preview(0).startswith("Onto “Heavy EBM Drums - Industrial EBM Anthem”")
     assert "nothing matches “Piercing Lead - Industrial EBM Anthem”" in preview(2)   # not in the new generation
     win.dragLeaveEvent(None)
+
+
+def test_app_icon_files_exist():
+    """Every icon file the spec, installer and window refer to is present (tools/make_icons.py)."""
+    import os
+    from midi_interchange.ui import app_icon
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for rel in ("assets/icon/icon.png", "assets/icon/MIDI Interchange.icns", "assets/icon/MIDI Interchange.ico",
+                "midi_interchange/resources/app_icon.png", "midi_interchange/resources/app_icon_mac.png"):
+        assert os.path.isfile(os.path.join(root, rel)), rel
+    path = app_icon.icon_path()
+    if path:
+        assert app_icon.app_icon() is not None and not app_icon.app_icon().isNull()

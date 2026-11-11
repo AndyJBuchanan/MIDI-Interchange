@@ -40,17 +40,24 @@ excluded = ["PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.Qt
             "PySide6.Qt3DCore", "PySide6.QtMultimedia", "PySide6.QtPdf", "PySide6.QtCharts",
             "PySide6.QtDataVisualization", "tkinter"]
 
-a = Analysis(["main.py"], pathex=["."], binaries=[], datas=[], hiddenimports=[],
+# Icon files are made from assets/icon/icon.png by tools/make_icons.py.
+ICON_ICNS = os.path.join("assets", "icon", "MIDI Interchange.icns")
+ICON_ICO = os.path.join("assets", "icon", "MIDI Interchange.ico")
+
+a = Analysis(["main.py"], pathex=["."], binaries=[],
+             datas=[(os.path.join("midi_interchange", "resources", "*.png"), os.path.join("midi_interchange", "resources"))],
+             hiddenimports=[],
              excludes=excluded, noarchive=False)
 pyz = PYZ(a.pure, cipher=block_cipher)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="MIDI Interchange",
           console=False, argv_emulation=False, target_arch=None,
           codesign_identity=codesign_identity, entitlements_file=entitlements_file,
-          version=version_info)
+          version=version_info, icon=ICON_ICO if sys.platform == "win32" else None)
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="MIDI Interchange")
 
 if sys.platform == "darwin":
     app = BUNDLE(coll, name="MIDI Interchange.app", bundle_identifier="com.midiinterchange.app",
+                 icon=ICON_ICNS,
                  info_plist={
                      "NSHighResolutionCapable": True,
                      "CFBundleShortVersionString": VERSION,

@@ -38,6 +38,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 ChangesAssociations=yes
 UninstallDisplayIcon={app}\{#AppExe}
+; The installer's own icon (made by tools/make_icons.py); the app's icon is inside the exe.
+SetupIconFile=..\assets\icon\MIDI Interchange.ico
 UninstallDisplayName={#AppName}
 OutputDir={#OutputDir}
 OutputBaseFilename=MIDI-Interchange-{#AppVersion}-Windows-x64-Setup
