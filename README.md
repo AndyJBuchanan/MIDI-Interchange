@@ -116,7 +116,6 @@ For each app check: does the drop import at all (if not, note the formats listed
 - The workspace isn't kept between sessions yet (planned); export what you need before quitting.
 - SMPTE-division files are rejected with a clear message.
 - On Windows, opening several files at once from Explorer opens several windows; drag them onto one window instead.
-- No app icon yet.
 
 The plan for what comes next is in the "To do" section of [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md).
 
@@ -189,7 +188,7 @@ scripts/build_macos.sh            # → dist/MIDI Interchange.app + dist/MIDI-In
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1   # → dist\MIDI-Interchange-<ver>-Windows-x64-Setup.exe (installer) + portable .zip
 ```
 
-Both scripts use PyInstaller with `midi_interchange.spec`.
+Both scripts use PyInstaller with `midi_interchange.spec`. The app icon files in `assets/icon/` are made from the master artwork `assets/icon/icon.png` (1024 px, transparent corners) by `tools/make_icons.py`; rerun it after changing the master.
 
 - **macOS:** when the git-ignored `scripts/signing.local.env` is set up, the app and DMG are signed with Developer ID and the hardened runtime, notarised by Apple and stapled. Verified for v0.2.0-pre (2026-11-10): Gatekeeper reports "Notarized Developer ID". Without that file the build falls back to ad-hoc signing. Setup is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#macos-signing-and-notarisation).
 - **Windows:** builds a one-folder app, a portable zip and an installer (Inno Setup: per-user install with no admin prompt, Start-menu shortcut, uninstaller, *Open with* for `.mid`). Verified on 2026-11-09 (Windows 11 x64, Python 3.12.10): the app runs from the zip and after a silent install, which also uninstalls cleanly. For v0.2.0-pre (2026-11-10) the full test suite passes on Windows too. It is **not code-signed** yet, so SmartScreen warns on download. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#windows-build).
