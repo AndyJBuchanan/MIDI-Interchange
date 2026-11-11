@@ -23,6 +23,15 @@ Range boundary policy (half-open ranges [s, e)):
 * The output end-of-track is placed at the end of the range (or of the last
   concatenated range) so loop lengths survive, unless trimming is enabled.
 
+Clip trims (edge trims) use these same rules, from the same code
+(``clip_window`` and ``_extract``): a clip's window is the segment's span cut
+to the clip's visible edges, where a trim is set. A note that started before
+the trimmed start follows ``partial_notes``, a note running past the trimmed
+end is released there, the settings in force are written at the window's
+start, and lyrics, text and markers outside the trims are dropped. A whole
+export writes untrimmed clips exactly as imported and sends only trimmed
+clips through this code (over an open-ended segment).
+
 Track selection: a whole export takes the enabled tracks (the track toggles).
 A range export takes every track and asks each range which tracks it
 includes (``Range.excluded``); the track toggles are not consulted. A track
@@ -44,7 +53,7 @@ from typing import Iterable
 
 import mido
 
-from .document import Track, Workspace
+from .document import Clip, Track, Workspace
 from .events import MODE_CCS, Event, Msg, display_text, is_note_off, is_note_on, pair_notes
 from .names import range_label, safe_filename
 from .ranges import Range, merge_ranges
@@ -102,10 +111,10 @@ def build_exports(ws: Workspace, opts: ExportOptions | None = None) -> list[Expo
         if opts.trim:
             bounds = content_bounds(tracks, ZERO, None)
             if bounds is None:
-                return [ExportResult("", _whole(ws, tracks))]
+                return [ExportResult("", _whole(ws, tracks, opts.partial_notes))]
             return [ExportResult("", _segmented(ws, tracks, [_Segment(bounds[0], bounds[1], ZERO)],
                                                 opts, preserve=False, end=bounds[1] - bounds[0]))]
-        return [ExportResult("", _whole(ws, tracks))]
+        return [ExportResult("", _whole(ws, tracks, opts.partial_notes))]
 
     if mode is ExportMode.PRESERVE:
         spans = merge_ranges(ranges)
@@ -188,30 +197,60 @@ def save_exports(results: list[ExportResult], path: str, label_only: bool = Fals
     return paths
 
 
+def clip_window(clip: Clip, s: Fraction, e: Fraction | None) -> tuple[Fraction, Fraction | None]:
+    """The part of segment [s, e) (e None = unbounded) that a clip can show:
+    the segment cut to the clip's trims. A side that isn't trimmed doesn't
+    cut, so untrimmed clips keep the segment's own edges."""
+    lo = max(s, clip.start) if clip.trim_start > ZERO else s
+    hi = e
+    if clip.trim_end < clip.length:
+        hi = clip.end if e is None else min(e, clip.end)
+    return lo, hi
+
+
+def _sounding(clip: Clip, lo: Fraction, hi: Fraction | None, notes=None):
+    """(note, start, end) in workspace time, for notes sounding in [lo, hi)."""
+    for n in (pair_notes(clip.events, clip.length)[0] if notes is None else notes):
+        ns, ne = n.start + clip.offset, n.end + clip.offset
+        if hi is not None and ns >= hi:
+            continue
+        if ne <= lo and not (ns == ne == lo):
+            continue
+        yield n, ns, ne
+
+
 def content_bounds(tracks: Iterable[Track], s: Fraction, e: Fraction | None) -> tuple[Fraction, Fraction] | None:
-    """First/last instant of notes or lyrics within [s, e) across tracks."""
+    """First/last instant of notes or lyrics within [s, e) across tracks,
+    inside each clip's trims."""
     lo: Fraction | None = None
     hi: Fraction | None = None
     for track in tracks:
         for clip in track.clips:
-            notes, _ = pair_notes(clip.events, clip.length)
-            for n in notes:
-                ns, ne = n.start + clip.offset, n.end + clip.offset
-                if e is not None and ns >= e or ne <= s and not (ns == ne == s):
-                    continue
-                a = max(ns, s)
-                b = ne if e is None else min(ne, e)
+            w0, w1 = clip_window(clip, s, e)
+            for _n, ns, ne in _sounding(clip, w0, w1):
+                a = max(ns, w0)
+                b = ne if w1 is None else min(ne, w1)
                 lo = a if lo is None else min(lo, a)
                 hi = b if hi is None else max(hi, b)
             for ev in clip.events:
                 if ev.msg.type == "lyrics":
                     t = ev.time + clip.offset
-                    if t >= s and (e is None or t < e):
+                    if t >= w0 and (w1 is None or t < w1):
                         lo = t if lo is None else min(lo, t)
                         hi = t if hi is None else max(hi, t)
     if lo is None or hi is None:
         return None
     return lo, hi
+
+
+def visible_msgs(clip: Clip) -> list[Msg]:
+    """The messages a clip contributes to an export of the whole timeline: all
+    of an untrimmed clip's, or what its trims leave (the same cutting as an
+    export). For counts and channel badges."""
+    if not clip.is_trimmed:
+        return [ev.msg for ev in clip.events]
+    items = _extract_clips([clip], _Segment(ZERO, None, ZERO), 0, True)
+    return [it.msg for it in items]
 
 
 def choose_ppq(source_ppqs: Iterable[int], times: Iterable[Fraction]) -> int:
@@ -257,16 +296,21 @@ def _concat_segments(ranges: list[Range], tracks: list[Track],
     return segs, cursor, own
 
 
-def _whole(ws: Workspace, tracks: list[Track]) -> mido.MidiFile:
-    """Lossless export: every event at its workspace position, unmodified."""
+def _whole(ws: Workspace, tracks: list[Track], partial_notes: bool = True) -> mido.MidiFile:
+    """Lossless export: every event of an untrimmed clip at its workspace
+    position, unmodified. Trimmed clips go through the edge rules."""
     out_tracks = []
+    whole = _Segment(ZERO, None, ZERO)
     for track in tracks:
         items = []
         for ci, clip in enumerate(track.clips):
+            if clip.is_trimmed:
+                continue
             for ev in clip.events:
                 items.append(_Item(clip.offset + ev.time, (0, ci, ev.seq), ev.msg))
+        items.extend(_extract_clips([c for c in track.clips if c.is_trimmed], whole, 0, partial_notes))
         out_tracks.append((track, items, track.end))
-    conductor = _tempo_items(ws.tempo_map, [_Segment(ZERO, None, ZERO)], preserve=True)
+    conductor = _tempo_items(ws.tempo_map, [whole], preserve=True)
     end = max((t.end for t in tracks), default=ZERO)
     return _serialize(ws, tracks, conductor, out_tracks, end)
 
@@ -301,49 +345,54 @@ def _state_key(msg: Msg) -> tuple | None:
 
 
 def _extract(track: Track, seg: _Segment, si: int, partial_notes: bool) -> list[_Item]:
-    s, e, dst = seg.start, seg.end, seg.dst
-    assert e is not None
+    return _extract_clips(track.clips, seg, si, partial_notes)
+
+
+def _extract_clips(clips: list[Clip], seg: _Segment, si: int, partial_notes: bool) -> list[_Item]:
+    """The edge rules (module docstring). Each clip is cut to its own window
+    (the segment within the clip's trims); settings are carried to the start
+    of that window, merged across clips that share it."""
+    s, dst = seg.start, seg.dst
 
     def out_time(t: Fraction) -> Fraction:
         return dst + (t - s)
 
     items: list[_Item] = []
-    state: dict[tuple, tuple[Fraction, int, Event]] = {}
-    for clip in track.clips:
+    state: dict[tuple, tuple[Fraction, int, Event]] = {}     # (window start, key) -> latest event before it
+    for clip in clips:
         off = clip.offset
-        if off >= e:
+        lo, hi = clip_window(clip, s, seg.end)
+        if seg.end is not None and lo >= seg.end:
             continue
+        cut_end = clip.end if clip.trim_end < clip.length else None   # settings after a trimmed end are gone
         notes, orphans = pair_notes(clip.events, clip.length)
         orphan_ids = {id(o) for o in orphans}
-        for n in notes:
-            ns, ne = n.start + off, n.end + off
-            sounding = (ns < e and ne > s) or (ns == ne and s <= ns < e)
-            if not sounding or (ns < s and not partial_notes):
+        for n, ns, ne in _sounding(clip, lo, hi, notes):
+            if ns < lo and not partial_notes:
                 continue
-            if ns >= s:
-                items.append(_Item(out_time(ns), (si, 1, n.on.seq), n.on.msg))
-            else:
-                items.append(_Item(out_time(s), (si, 1, n.on.seq), n.on.msg))
-            if n.off is not None and ne <= e:
+            items.append(_Item(out_time(max(ns, lo)), (si, 1, n.on.seq), n.on.msg))
+            if n.off is not None and (hi is None or ne <= hi):
                 items.append(_Item(out_time(ne), (si, 1, n.off.seq), n.off.msg))
             else:
-                items.append(_Item(out_time(min(ne, e)), (si, 2, n.on.seq),
+                end_t = ne if hi is None else min(ne, hi)
+                items.append(_Item(out_time(end_t), (si, 2, n.on.seq),
                                    mido.Message("note_off", channel=n.channel, note=n.pitch, velocity=0)))
         for ev in clip.events:
             m = ev.msg
             if (is_note_on(m) or is_note_off(m)) and id(ev) not in orphan_ids:
                 continue
             t = ev.time + off
-            if s <= t < e:
+            if t >= lo and (hi is None or t < hi):
                 items.append(_Item(out_time(t), (si, 1, ev.seq), m))
-            elif t < s:
+            elif t < lo and (cut_end is None or t < cut_end):
                 k = _state_key(m)
                 if k is not None:
-                    cur = state.get(k)
+                    key = (lo, k)
+                    cur = state.get(key)
                     if cur is None or (t, ev.seq) >= (cur[0], cur[1]):
-                        state[k] = (t, ev.seq, ev)
-    for _t, seq, ev in sorted(state.values(), key=lambda v: (v[0], v[1])):
-        items.append(_Item(dst, (si, 0, seq), ev.msg))
+                        state[key] = (t, ev.seq, ev)
+    for (lo, _k), (_t, seq, ev) in sorted(state.items(), key=lambda kv: (kv[0][0], kv[1][0], kv[1][1])):
+        items.append(_Item(out_time(lo), (si, 0, seq), ev.msg))
     return items
 
 

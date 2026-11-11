@@ -11,7 +11,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QFo
                                QWidget)
 
 from ..core.document import Source, Track, Workspace
+from ..core.document import msg_channels
 from ..core.events import is_note_on
+from ..core.export_smf import visible_msgs
 
 
 def _channels(chs) -> str:
@@ -42,7 +44,7 @@ class SourceInfoDialog(QDialog):
             f.addRow("Original name:", _value(track.original_name))
         f.addRow("Clips:", _value(f"{len(track.clips)} from {len(self.sources)} source(s)"))
         f.addRow("Channels:", _value(_channels(track.channels)))
-        f.addRow("Events:", _value(str(sum(len(c.events) for c in track.clips))))
+        f.addRow("Events:", _value(str(sum(len(visible_msgs(c)) for c in track.clips))))
         if track.overlaps():
             f.addRow("Overlaps:", _value(f"{len(track.overlaps())} (notes are merged on export)"))
 
@@ -62,8 +64,9 @@ class SourceInfoDialog(QDialog):
         self._clip_source: list[int] = []
         for row, c in enumerate(track.clips):
             src = ws.source(c.source_id)
-            chs = {e.channel for e in c.events if e.channel is not None}
-            notes = sum(1 for e in c.events if is_note_on(e.msg))
+            msgs = visible_msgs(c)               # inside the clip's trims
+            chs = msg_channels(msgs)
+            notes = sum(1 for m in msgs if is_note_on(m))
             cells = [str(row + 1), tm.format_bbt(c.start), tm.format_bbt(c.end), _channels(chs),
                      str(notes), src.name if src else "—"]
             for col, text in enumerate(cells):

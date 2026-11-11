@@ -145,9 +145,40 @@ class Controller(QObject):
         src, clip = found
         offset = max(offset, ZERO)
         dest = track_id or src.id
-        if offset != clip.offset or dest != src.id:
+        if offset != clip.start or dest != src.id:
             self.ws.move_clip_to_track(clip_id, dest, offset)
             self.tracksChanged.emit()
+
+    def trim_clip_live(self, clip_id: str, edge: str, time: Fraction, bypass_snap: bool = False) -> None:
+        """Live edge trim during a drag (caller checkpoints once at drag start).
+        The edge snaps like a clip move; Shift bypasses. It stays within the
+        clip's full extent and keeps a minimum length of one snap step (one
+        tick when the snap is bypassed or off)."""
+        found = self.ws.find_clip(clip_id)
+        if found is None:
+            return
+        _track, clip = found
+        time = self.snap_time(time, bypass_snap)
+        if self.ws.trim_clip(clip_id, edge, time, self._min_trim(clip, bypass_snap)):
+            self.tracksChanged.emit()
+
+    def _min_trim(self, clip, bypass_snap: bool) -> Fraction | None:
+        """Smallest clip length a trim may leave (None: one tick)."""
+        setting = None if bypass_snap else self.snap
+        if setting is None:
+            return None
+        tm = self.ws.tempo_map
+        ts = tm.timesig_at(clip.start)
+        return ts.bar_length if setting == "bar" else ts.beat_length if setting == "beat" else Fraction(setting)
+
+    def restore_clip(self, clip_id: str) -> None:
+        """Menu command: put a trimmed clip's edges back to its full extent."""
+        found = self.ws.find_clip(clip_id)
+        if found is None or not found[1].is_trimmed:
+            return
+        self.checkpoint()
+        self.ws.restore_clip(clip_id)
+        self.tracksChanged.emit()
 
     def end_clip_gesture(self) -> None:
         if self.ws.remove_empty_tracks():

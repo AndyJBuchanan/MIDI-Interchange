@@ -70,14 +70,41 @@ class Clip:
     source_track_index: int = 0
     name: str = ""
     source_id: str = ""          # Source this clip's events came from (clips can move between tracks)
+    # Edge trims, in clip time. ``events`` and ``length`` stay the full extent;
+    # the trims only choose what shows and exports (cutting rules: export_smf).
+    trim_start: Fraction = ZERO
+    trim_end: Fraction | None = None     # None = not trimmed: the full length
+
+    def __post_init__(self) -> None:
+        if self.trim_end is None:
+            self.trim_end = self.length
 
     @property
     def start(self) -> Fraction:
-        return self.offset
+        """Visible start (workspace time)."""
+        return self.offset + self.trim_start
 
     @property
     def end(self) -> Fraction:
+        """Visible end (workspace time)."""
+        return self.offset + self.trim_end
+
+    @property
+    def full_start(self) -> Fraction:
+        return self.offset
+
+    @property
+    def full_end(self) -> Fraction:
         return self.offset + self.length
+
+    @property
+    def is_trimmed(self) -> bool:
+        return self.trim_start > ZERO or self.trim_end < self.length
+
+    def set_start(self, start: Fraction) -> None:
+        """Position the clip so its visible start is at ``start``. Every
+        positioning goes through here, so trims travel with the clip."""
+        self.offset = start - self.trim_start
 
 
 @dataclass
@@ -120,12 +147,13 @@ class Track:
         """Recompute channels after clips were added or removed. A track that
         gains channel data stops being auxiliary; one never becomes auxiliary
         by losing it (it is removed instead when it has no clips)."""
-        self.channels = track_channels([e for c in self.clips for e in c.events])
+        from .export_smf import visible_msgs     # the edge rules live with export (imported late: it needs this module)
+        self.channels = msg_channels([m for c in self.clips for m in visible_msgs(c)])
         if self.channels:
             self.auxiliary = False
 
     def sort_clips(self) -> None:
-        self.clips.sort(key=lambda c: (c.offset, c.id))
+        self.clips.sort(key=lambda c: (c.start, c.id))
 
     def overlaps(self) -> list[tuple[Fraction, Fraction]]:
         """Spans where two or more of this track's clips overlap."""
@@ -230,7 +258,7 @@ class Workspace:
             return
         src, clip = found
         if offset is not None:
-            clip.offset = max(offset, ZERO)
+            clip.set_start(max(offset, ZERO))
         if src is not dest:
             src.clips.remove(clip)
             if not clip.source_id:
@@ -277,8 +305,8 @@ class Workspace:
         dest = self.track(track_id) if track_id else t
         if dest is None:
             return None
-        dup = replace(clip, id=new_id(), source_id=clip.source_id or t.source_id,
-                      offset=clip.end if offset is None else max(offset, ZERO))
+        dup = replace(clip, id=new_id(), source_id=clip.source_id or t.source_id)
+        dup.set_start(clip.end if offset is None else max(offset, ZERO))
         dest.clips.append(dup)
         dest.refresh_channels()
         dest.sort_clips()
@@ -294,8 +322,43 @@ class Workspace:
         prev = [c for c in t.clips if c is not clip and c.start < clip.start]
         if not prev:
             return False
-        clip.offset = max(c.end for c in prev)
+        clip.set_start(max(c.end for c in prev))
         t.sort_clips()
+        return True
+
+    def trim_clip(self, clip_id: str, edge: str, time: Fraction, min_length: Fraction | None = None) -> bool:
+        """Move a clip's visible ``edge`` ("start" or "end") to workspace
+        ``time``. The edge stays within the clip's full extent, and the two
+        edges keep at least ``min_length`` apart (default: one tick of the
+        clip's source). Returns whether anything changed."""
+        found = self.find_clip(clip_id)
+        if found is None:
+            return False
+        track, clip = found
+        if min_length is None:
+            src = self.source(clip.source_id)
+            min_length = Fraction(1, src.ppq if src else 480)
+        t = time - clip.offset                      # clip time
+        if edge == "start":
+            new = min(max(t, ZERO), max(clip.trim_end - min_length, clip.trim_start))
+            changed, clip.trim_start = new != clip.trim_start, new
+        elif edge == "end":
+            new = max(min(t, clip.length), min(clip.trim_start + min_length, clip.trim_end))
+            changed, clip.trim_end = new != clip.trim_end, new
+        else:
+            raise ValueError(edge)
+        if changed:
+            track.refresh_channels()
+        return changed
+
+    def restore_clip(self, clip_id: str) -> bool:
+        """Put both edges back to the clip's full extent."""
+        found = self.find_clip(clip_id)
+        if found is None or not found[1].is_trimmed:
+            return False
+        track, clip = found
+        clip.trim_start, clip.trim_end = ZERO, clip.length
+        track.refresh_channels()
         return True
 
     def merge_tracks(self, from_id: str, into_id: str) -> None:
@@ -342,4 +405,8 @@ class Workspace:
 
 
 def track_channels(events: list[Event]) -> tuple[int, ...]:
-    return tuple(sorted({e.msg.channel for e in events if is_channel_msg(e.msg)}))
+    return msg_channels([e.msg for e in events])
+
+
+def msg_channels(msgs) -> tuple[int, ...]:
+    return tuple(sorted({m.channel for m in msgs if is_channel_msg(m)}))

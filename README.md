@@ -37,7 +37,7 @@ Shortcuts are shown for macOS; on Windows use Ctrl for ⌘ and Alt for ⌥ (Opti
 - **Several files at once:** you're asked: **End to End** (each file starts where the previous one ends, on **one** new track named after the first file's track; multi-track files line up by track position) or **All at Cursor** (each file at the cursor, with the usual name matching).
 - **Round trips:** when a multi-track file matches the track you drop it on, its other tracks also join their same-named tracks, and the rest become new tracks.
   - A file that repeats a track name (Staccato.ai files can) pairs its copies in order with the existing same-named tracks.
-  - A dropped clip with exactly the same start and end as one already on the track **replaces** it; partial overlaps are kept and tinted.
+  - A dropped clip with exactly the same start and end as one already on the track **replaces** it (a trimmed clip counts by its visible edges); partial overlaps are kept and tinted.
   - **Song titles:** Staccato.ai names tracks "part - song" and changes the song between generations. If no name matches exactly, names are compared again without a known song title, so "Drums - Staccato Generation" joins "Drums - Industrial EBM Anthem"; the status bar says when it did. A song title is known only from the file itself (its tempo track's name, or an ending all its tracks share), so DAW clips such as "Lead - Verse" and "Lead - Chorus" never match.
 - The first file with a tempo map sets the workspace tempo. Timing ▸ Tempo Map lets you adopt another file's map.
 
@@ -46,8 +46,9 @@ Shortcuts are shown for macOS; on Windows use Ctrl for ⌘ and Alt for ⌥ (Opti
 | Action | How |
 |---|---|
 | Move a clip | ⌥-drag it in time and onto another track; drag below the last track for a new one. Hold Shift to keep its time (track change only). A track left empty is removed (Undo restores it) |
+| Trim a clip | ⌥-drag its left or right edge (the cursor turns to ↔). The edge snaps like a clip move (Shift bypasses the snap) and can't go past where the clip's MIDI originally started or ended. Notes and settings outside the trims are left out of exports and drag-out; right-click ▸ **Restore Full Clip** puts both edges back. A plain drag on a clip edge still makes or resizes a range. A clip too narrow to hold both edges can only be moved: zoom in to trim it |
 | Copy a clip | ⌥⌘-drag it, or right-click ▸ Duplicate Clip (placed straight after it) |
-| Clip tools | Right-click a clip: Duplicate, Butt Against Previous Clip, Move Clip to Track (or New Track), Delete Clip |
+| Clip tools | Right-click a clip: Duplicate, Butt Against Previous Clip, Restore Full Clip (on a trimmed clip), Move Clip to Track (or New Track), Delete Clip |
 | Overlaps | Clips may overlap on a track; the overlap is tinted red and both clips' notes are exported, merged |
 | Tracks | Click the name to rename, drag ⋮⋮ to reorder, ✕ to remove. Right-click a header (or a clip ▸ Track) for Enable/Disable, Rename, Solo for Export / Unsolo, Move Up/Down, Merge Into (another track), Save This Track…, Source Info… and Remove Track |
 | Start again | File ▸ New (⌘N, also on the toolbar) clears the workspace; Undo brings it back. Export settings are kept |
@@ -112,7 +113,7 @@ For each app check: does the drop import at all (if not, note the formats listed
 
 - **Drag and drop depends on the other app.** File URLs and any data starting with `MThd` are handled. Qt can't receive **macOS file promises** or **Windows virtual files**; no app tested so far needed them. If a drop carries no usable MIDI, the app lists the formats it was offered, which helps a lot in a bug report. Drag-out offers temp files (in `$TMPDIR/MIDI Interchange Drag`, pruned after 24 h).
 - **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, assemble clips that share a channel. A per-track export channel is planned.
-- Clips move whole; they can't be split or trimmed yet (edge trims are planned).
+- Clips can be trimmed at either edge but not split.
 - The workspace isn't kept between sessions yet (planned); export what you need before quitting.
 - SMPTE-division files are rejected with a clear message.
 - On Windows, opening several files at once from Explorer opens several windows; drag them onto one window instead.
@@ -177,6 +178,7 @@ The main design decisions:
 - **Preserve** mode merges overlapping or adjacent ranges and keeps positions. **Rebase** concatenates ranges in list order; it's the default. With no ranges, the whole workspace is exported. **Separate** writes one rebased file per range. End-of-track is placed at the range end so loop lengths survive.
 - **Tracks per range:** range exports use each range's own track checkboxes, not the track toggles. A track excluded from a range is silent there (the range still takes its time); a track no exported range includes is left out of the file. Whole export uses the track toggles.
 - **File names:** a one-track export is named after the track; otherwise after the range names ("Verse + Chorus"). Separate files dragged out are named by their range alone ("Verse.mid", a repeat gets " (2)"); Save MIDI… adds the range name to the name you choose.
+- **Clip trims** use the same edge rules as ranges: a note that started before a trimmed start sounds from the edge, a note running past a trimmed end is released at it, and the program, controllers and pitch bend in force are written at the start. A whole export writes untrimmed clips exactly as imported.
 - **Trim** applies to the whole output only. It cuts to the first and last note or lyric and moves every track by the same amount, so alignment is never broken.
 
 ## Packaging

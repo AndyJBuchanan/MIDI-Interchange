@@ -1,6 +1,6 @@
 # Plan: clip edge trims
 
-Status: **agreed, not built** (planned 2026-11-11). Branch: `feature/clip-edge-trims`.
+Status: **built** (planned and built 2026-11-11). Branch: `feature/clip-edge-trims`.
 
 Option-drag a clip's left or right edge to trim it. An edge can't go past the clip's original start or end. Exports write what the timeline shows.
 

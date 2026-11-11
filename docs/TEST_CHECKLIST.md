@@ -112,6 +112,17 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 - [x] Staccato round trip again (round 2 failed with the drop on Heavy EBM Drums; not reproduced on the dev Mac with the same files and steps, round 3 adds the reason to the message): open the Staccato song, drag a new Staccato generation onto Heavy EBM Drums. While dragging, the preview says "Onto “Heavy EBM Drums - …” …"; after the drop, the parts land on their tracks and the status bar says "matched ignoring song titles …". **If it makes new tracks instead, copy down the status bar message**: it now ends "new because nothing matches “…” (…)" with the file's and the track's song titles.
 - [x] The preview and the result always agree: whatever the cursor says before you let go ("Onto …" or "New track(s) …: nothing matches …") is what happens.
 
+## 8d. Clip edge trims (`feature/clip-edge-trims`)
+
+- [ ] ⌥-hover a clip's left or right edge: the cursor turns to ↔. Without ⌥ nothing changes, and a plain drag there makes a range.
+- [ ] ⌥-drag the right edge in: the clip shortens and its notes are cut at the edge. Drag it back out: it stops at where the clip originally ended. Same for the left edge and the original start.
+- [ ] The edge snaps to the grid; hold Shift to place it freely. The two edges can't cross.
+- [ ] One ⌘Z undoes a whole trim drag. Right-click a trimmed clip ▸ **Restore Full Clip** (the item isn't there on an untrimmed clip); ⌘Z brings the trim back.
+- [ ] Trim a clip so an edge falls inside a long note, then **drag out to a DAW** (try Cubase and Reason): the note starts at the edge (or is missing if that option is turned off in code), a note over the right edge ends at it, and nothing hangs. Check the instrument sound (program, volume) is right at the start.
+- [ ] Move, ⌥⌘-copy, Duplicate, Butt Against Previous and Merge Into keep the trim. Butting uses the trimmed start.
+- [ ] Zoom far out so a clip is only a few pixels wide: ⌥-drag moves it instead of trimming.
+- [ ] Drop a file onto a trimmed clip's exact visible start and end: it replaces it.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.
