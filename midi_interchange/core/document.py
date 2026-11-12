@@ -326,6 +326,30 @@ class Workspace:
         t.sort_clips()
         return True
 
+    def _default_min_trim(self, clip: Clip) -> Fraction:
+        src = self.source(clip.source_id)
+        return Fraction(1, src.ppq if src else 480)
+
+    def can_trim_move(self, clip_id: str, edge: str, direction: int,
+                      min_length: Fraction | None = None) -> bool:
+        """Whether a clip's visible ``edge`` can still move in ``direction`` (-1 earlier,
+        +1 later). The limits are the ones trim_clip clamps to, kept together here."""
+        found = self.find_clip(clip_id)
+        if found is None:
+            return False
+        clip = found[1]
+        if min_length is None:
+            min_length = self._default_min_trim(clip)
+        if edge == "start":
+            if direction < 0:
+                return clip.trim_start > ZERO and clip.start > ZERO
+            return clip.trim_start < clip.trim_end - min_length
+        if edge == "end":
+            if direction > 0:
+                return clip.trim_end < clip.length
+            return clip.trim_end > clip.trim_start + min_length
+        raise ValueError(edge)
+
     def trim_clip(self, clip_id: str, edge: str, time: Fraction, min_length: Fraction | None = None) -> bool:
         """Move a clip's visible ``edge`` ("start" or "end") to workspace
         ``time``. The edge stays within the clip's full extent, and the two
@@ -336,8 +360,7 @@ class Workspace:
             return False
         track, clip = found
         if min_length is None:
-            src = self.source(clip.source_id)
-            min_length = Fraction(1, src.ppq if src else 480)
+            min_length = self._default_min_trim(clip)
         t = time - clip.offset                      # clip time
         if edge == "start":
             new = min(max(t, ZERO), max(clip.trim_end - min_length, clip.trim_start))

@@ -157,6 +157,11 @@ Planned features (decided 2026-11-10), each on its own branch:
 - **Track export channel (one feature, design still open):** covers both the mixed-channel policy (Risk 9; Reason splits multi-channel tracks on import) and changing a clip's channel. Likely shape: a control in the track header that sets the export channel for every clip on the track, whatever the clips' or the track's original channels. Keep a way to leave channels as they are, since a deliberately multi-channel track is possible today.
 - **Session persistence (not save/load):** keep the one current workspace between runs. Write it to disk on exit, restore it at startup, and say so if it couldn't be restored cleanly, e.g. after a crash or a crash on exit. No project files, no Save/Open of workspaces. (Open question: also write it periodically, so a crash loses little?) It must keep clip trims (`trim_start`, `trim_end`).
 
+Seen in studio testing 2026-11-12, not yet built (see [plans/next-drag-in-scroll-and-mute-solo.md](plans/next-drag-in-scroll-and-mute-solo.md)):
+
+- **Drag-in auto-scroll:** dragging MIDI in from another app doesn't scroll the timeline at the right edge of the window, so later positions can't be reached in one drag.
+- **Mute and solo:** the track include tickbox becomes a mute control, with a solo button and a cancel-all control in the top left panel.
+
 Suggested (studio, 2026-11-10), not yet agreed:
 
 - **Scroll bar zoom:** drag the ends of the horizontal scroll bar to zoom, as other apps do.

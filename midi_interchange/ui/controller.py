@@ -162,6 +162,13 @@ class Controller(QObject):
         if self.ws.trim_clip(clip_id, edge, time, self._min_trim(clip, bypass_snap)):
             self.tracksChanged.emit()
 
+    def trim_can_move(self, clip_id: str, edge: str, direction: int, bypass_snap: bool = False) -> bool:
+        """Whether a trim drag's edge can still move that way (the workspace owns the limits)."""
+        found = self.ws.find_clip(clip_id)
+        if found is None:
+            return False
+        return self.ws.can_trim_move(clip_id, edge, direction, self._min_trim(found[1], bypass_snap))
+
     def _min_trim(self, clip, bypass_snap: bool) -> Fraction | None:
         """Smallest clip length a trim may leave (None: one tick)."""
         setting = None if bypass_snap else self.snap

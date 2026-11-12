@@ -126,6 +126,16 @@ def test_restore_full_clip(ws):
     assert ws.restore_clip(c.id) and (c.start, c.end) == (0, 8) and not c.is_trimmed
 
 
+def test_can_trim_move_matches_the_clamps(ws):
+    c = clip_of(ws)
+    assert not ws.can_trim_move(c.id, "end", 1) and ws.can_trim_move(c.id, "end", -1)
+    assert not ws.can_trim_move(c.id, "start", -1) and ws.can_trim_move(c.id, "start", 1)
+    ws.trim_clip(c.id, "end", F(5), min_length=F(1))
+    ws.trim_clip(c.id, "start", F(4), min_length=F(1))
+    assert ws.can_trim_move(c.id, "end", 1) and ws.can_trim_move(c.id, "start", -1)
+    assert not ws.can_trim_move(c.id, "end", -1, F(1)) and not ws.can_trim_move(c.id, "start", 1, F(1))
+
+
 # -- export: left edge --------------------------------------------------------------
 def test_note_across_left_edge_sounds_from_the_edge(ws):
     ws.trim_clip(clip_of(ws).id, "start", F(2))
@@ -461,3 +471,34 @@ def test_narrow_clip_can_only_be_moved(win):
     before = c.end - c.start
     gesture(tl, mid, QPoint(mid.x() + 12, y), Qt.AltModifier)
     assert c.start > 0 and c.end - c.start == before and c.trim_end == 2
+
+
+def test_trim_autoscroll_stops_when_the_edge_is_pinned(win):
+    tl, ctl = win.timeline, win.ctl
+    y = HEADER_H + tl.lane_h // 2
+    hbar, w = tl.horizontalScrollBar(), tl.viewport().width()
+    p = QPoint(int(tl.x_of(8)) - 2, y)
+    QTest.mousePress(tl.viewport(), Qt.LeftButton, Qt.AltModifier, p)
+    assert tl._drag["kind"] == "trim"
+    before = hbar.value()
+    tl._autoscroll_step(w - 5, y, False)                    # the end is at the clip's original end
+    assert hbar.value() == before and not tl._autoscroll.isActive()
+    QTest.mouseRelease(tl.viewport(), Qt.LeftButton, Qt.AltModifier, p)
+
+
+def test_trim_autoscroll_continues_while_the_limit_is_off_screen(win):
+    tl, ctl = win.timeline, win.ctl
+    c = clip_of(ctl.ws)
+    ctl.trim_clip_live(c.id, "end", F(2))
+    tl.set_zoom(200.0, 0)
+    tl.horizontalScrollBar().setValue(0)
+    QApplication.processEvents()
+    y = HEADER_H + tl.lane_h // 2
+    hbar, w = tl.horizontalScrollBar(), tl.viewport().width()
+    p = QPoint(int(tl.x_of(2)) - 2, y)
+    QTest.mousePress(tl.viewport(), Qt.LeftButton, Qt.AltModifier, p)
+    assert tl._drag["kind"] == "trim"
+    tl._autoscroll_step(w - 5, y, False)                    # the original end (beat 8) is off screen
+    assert hbar.value() > 0
+    assert c.trim_end > 2                                    # and the edge followed the pointer
+    QTest.mouseRelease(tl.viewport(), Qt.LeftButton, Qt.AltModifier, p)

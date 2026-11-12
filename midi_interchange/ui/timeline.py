@@ -725,7 +725,7 @@ class Timeline(QAbstractScrollArea):
             self._update_cursor(pos, e.modifiers())
             self.viewport().update(0, 0, self.viewport().width(), HEADER_H)
             return
-        self._check_autoscroll(pos.x())
+        self._check_autoscroll(pos.x(), bypass)
         self._drag_to(pos.x(), bypass, pos.y())
 
     def _drag_to(self, x: float, bypass: bool, y: float | None = None) -> None:
@@ -884,31 +884,43 @@ class Timeline(QAbstractScrollArea):
         if vp.toolTip() != tip:
             vp.setToolTip(tip)
 
-    def _check_autoscroll(self, x: float) -> None:
+    def _may_scroll(self, x: float, bypass: bool) -> bool:
+        """Auto-scroll direction check: a trim drag scrolls only while its edge can still
+        move that way. Other drags always may."""
+        d = self._drag
+        if d is None or d["kind"] != "trim":
+            return True
         w = self.viewport().width()
-        if x < 20 or x > w - 20:
+        direction = -1 if x < 20 else 1 if x > w - 20 else 0
+        return direction != 0 and self.ctl.trim_can_move(d["cid"], d["edge"], direction, bypass)
+
+    def _check_autoscroll(self, x: float, bypass: bool = False) -> None:
+        w = self.viewport().width()
+        if (x < 20 or x > w - 20) and self._may_scroll(x, bypass):
             if not self._autoscroll.isActive():
                 self._autoscroll.start()
         else:
             self._autoscroll.stop()
 
     def _autoscroll_tick(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        pt = self.viewport().mapFromGlobal(QCursor.pos())
+        self._autoscroll_step(pt.x(), pt.y(), bool(QApplication.keyboardModifiers() & Qt.ShiftModifier))
+
+    def _autoscroll_step(self, x: float, y: float, bypass: bool) -> None:
         if self._drag is None:
             self._autoscroll.stop()
             return
-        x = self.viewport().mapFromGlobal(QCursor.pos()).x()
         w = self.viewport().width()
         hbar = self.horizontalScrollBar()
-        if x < 20:
-            hbar.setValue(hbar.value() - max(4, int(20 - x)))
-        elif x > w - 20:
-            hbar.setValue(hbar.value() + max(4, int(x - (w - 20))))
-        else:
+        if not (x < 20 or x > w - 20) or not self._may_scroll(x, bypass):
             self._autoscroll.stop()
             return
-        from PySide6.QtWidgets import QApplication
-        y = self.viewport().mapFromGlobal(QCursor.pos()).y()
-        self._drag_to(min(max(x, 0), w), bool(QApplication.keyboardModifiers() & Qt.ShiftModifier), y)
+        if x < 20:
+            hbar.setValue(hbar.value() - max(4, int(20 - x)))
+        else:
+            hbar.setValue(hbar.value() + max(4, int(x - (w - 20))))
+        self._drag_to(min(max(x, 0), w), bypass, y)
 
     def _context_menu(self, hit: tuple, e: QMouseEvent) -> None:
         gp = e.globalPosition().toPoint()

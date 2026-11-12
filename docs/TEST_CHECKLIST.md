@@ -114,14 +114,15 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 
 ## 8d. Clip edge trims (`feature/clip-edge-trims`)
 
-- [ ] ⌥-hover a clip's left or right edge: the cursor turns to ↔. Without ⌥ nothing changes, and a plain drag there makes a range.
-- [ ] ⌥-drag the right edge in: the clip shortens and its notes are cut at the edge. Drag it back out: it stops at where the clip originally ended. Same for the left edge and the original start.
-- [ ] The edge snaps to the grid; hold Shift to place it freely. The two edges can't cross.
-- [ ] One ⌘Z undoes a whole trim drag. Right-click a trimmed clip ▸ **Restore Full Clip** (the item isn't there on an untrimmed clip); ⌘Z brings the trim back.
-- [ ] Trim a clip so an edge falls inside a long note, then **drag out to a DAW** (try Cubase and Reason): the note starts at the edge (or is missing if that option is turned off in code), a note over the right edge ends at it, and nothing hangs. Check the instrument sound (program, volume) is right at the start.
-- [ ] Move, ⌥⌘-copy, Duplicate, Butt Against Previous and Merge Into keep the trim. Butting uses the trimmed start.
-- [ ] Zoom far out so a clip is only a few pixels wide: ⌥-drag moves it instead of trimming.
-- [ ] Drop a file onto a trimmed clip's exact visible start and end: it replaces it.
+- [x] ⌥-hover a clip's left or right edge: the cursor turns to ↔. Without ⌥ nothing changes, and a plain drag there makes a range.
+- [x] ⌥-drag the right edge in: the clip shortens and its notes are cut at the edge. Drag it back out: it stops at where the clip originally ended. Same for the left edge and the original start.
+- [x] The edge snaps to the grid; hold Shift to place it freely. The two edges can't cross.
+- [x] One ⌘Z undoes a whole trim drag. Right-click a trimmed clip ▸ **Restore Full Clip** (the item isn't there on an untrimmed clip); ⌘Z brings the trim back.
+- [x] Trim a clip so an edge falls inside a long note, then **drag out to a DAW** (try Cubase and Reason): the note starts at the edge (or is missing if that option is turned off in code), a note over the right edge ends at it, and nothing hangs. Check the instrument sound (program, volume) is right at the start.
+- [x] Move, ⌥⌘-copy, Duplicate, Butt Against Previous and Merge Into keep the trim. Butting uses the trimmed start.
+- [x] Zoom far out so a clip is only a few pixels wide: ⌥-drag moves it instead of trimming.
+- [x] Drop a file onto a trimmed clip's exact visible start and end: it replaces it.
+- [ ] Hold a trim drag past the clip's original end with the pointer at the window edge: the view doesn't scroll. Then zoom in so the original end is off screen: the drag does scroll, so you can reach it.
 
 ## 9. New document
 
@@ -141,4 +142,4 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 
 Windows is a secondary platform: it isn't tested during normal development, only before a release (RELEASING.md, step 3). Leave this section unticked until then.
 
-- [ ] Use **Alt** in place of Option and **Ctrl** in place of ⌘ for the clip drags. Check the drop cursor and the multi-file dialog.
+- [x] Use **Alt** in place of Option and **Ctrl** in place of ⌘ for the clip drags. Check the drop cursor and the multi-file dialog.
