@@ -162,3 +162,25 @@ def test_top_m_indicator_ignores_hidden_mutes_but_clear_still_clears_them(win):
     assert not win.track_panel.clear_m.isChecked()
     c.clear_solos()
     assert c.ws.global_tracks() == [a, b]
+
+
+def test_named_track_export_ignores_mute_and_solo_in_whole_mode(win):
+    from midi_interchange.core.export_smf import export_tracks
+    ws = win.ctl.ws
+    a, b = ws.tracks
+    win.ctl.set_mute(a.id, True)
+    assert len(export_tracks(ws, [a.id])) == 1
+    win.ctl.set_mute(a.id, False)
+    win.ctl.toggle_solo(b.id)
+    assert len(export_tracks(ws, [a.id])) == 1
+
+
+def test_whole_export_without_ids_still_filtered_by_mute_and_solo(win):
+    from midi_interchange.core.export_smf import export_tracks
+    ws = win.ctl.ws
+    a, b = ws.tracks
+    win.ctl.set_mute(a.id, True)
+    assert len(export_tracks(ws)) == 1
+    win.ctl.set_mute(a.id, False)
+    win.ctl.toggle_solo(b.id)
+    assert len(export_tracks(ws)) == 1

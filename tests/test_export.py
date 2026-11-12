@@ -167,7 +167,7 @@ def test_track_selection_and_disabled_tracks():
     names = [m.name for t in mf.tracks for m in t if m.type == "track_name"]
     assert names == ["A", "C"]
     mf = build_exports(ws, ExportOptions(track_ids=[ws.tracks[1].id]))[0].midi
-    assert [m.name for t in mf.tracks for m in t if m.type == "track_name"] == []
+    assert [m.name for t in mf.tracks for m in t if m.type == "track_name"] == ["B"]
     assert ws.tracks[1].muted is True  # individual export does not change state
 
 
