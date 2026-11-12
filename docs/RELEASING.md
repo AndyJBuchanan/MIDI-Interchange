@@ -20,23 +20,23 @@ To support older Macs, build with the python.org macOS installer, whose framewor
 
 ## Version numbers
 
-**There's one place to change: the `VERSION = "x.y.z"` line at the top of [`midi_interchange.spec`](../midi_interchange.spec).**
+**There's one place to change: the `__version__ = "x.y.z"` line in [`midi_interchange/__init__.py`](../midi_interchange/__init__.py).** The About box shows it too.
 
 Everything else comes from that line:
 
 | Where the version appears | How it gets there |
 |---|---|
-| macOS `CFBundleShortVersionString` / `CFBundleVersion` (Finder ▸ Get Info) | the spec's `info_plist` |
+| macOS `CFBundleShortVersionString` / `CFBundleVersion` (Finder ▸ Get Info) | the spec's `info_plist` (the spec imports `__version__`) |
 | Windows exe *File version* / *Product version* (Properties ▸ Details) | the spec's `VSVersionInfo` resource |
 | Windows installer version, and the version in *Settings ▸ Apps* | `build_windows.ps1` passes `/DAppVersion` to `installer.iss` |
-| DMG, zip and Setup exe file names | `build_macos.sh` reads it back from `Info.plist`; `build_windows.ps1` reads the spec line |
+| DMG, zip and Setup exe file names | `build_macos.sh` reads it back from `Info.plist`; `build_windows.ps1` reads the `__version__` line |
 
 Rules:
 
-- **Use `MAJOR.MINOR.PATCH` digits only**, for example `0.1.0` or `0.2.0`. macOS and Windows version fields don't accept suffixes. The spec refuses to build with anything else and gives a clear error.
-- **Pre-release labels go on the git tag and the GitHub release, not in `VERSION`.** For example, `VERSION = "0.1.0"` is released as tag **`v0.1.0-pre`**, and the downloads keep the plain `0.1.0` in their names.
-- **Tags are `v` + `VERSION`, plus an optional `-label`:** `v0.1.0-pre`, `v0.2.0-beta.1`, `v1.0.0`. Mark any tag with a label as a GitHub *pre-release*.
-- **Bump `VERSION` for every build you ship.** The Windows installer upgrades in place by `AppId`, so the version is how users and Windows tell builds apart. Two different builds should never share a version.
+- **Use `MAJOR.MINOR.PATCH` digits only**, for example `0.1.0` or `0.2.0`. macOS and Windows version fields don't accept suffixes. The package refuses to import with anything else (so the app and the spec both stop) and gives a clear error.
+- **Pre-release labels go on the git tag and the GitHub release, not in `__version__`.** For example, `__version__ = "0.1.0"` is released as tag **`v0.1.0-pre`**, and the downloads keep the plain `0.1.0` in their names.
+- **Tags are `v` + `__version__`, plus an optional `-label`:** `v0.1.0-pre`, `v0.2.0-beta.1`, `v1.0.0`. Mark any tag with a label as a GitHub *pre-release*.
+- **Bump `__version__` for every build you ship.** The Windows installer upgrades in place by `AppId`, so the version is how users and Windows tell builds apart. Two different builds should never share a version.
 - If you want two pre-releases of the same version (`v0.2.0-beta.1`, then `v0.2.0-beta.2`), the downloads would have the same file names. Bump `PATCH` instead, or attach the second set to its own release.
 - Never change the `AppId` GUID in `scripts/installer.iss`; it isn't part of versioning.
 
@@ -45,7 +45,7 @@ Rules:
 ### 1. Prepare (any machine)
 
 1. Pull the latest `main`, and make sure the tree is clean and the tests pass: `.venv/bin/python -m pytest -q`
-2. Set `VERSION` in `midi_interchange.spec`, commit with a message like `Bump version to 0.2.0`, and push.
+2. Set `__version__` in `midi_interchange/__init__.py`, commit with a message like `Bump version to 0.2.0`, and push.
 3. Write the release notes in `docs/releases/v<ver>[-label].md` (copy the previous one), then commit and push.
 4. Note the commit hash (`git rev-parse --short HEAD`). Both platforms must build **this exact commit**.
 

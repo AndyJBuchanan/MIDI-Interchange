@@ -8,7 +8,7 @@ from fractions import Fraction
 from PySide6.QtCore import QPoint, QPointF, QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPainter
 from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox,
-                               QSplitter, QToolBar, QVBoxLayout, QWidget)
+                               QSizePolicy, QSplitter, QToolBar, QVBoxLayout, QWidget)
 
 from ..core.import_smf import ImportError_, import_smf_bytes
 from ..core.names import quoted
@@ -17,6 +17,7 @@ from ..core.timing import ZERO
 from ..interchange.drag_import import extract_payloads
 from ..interchange.payload import Payload
 from . import theme
+from .about_dialog import AboutDialog
 from .controller import SNAP_CHOICES, Controller
 from .export_panel import ExportPanel, start_file_drag
 from .timeline import HEADER_H, Timeline
@@ -125,7 +126,11 @@ class MainWindow(QMainWindow):
         self.a_del_range = self._act("Delete Range", lambda: self.ctl.delete_range())
         self.a_clear_ranges = self._act("Clear All Ranges", self.ctl.clear_ranges)
         self.a_enable_all = self._act("Enable All Tracks", lambda: self.ctl.set_all_enabled(True))
+        self.a_about = self._act("About", self.show_about, tip="About MIDI Interchange")
         self.a_disable_all = self._act("Disable All Tracks", lambda: self.ctl.set_all_enabled(False))
+
+    def show_about(self) -> None:
+        AboutDialog(self).exec()
 
     def _build_toolbar(self) -> None:
         tb = QToolBar("Main")
@@ -152,6 +157,10 @@ class MainWindow(QMainWindow):
         tb.addWidget(self.snap_combo)
         tb.addSeparator()
         tb.addAction(self.a_clear_ranges)
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        tb.addWidget(spacer)
+        tb.addAction(self.a_about)
 
     def _build_menus(self) -> None:
         mb = self.menuBar()

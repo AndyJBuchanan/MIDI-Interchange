@@ -56,8 +56,8 @@ if (-not (Test-Path $exe)) { throw "Build finished but $exe is missing" }
 Write-Host "Built: $exe"
 
 # --- package the zip -------------------------------------------------------------
-$specText = Get-Content -Raw midi_interchange.spec
-if ($specText -notmatch '(?m)^VERSION\s*=\s*"([^"]+)"') { throw "VERSION not found in midi_interchange.spec" }
+$initText = Get-Content -Raw midi_interchange\__init__.py
+if ($initText -notmatch '(?m)^__version__\s*=\s*"([^"]+)"') { throw "__version__ not found in midi_interchange\__init__.py" }
 $version = $Matches[1]
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
 $zip = "dist\MIDI-Interchange-$version-Windows-$arch.zip"
