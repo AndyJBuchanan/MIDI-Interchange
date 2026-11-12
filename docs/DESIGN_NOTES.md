@@ -169,6 +169,7 @@ Suggested (studio, 2026-11-10), not yet agreed:
 Later, after more real-world use:
 
 - **Investigate Esc cancellation of incoming macOS drags** (deferred by agreement, 2026-11-12; outside the current drag-in auto-scroll work). Finder → Finder cancels, but Finder → MIDI Interchange does not; Cubase → Finder and Cubase → MIDI Interchange both fail to cancel. Investigate the Finder difference and whether native handling can help, without assuming the destination can cancel another app's drag. Keep timeline restoration on drag leave. See [the recorded results](INTEROP_FINDINGS.md#esc-during-incoming-drags-studio-report-2026-11-12).
+- **Clicking a greyed-out range checkbox (mute/solo):** on an unlocked range it does nothing for now (agreed 2026-11-12). A possible later change: the click locks the range and applies the change in one step. See [the mute/solo plan](plans/mute-solo.md).
 - **Keys and modifiers:** review the UI's keyboard shortcuts and drag modifiers as a whole, including Shift on clip drags. Shift currently keeps the clip's time (track change only), unlike range drags, where Shift bypasses snap; kept for now.
 
 ## Future settings page

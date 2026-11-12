@@ -1,6 +1,6 @@
 # Plan: mute and solo
 
-Status: **draft, updated with user decisions** (2026-11-12). Not built. Branch, when built: `feature/mute-solo` from `main`.
+Status: **draft, all open questions answered** (2026-11-12). Not built. Branch, when built: `feature/mute-solo` from `main`.
 
 This came from the clip-trims studio test (2026-11-12): replace the include tickbox and the Solo for Export menu with standard mute and solo.
 
@@ -10,13 +10,14 @@ This came from the clip-trims studio test (2026-11-12): replace the include tick
 - **Which tracks export globally:** if any tracks are soloed, those tracks export. Otherwise, all unmuted tracks export. Several tracks can be soloed at once. Range exports use the range's stored include/exclude result as described below.
 - **Click modifiers:**
   - A click toggles the button.
-  - ⌥/Alt-click on S solos only that track (exclusive solo).
-  - ⌥/Alt-click on M mutes or unmutes every track.
+  - ⌥/Alt-click on S solos only that track (exclusive solo). ⌥-click on S of a track that is already the only solo unsolos it.
+  - ⌥/Alt-click on M sets every track's mute to the clicked track's new state, as Cubase does. Muting a soloed track cancels its solo (see below), so muting all also clears every solo.
 - **Mute and solo transitions:**
-  - Soloing a muted track overrides its mute. The mute indication is greyed out while solo is active; the track exports normally.
+  - Soloing a muted track overrides its mute. That track's M button is shown greyed out while its own solo is active; the track exports normally. Other muted tracks keep their normal lit M while a solo is on (no "implied mute" display), which we understand to be Cubase's behaviour; confirm in the studio.
   - Cancelling solo restores that track's previous muted/unmuted state.
   - Muting a soloed track cancels its solo and sets mute. Subsequently unmuting it does not restore solo.
   - Exclusive solo and clearing solos must also restore the previous mute states of tracks whose solo ends.
+  - The clear-mutes button clears hidden mutes (remembered under a solo) as well as visible ones, so unsoloing such a track afterwards leaves it unmuted.
 - **Cancel-all buttons:** compact boxed **M** and **S** buttons sit in the top-left panel, rather than text buttons. They clear all mutes or all solos respectively, and light up while the corresponding state is present. Tooltips explain their actions.
 - **Old controls removed:** the Solo for Export / Unsolo (Restore Track Selection) menu items and the stored state behind them (`controller.solo`) go.
 - **Undo:** each mute or solo action is one undo step, including its effects on other tracks and following ranges. Locking/unlocking a range or changing a range checkbox is also one undo step.
@@ -27,12 +28,14 @@ This came from the clip-trims studio test (2026-11-12): replace the include tick
 - Each range still stores a collapsed include/exclude result (`Range.excluded`), rather than separate per-range mute and solo states.
 - A new range starts unlocked. Its included tracks are set from the effective global M/S result when it is created.
 - Track M/S changes and global clear-M/clear-S actions update every unlocked range to match the effective global result. This includes changes to other tracks' eligibility caused by entering or leaving solo.
-- An unlocked range's track checkboxes are greyed out and cannot be edited, but continue to show its current export inclusion state.
+- An unlocked range's track checkboxes are greyed out and cannot be edited, but continue to show its current export inclusion state. Clicking a greyed-out checkbox does nothing for now (agreed 2026-11-12; recorded in DESIGN_NOTES as a possible later change: click to lock and apply).
 - Each range gets a padlock in the range header, inline with its track checkboxes. The padlock shows the range's track lock state.
 - Clicking the padlock to **lock** the range preserves its current track inclusion, enables its checkboxes for independent editing, and prevents subsequent track/global M/S changes from altering that range.
 - Clicking again to **unlock** immediately replaces its track inclusion with the current global M/S result, greys out the checkboxes and resumes following global changes. Previous manual checkbox choices are discarded.
 - Range export uses the range's stored inclusion directly. A locked range may therefore export a track that the global M/S result excludes; do not apply another global M/S filter at export time.
-- The range context-menu include/exclude controls must respect the same lock: independent editing is available only while locked.
+- **Range context menu:** "Reset to track toggles" becomes **Unlock** (same as clicking the padlock to unlock). **Include all** and **Exclude all** lock the range first if it isn't already locked, then apply, as one undo step. Per-track include/exclude items are available only while locked.
+- **New tracks:** a track added later (drag-in or import) is included in every locked range, and joins unlocked ranges through the global M/S result as usual.
+- **Lane dimming:** a range always draws each track dimmed or undimmed to match what that range will actually export. Outside ranges, lanes follow the global M/S result. So a globally muted track shows normally inside a locked range that includes it, as an off track does today.
 
 **Code:**
 - **Model:** replace `Track.enabled` with mute/solo state and retain the mute state needed when solo ends. Put the global eligibility rule in one place in `core` (replacing `enabled_tracks`). Whole exports use that rule; range creation and updates copy its result into unlocked ranges. Range exports continue to use each range's stored inclusion.
@@ -41,10 +44,12 @@ This came from the clip-trims studio test (2026-11-12): replace the include tick
 - **Other places that read `enabled`:**
   - drag-out, `new_track_for_clip` and seeding new ranges;
   - the old ⌥ "every range" toggle is replaced by following unlocked ranges automatically. ⌥-click on M now operates on all track mutes and must respect range locks.
+  - `set_range_tracks` (the context-menu Include all / Exclude all / Reset) and the timeline's range lane painting (`_paint_track_regions`).
 
 **Tests:**
 - Whole exports: mute, solo, several solos, solo overriding mute, restoring mute on unsolo, and muting a soloed track cancelling solo without later reactivation on unmute.
-- Exclusive solo, both global clears, undo/redo of complete actions, and the old menu items being gone.
+- Exclusive solo, ⌥-click S on the only solo unsoloing it, ⌥-click M setting all mutes to the clicked track's new state and clearing solos, both global clears (clear-mutes also clearing hidden mutes), undo/redo of complete actions, and the old menu items being gone.
+- Context menu: Unlock replaces Reset; Include all / Exclude all lock an unlocked range. A new track is included in locked ranges. Clicking a greyed checkbox on an unlocked range changes nothing.
 - New ranges copy the global result. Every track/global M/S action updates unlocked ranges, including the effect on non-soloed tracks.
 - Locking preserves the inclusion list and enables editing; global changes leave locked ranges alone. Unlocking immediately copies the current global result and disables independent editing.
 - Locked range exports honour their own inclusion even for globally excluded tracks, in Preserve, Rebase and Separate modes and through both Save MIDI and drag-out.
