@@ -109,6 +109,7 @@ class Timeline(QAbstractScrollArea):
     trackContextMenuRequested = Signal(str, QPoint)
     clipContextMenuRequested = Signal(str, str, QPoint)   # track id, clip id
     rangeEditRequested = Signal(str)
+    externalDragMoved = Signal(QPointF, bool)  # viewport position, bypass snap
 
     def __init__(self, ctl: Controller, parent=None) -> None:
         super().__init__(parent)
@@ -117,6 +118,9 @@ class Timeline(QAbstractScrollArea):
         self.lane_h = 68
         self._cache: dict[str, ClipRender] = {}
         self._drag: dict | None = None
+        self._external_drag = False
+        self._drag_reach: float | None = None
+        self._drag_scroll_start: int | None = None
         self._hover_x: float | None = None
         self._press_pos: QPointF | None = None
         self._drop_ind: tuple[int | None, Fraction, str] | None = None   # lane (None = new track), time, label
@@ -167,7 +171,31 @@ class Timeline(QAbstractScrollArea):
         end = float(ws.end)
         for r in ws.ranges:
             end = max(end, float(r.end))
+        if self._drag_reach is not None:
+            end = max(end, self._drag_reach)
         return max(end + 32.0, 128.0)
+
+    def begin_drag(self, *, external: bool = False) -> None:
+        self._external_drag = external
+        self._drag_reach = None
+        self._drag_scroll_start = self.horizontalScrollBar().value()
+
+    def end_drag(self, *, cancel: bool = False) -> None:
+        self._autoscroll.stop()
+        scroll_start = self._drag_scroll_start
+        self._external_drag = False
+        self._drag_reach = None
+        self._drag_scroll_start = None
+        self._update_scrollbars()
+        if cancel and scroll_start is not None:
+            self.horizontalScrollBar().setValue(scroll_start)
+        self.viewport().update()
+
+    def update_external_drag(self, pos: QPointF, bypass: bool) -> None:
+        if self._external_drag and self.viewport().rect().contains(pos.toPoint()):
+            self._check_autoscroll(pos.x(), bypass)
+        else:
+            self._autoscroll.stop()
 
     def _update_scrollbars(self) -> None:
         vw, vh = self.viewport().width(), self.viewport().height()
@@ -261,6 +289,8 @@ class Timeline(QAbstractScrollArea):
         p.setClipping(False)
 
         self._paint_header(p, w, t0, t1)
+        if self._drop_ind is not None:
+            self._paint_drop_ruler(p)
         if not ws.tracks:
             p.setPen(theme.TEXT_DIM)
             f = QFont(self.font())
@@ -409,6 +439,17 @@ class Timeline(QAbstractScrollArea):
                     continue
                 p.fillRect(QRectF(x0, top + 2, max(x1 - x0, 2), lane_h - 5), theme.OVERLAP_FILL)
                 p.fillRect(QRectF(x0, top + 2, max(x1 - x0, 2), 2), theme.OVERLAP_EDGE)
+
+    def _paint_drop_ruler(self, p: QPainter) -> None:
+        """Keep the drop time visible even when the destination lane is off screen."""
+        x = round(self.x_of(float(self._drop_ind[1]))) + 0.5
+        p.setPen(QPen(theme.ACCENT, 2))
+        p.drawLine(QPointF(x, 0), QPointF(x, RULER_H))
+        marker = QPainterPath(QPointF(x - 5, 1))
+        marker.lineTo(x + 5, 1)
+        marker.lineTo(x, 7)
+        marker.closeSubpath()
+        p.fillPath(marker, theme.ACCENT)
 
     def _paint_drop_indicator(self, p: QPainter, w: int, h: int) -> None:
         lane, t, label = self._drop_ind
@@ -712,6 +753,8 @@ class Timeline(QAbstractScrollArea):
             self.viewport().setCursor(Qt.DragCopyCursor if self._drag["copy"] else Qt.ClosedHandCursor)
         else:
             self._drag = {"kind": "create", "anchor": self.time_at(pos.x(), bypass), "rid": None}
+        if self._drag is not None:
+            self.begin_drag()
 
     def mouseMoveEvent(self, e: QMouseEvent) -> None:
         pos = e.position()
@@ -821,7 +864,7 @@ class Timeline(QAbstractScrollArea):
     def mouseReleaseEvent(self, e: QMouseEvent) -> None:
         d = self._drag
         self._drag = None
-        self._autoscroll.stop()
+        self.end_drag()
         if d is None:
             return
         if d["kind"] == "clip" and d["checkpointed"]:
@@ -908,10 +951,13 @@ class Timeline(QAbstractScrollArea):
         self._autoscroll_step(pt.x(), pt.y(), bool(QApplication.keyboardModifiers() & Qt.ShiftModifier))
 
     def _autoscroll_step(self, x: float, y: float, bypass: bool) -> None:
-        if self._drag is None:
+        if self._drag is None and not self._external_drag:
             self._autoscroll.stop()
             return
         w = self.viewport().width()
+        if self._external_drag and not self.viewport().rect().contains(QPoint(int(x), int(y))):
+            self._autoscroll.stop()
+            return
         hbar = self.horizontalScrollBar()
         if not (x < 20 or x > w - 20) or not self._may_scroll(x, bypass):
             self._autoscroll.stop()
@@ -919,8 +965,18 @@ class Timeline(QAbstractScrollArea):
         if x < 20:
             hbar.setValue(hbar.value() - max(4, int(20 - x)))
         else:
-            hbar.setValue(hbar.value() + max(4, int(x - (w - 20))))
-        self._drag_to(min(max(x, 0), w), bypass, y)
+            step = max(4, int(x - (w - 20)))
+            # Make room before scrolling, including when the view already fills
+            # the normal timeline (e.g. an empty workspace zoomed right out).
+            reach = (hbar.value() + w + step) / self.ppb
+            self._drag_reach = max(self._drag_reach or 0.0, reach)
+            self._update_scrollbars()
+            hbar.setValue(hbar.value() + step)
+        x = min(max(x, 0), w)
+        if self._external_drag:
+            self.externalDragMoved.emit(QPointF(x, y), bypass)
+        else:
+            self._drag_to(x, bypass, y)
 
     def _context_menu(self, hit: tuple, e: QMouseEvent) -> None:
         gp = e.globalPosition().toPoint()
