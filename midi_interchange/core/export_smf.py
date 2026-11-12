@@ -160,17 +160,16 @@ def export_tracks(ws: Workspace, track_ids: list[str] | None = None,
 
 
 def export_name(tracks: list[Track], ranges: list[Range] | None) -> str:
-    """Suggested name for a single export: the track's name when there is one
-    track, else the names of the ranges used (in export order), else a default.
+    """Suggested name: range labels in export order, else a track or default.
     ``ranges`` None = whole export."""
-    if len(tracks) == 1:
-        return tracks[0].name
-    ids = {t.id for t in tracks}
     names: list[str] = []
-    for r in ranges or []:
-        if r.name and not r.is_empty and any(r.includes(i) for i in ids) and r.name not in names:
-            names.append(r.name)
-    return " + ".join(names) or "MIDI Interchange Export"
+    for i, r in enumerate(ranges or []):
+        label = range_label(r.name, i)
+        if not r.is_empty and label not in names:
+            names.append(label)
+    if names:
+        return " + ".join(names)
+    return tracks[0].name if len(tracks) == 1 else "MIDI Interchange Export"
 
 
 def save_exports(results: list[ExportResult], path: str, label_only: bool = False) -> list[str]:

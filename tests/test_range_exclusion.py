@@ -315,6 +315,50 @@ def _drag_names(win, monkeypatch) -> list[str]:
     return [os.path.basename(u.toLocalFile()) for u in urls]
 
 
+@pytest.mark.parametrize("mode", [ExportMode.REBASE, ExportMode.PRESERVE, ExportMode.SEPARATE])
+@pytest.mark.parametrize("single_track", [False, True])
+def test_unnamed_range_names_for_drag_and_save(song, monkeypatch, tmp_path, mode, single_track):
+    from pathlib import Path
+    from PySide6.QtWidgets import QFileDialog
+    ctl = song.ctl
+    r, = add_ranges(song, mode, [(0, 4)])
+    if single_track:
+        ctl.set_range_tracks(r.id, False)
+        ctl.set_range_track_included(r.id, ctl.ws.tracks[LEAD].id, True)
+    assert ctl.default_export_name() == "Range 1"
+    assert _drag_names(song, monkeypatch) == ["Range 1.mid"]
+    def save_dialog(_parent, _title, default, _filter):
+        assert Path(default).name == "Range 1.mid"
+        return str(tmp_path / "Range 1.mid"), ""
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", save_dialog)
+    song.save_midi()
+    assert (tmp_path / "Range 1.mid").exists()
+
+
+@pytest.mark.parametrize("mode", [ExportMode.REBASE, ExportMode.PRESERVE, ExportMode.SEPARATE])
+@pytest.mark.parametrize("named", [False, True])
+def test_multiple_range_filenames_and_separate_save_base(song, monkeypatch, tmp_path, mode, named):
+    from pathlib import Path
+    from PySide6.QtWidgets import QFileDialog
+    ctl = song.ctl
+    r1, r2 = add_ranges(song, mode, [(0, 4), (4, 8)])
+    if named:
+        ctl.update_range(r1.id, name="Verse")
+        ctl.update_range(r2.id, name="Chorus")
+    labels = ["Verse", "Chorus"] if named else ["Range 1", "Range 2"]
+    joined = " + ".join(labels)
+    assert ctl.default_export_name() == joined
+    separate = mode is ExportMode.SEPARATE
+    assert _drag_names(song, monkeypatch) == ([s + ".mid" for s in labels] if separate else [joined + ".mid"])
+    def save_dialog(_parent, _title, default, _filter):
+        assert Path(default).name == ("Export" if separate else joined) + ".mid"
+        return str(tmp_path / Path(default).name), ""
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", save_dialog)
+    song.save_midi()
+    expected = ["Export - " + s + ".mid" for s in labels] if separate else [joined + ".mid"]
+    assert sorted(p.name for p in tmp_path.glob("*.mid")) == sorted(expected)
+
+
 def test_export_name_joins_the_range_names(song):
     ctl = song.ctl
     r1, r2, r3, r4 = add_ranges(song, ExportMode.REBASE, [(0, 4), (4, 8), (8, 12), (12, 16)])
@@ -322,9 +366,9 @@ def test_export_name_joins_the_range_names(song):
     ctl.update_range(r2.id, name="Chorus")
     ctl.update_range(r3.id, name="Verse")          # repeated: named once
     ctl.update_range(r4.id, name="Outro")
-    ctl.set_range_tracks(r4.id, False)             # contributes no tracks: not named
+    ctl.set_range_tracks(r4.id, False)             # range labels don't depend on track inclusion
     ctl.select_range(r2.id)
-    assert ctl.default_export_name() == "Verse + Chorus"
+    assert ctl.default_export_name() == "Verse + Chorus + Outro"
     ctl.set_export_mode(ExportMode.WHOLE)          # whole export ignores ranges
     assert ctl.default_export_name() == "MIDI Interchange Export"
 
