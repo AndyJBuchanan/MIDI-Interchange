@@ -95,8 +95,9 @@ def test_full_workflow(win, tmp_path):
     hdr._commit_name()
     assert bass.name == "Low End"
     drums = next(t for t in ctl.ws.tracks if t.name == "Drums")
-    win.track_panel.header(drums.id).enabled_cb.setChecked(False)
-    assert drums.enabled is False
+    ctl.set_range_locked(r.id, True)
+    win.track_panel.header(drums.id).mute_btn.click()
+    assert drums.muted is True
 
     # export (rebase) and verify
     from midi_interchange.core.export_smf import ExportMode, save_exports

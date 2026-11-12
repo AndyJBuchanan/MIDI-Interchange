@@ -1,6 +1,6 @@
 # Plan: mute and solo
 
-Status: **draft, all open questions answered** (2026-11-12). Not built. Branch, when built: `feature/mute-solo` from `main`.
+Status: **built, awaiting studio test** (2026-11-12). Branch: `feature/mute-solo` from `main`.
 
 This came from the clip-trims studio test (2026-11-12): replace the include tickbox and the Solo for Export menu with standard mute and solo.
 
@@ -62,3 +62,5 @@ This came from the clip-trims studio test (2026-11-12): replace the include tick
 - Build only this plan, and only when the user says so.
 - If the code doesn't fit the plan, stop and ask rather than designing around it.
 - Work on the feature branch named above. Don't switch branches, and don't push.
+
+Implementation verification: 229 automated tests passed. The track controls and range padlocks were also rendered and inspected headlessly. Manual studio checks are in `docs/TEST_CHECKLIST.md`, section 8g; not yet run.

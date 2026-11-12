@@ -1,9 +1,9 @@
 """Export ranges: half-open intervals [start, end) in quarter notes.
 
 Each range carries its own track selection (``excluded``: ids of tracks left
-out of that range). It is seeded from the track toggles when the range is
-created and is independent of them afterwards: in range exports the range's
-selection wins over the track toggle.
+out of that range). Unlocked ranges follow the global mute/solo result. Locked
+ranges preserve an independently editable selection. Range exports use this
+stored selection directly.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ class Range:
     name: str = ""
     id: str = ""
     excluded: set[str] = field(default_factory=set)
+    track_locked: bool = False
 
     def __post_init__(self) -> None:
         if not self.id:

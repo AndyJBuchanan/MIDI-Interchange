@@ -150,7 +150,7 @@ def export_tracks(ws: Workspace, track_ids: list[str] | None = None,
     """Tracks that go into an export. ``ranges`` None = whole export (track
     toggles); otherwise every track some range includes (range toggles)."""
     if ranges is None:
-        pool = ws.enabled_tracks() if track_ids is None else ws.tracks
+        pool = ws.global_tracks()
     else:
         pool = [t for t in ws.tracks if any(r.includes(t.id) for r in ranges if not r.is_empty)]
     if track_ids is None:

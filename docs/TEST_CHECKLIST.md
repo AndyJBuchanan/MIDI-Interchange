@@ -146,6 +146,20 @@ Esc cancellation failed in the studio and is deferred to [future work](DESIGN_NO
 - [ ] Drop several files, Cancel the "Place dropped files" dialog, and check the view returns to where it was before the drag.
 - [x] Option-drag an existing clip past the end: the timeline grows. Draw or resize a range past the end too. Release: only the normal content/range padding remains. Check trim scrolling still stops at the clip's original extent.
 
+## 8g. Mute, solo and range track locks (`feature/mute-solo`)
+
+- [ ] Track M/S buttons toggle mute/solo. Several solos work together. Option-click S solos only that track; repeat on the only solo to unsolo it.
+- [ ] Mute a track, solo it, then unsolo it: it exports during solo and returns to muted afterwards. Its M indication is greyed while solo overrides it. Compare the display with Cubase.
+- [ ] Mute a soloed track: solo clears. Unmute it: solo stays off. Option-click M applies the clicked track's new mute state to all tracks; muting all clears all solos.
+- [ ] The boxed M/S buttons above the tracks light when needed and clear all mutes/solos. Clear mutes also clears a mute remembered under solo; unsolo afterwards leaves that track unmuted.
+- [ ] Create a range: its greyed checkboxes show the current global M/S result. Clicking them changes nothing. Changing track/global M/S updates all unlocked ranges.
+- [ ] Click the padlock in the range header: the range locks and its checkboxes become editable. Global M/S changes leave its track choices alone. Click again: the range immediately follows global M/S and its checkboxes become greyed.
+- [ ] Right-click a range: Include All/Exclude All lock it and apply the choice; Unlock resumes following global M/S. Per-track menu choices are disabled while unlocked. Check a narrow range through its context menu.
+- [ ] Import a new track: it is included in locked ranges and follows global M/S in unlocked ones. Repeat while solo is active.
+- [ ] Lane colours inside ranges match their actual export choices, including a globally muted track included in a locked range. Outside ranges, colours follow global M/S.
+- [ ] Save and drag whole and range exports to Cubase and Reason, using Preserve, Rebase and Separate. Check track membership and notes, especially locked ranges that override global M/S.
+- [ ] Undo/redo each action: global changes and their unlocked-range updates undo together; locks, manual track choices and remembered mutes restore correctly.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.

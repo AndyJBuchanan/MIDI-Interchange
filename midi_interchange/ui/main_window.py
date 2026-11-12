@@ -126,9 +126,9 @@ class MainWindow(QMainWindow):
                                    "Ctrl+Shift+-")
         self.a_del_range = self._act("Delete Range", lambda: self.ctl.delete_range())
         self.a_clear_ranges = self._act("Clear All Ranges", self.ctl.clear_ranges)
-        self.a_enable_all = self._act("Enable All Tracks", lambda: self.ctl.set_all_enabled(True))
+        self.a_clear_mutes = self._act("Clear All Mutes", self.ctl.clear_mutes)
         self.a_about = self._act("About", self.show_about, tip="About MIDI Interchange")
-        self.a_disable_all = self._act("Disable All Tracks", lambda: self.ctl.set_all_enabled(False))
+        self.a_clear_solos = self._act("Clear All Solos", self.ctl.clear_solos)
 
     def show_about(self) -> None:
         AboutDialog(self).exec()
@@ -178,8 +178,8 @@ class MainWindow(QMainWindow):
         m.addAction(self.a_del_range)
         m.addAction(self.a_clear_ranges)
         m.addSeparator()
-        m.addAction(self.a_enable_all)
-        m.addAction(self.a_disable_all)
+        m.addAction(self.a_clear_mutes)
+        m.addAction(self.a_clear_solos)
         m = mb.addMenu("&View")
         for a in (self.a_zoom_in, self.a_zoom_out, self.a_zoom_fit, self.a_taller, self.a_shorter):
             m.addAction(a)
@@ -473,13 +473,9 @@ class MainWindow(QMainWindow):
         if t is None:
             return False
         idx = ws.tracks.index(t)
-        m.addAction("Disable" if t.enabled else "Enable",
-                    lambda: self.ctl.set_track_enabled(track_id, not t.enabled))
+        m.addAction("Unmute" if t.muted and not t.soloed else "Mute",
+                    lambda: self.ctl.set_mute(track_id, True if t.soloed else not t.muted))
         m.addAction("Rename", lambda: self.track_panel.header(track_id) and self.track_panel.header(track_id).focus_name())
-        if self.ctl.is_soloed(track_id):
-            m.addAction("Unsolo (Restore Track Selection)", self.ctl.unsolo)
-        else:
-            m.addAction("Solo for Export", lambda: self.ctl.solo_track(track_id))
         m.addSeparator()
         a = m.addAction("Move Up", lambda: self.ctl.move_track(track_id, idx - 1))
         a.setEnabled(idx > 0)
