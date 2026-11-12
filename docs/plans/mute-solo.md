@@ -1,6 +1,6 @@
 # Plan: mute and solo
 
-Status: **built, awaiting studio test** (2026-11-12). Branch: `feature/mute-solo` from `main`.
+Status: **built and studio-tested, including feedback changes** (2026-11-12). Branch: `feature/mute-solo` from `main`.
 
 This came from the clip-trims studio test (2026-11-12): replace the include tickbox and the Solo for Export menu with standard mute and solo.
 
@@ -18,10 +18,10 @@ This came from the clip-trims studio test (2026-11-12): replace the include tick
   - Muting a soloed track cancels its solo and sets mute. Subsequently unmuting it does not restore solo.
   - Exclusive solo and clearing solos must also restore the previous mute states of tracks whose solo ends.
   - The clear-mutes button clears hidden mutes (remembered under a solo) as well as visible ones, so unsoloing such a track afterwards leaves it unmuted.
-- **Cancel-all buttons:** compact boxed **M** and **S** buttons sit in the top-left panel, rather than text buttons. They clear all mutes or all solos respectively, and light up while the corresponding state is present. Tooltips explain their actions.
+- **Cancel-all buttons:** compact boxed **M** and **S** buttons sit in the top-left panel, rather than text buttons. They clear all mutes or all solos respectively, and light up while the corresponding state is present. The top M indicator counts only explicit mutes not overridden by that track's solo; hidden mutes do not light it, but Clear mutes still clears them. Tooltips explain their actions.
 - **Old controls removed:** the Solo for Export / Unsolo (Restore Track Selection) menu items and the stored state behind them (`controller.solo`) go.
 - **Undo:** each mute or solo action is one undo step, including its effects on other tracks and following ranges. Locking/unlocking a range or changing a range checkbox is also one undo step.
-- **Colours:** use the app's existing colours, with no new ones. When no solo is active, unmuted tracks (neither muted nor soloed) are drawn normally and muted tracks are dimmed. While any solo is active, soloed tracks are drawn normally and the other tracks are dimmed. Solo overrides the lane dimming of a previously muted track while that solo is active.
+- **Colours:** mute is yellow/orange; solo is red, for track and global buttons. When no solo is active, unmuted tracks (neither muted nor soloed) are drawn normally and muted tracks are dimmed. While any solo is active, soloed tracks are drawn normally and the other tracks are dimmed. Solo overrides the lane dimming of a previously muted track while that solo is active.
 
 **Ranges: follow global M/S until locked.**
 
@@ -33,8 +33,8 @@ This came from the clip-trims studio test (2026-11-12): replace the include tick
 - Clicking the padlock to **lock** the range preserves its current track inclusion, enables its checkboxes for independent editing, and prevents subsequent track/global M/S changes from altering that range.
 - Clicking again to **unlock** immediately replaces its track inclusion with the current global M/S result, greys out the checkboxes and resumes following global changes. Previous manual checkbox choices are discarded.
 - Range export uses the range's stored inclusion directly. A locked range may therefore export a track that the global M/S result excludes; do not apply another global M/S filter at export time.
-- **Range context menu:** "Reset to track toggles" becomes **Unlock** (same as clicking the padlock to unlock). **Include all** and **Exclude all** lock the range first if it isn't already locked, then apply, as one undo step. Per-track include/exclude items are available only while locked.
-- **New tracks:** a track added later (drag-in or import) is included in every locked range, and joins unlocked ranges through the global M/S result as usual.
+- **Range context menu:** "Reset to track toggles" becomes **Unlock** (same as clicking the padlock to unlock). **Include all** and **Exclude all** lock the range first if it isn't already locked, then apply, as one undo step. Individual track entries and their heading are removed; use the range checkboxes for individual choices.
+- **New tracks:** imports and tracks created by clip moves/copies always start unmuted and effectively included. They join an existing solo group when needed to remain included; otherwise solo starts off. One shared track-addition path handles this, using the central solo-state rule. New tracks are included in locked ranges, and unlocked ranges copy the resulting global selection.
 - **Lane dimming:** a range always draws each track dimmed or undimmed to match what that range will actually export. Outside ranges, lanes follow the global M/S result. So a globally muted track shows normally inside a locked range that includes it, as an off track does today.
 
 **Code:**
@@ -63,4 +63,6 @@ This came from the clip-trims studio test (2026-11-12): replace the include tick
 - If the code doesn't fit the plan, stop and ask rather than designing around it.
 - Work on the feature branch named above. Don't switch branches, and don't push.
 
-Implementation verification: 229 automated tests passed. The track controls and range padlocks were also rendered and inspected headlessly. Manual studio checks are in `docs/TEST_CHECKLIST.md`, section 8g; not yet run.
+Implementation verification: 229 automated tests passed. The track controls and range padlocks were also rendered and inspected headlessly. The user passed the studio checklist, including the feedback retests in TEST_CHECKLIST section 8h.
+
+Feedback follow-up verification: 238 automated tests passed. Imported and clip-created tracks share `_add_track` and the central `has_solos` rule. Workflow tests use named fixtures so manual-test MIDI exports in `samples/` do not affect expected track counts. Version: 0.2.2. Studio feedback retest: TEST_CHECKLIST section 8h, passed locally by the user (2026-11-12).

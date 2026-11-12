@@ -1,6 +1,8 @@
 """Mute/solo transitions and range locks, including real widget actions."""
 from fractions import Fraction as F
 
+import pytest
+
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
@@ -74,7 +76,8 @@ def test_new_tracks_and_removing_last_solo_update_followers(win):
     c.toggle_solo(a.id)
     c.import_payloads([Payload('new.mid', part('New'))])
     new = c.ws.tracks[-1]
-    assert locked.includes(new.id) and not r.includes(new.id)
+    assert locked.includes(new.id) and r.includes(new.id)
+    assert new.soloed and not new.muted
     c.remove_track(a.id)
     assert r.includes(new.id)
 
@@ -94,7 +97,8 @@ def test_padlock_and_disabled_checkboxes(win):
     QTest.mouseClick(tl.viewport(), Qt.LeftButton, Qt.NoModifier, lock)
     assert not r.track_locked and r.includes(c.ws.tracks[0].id)
     actions = {a.text(): a for a in tl.range_menu(r.id).actions()}
-    assert not actions[c.ws.tracks[0].name].isEnabled()
+    assert not any(t.name in actions for t in c.ws.tracks)
+    assert "Tracks in this range" not in actions
     actions['Exclude All Tracks'].trigger()
     assert r.track_locked and not any(r.includes(t.id) for t in c.ws.tracks)
 
@@ -109,3 +113,52 @@ def test_mute_button_on_hidden_mute_and_alt_all(win):
     assert all(t.muted and not t.soloed for t in c.ws.tracks)
     QTest.mouseClick(button, Qt.LeftButton, Qt.AltModifier)
     assert all(not t.muted and not t.soloed for t in c.ws.tracks)
+
+
+@pytest.mark.parametrize("solo", [False, True])
+@pytest.mark.parametrize("creation", ["import", "move", "copy"])
+def test_new_tracks_always_on_without_inheriting_source_mute(win, solo, creation):
+    c = win.ctl
+    source, other = c.ws.tracks
+    c.set_mute(source.id, True)
+    if solo:
+        c.toggle_solo(other.id)
+    following = c.add_range(F(0), F(4))
+    locked = c.add_range(F(4), F(8))
+    c.set_range_tracks(locked.id, False)
+    if creation == "import":
+        c.import_payloads([Payload("new.mid", part("New"))])
+        new = c.ws.tracks[-1]
+    else:
+        c.checkpoint()
+        cid = source.clips[0].id
+        if creation == "copy":
+            cid = c.duplicate_clip(cid, checkpoint=False)
+        new = c.ws.new_track_for_clip(cid, like=source)
+        c.end_clip_gesture()
+    assert new in c.ws.global_tracks()
+    assert not new.muted and new.soloed == solo
+    assert following.includes(new.id) and locked.includes(new.id)
+    assert other.soloed == solo
+    new_id = new.id
+    c.undo()
+    assert c.ws.track(new_id) is None
+    c.redo()
+    new = c.ws.track(new_id)
+    assert new in c.ws.global_tracks() and new.soloed == solo and not new.muted
+
+
+def test_top_m_indicator_ignores_hidden_mutes_but_clear_still_clears_them(win):
+    c = win.ctl
+    a, b = c.ws.tracks
+    c.set_mute(a.id, True)
+    assert win.track_panel.clear_m.isChecked()
+    c.toggle_solo(a.id)
+    assert not win.track_panel.clear_m.isChecked()
+    c.set_mute(b.id, True)
+    assert win.track_panel.clear_m.isChecked()
+    win.track_panel.clear_m.click()
+    assert not a.muted and not b.muted and a.soloed
+    assert not win.track_panel.clear_m.isChecked()
+    c.clear_solos()
+    assert c.ws.global_tracks() == [a, b]

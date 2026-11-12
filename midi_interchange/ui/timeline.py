@@ -1030,13 +1030,6 @@ class Timeline(QAbstractScrollArea):
         m.addAction("Delete Range", lambda: ctl.delete_range(rid))
         if r is None or not ctl.ws.tracks:
             return m
-        m.addSection("Tracks in this range")
-        for t in ctl.ws.tracks:
-            a = m.addAction(t.name)
-            a.setCheckable(True)
-            a.setEnabled(r.track_locked)
-            a.setChecked(r.includes(t.id))
-            a.toggled.connect(lambda on, tid=t.id: ctl.set_range_track_included(rid, tid, on))
         m.addSeparator()
         m.addAction("Include All Tracks", lambda: ctl.set_range_tracks(rid, True))
         m.addAction("Exclude All Tracks", lambda: ctl.set_range_tracks(rid, False))

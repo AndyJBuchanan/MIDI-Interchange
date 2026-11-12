@@ -46,7 +46,8 @@ def drag(widget, p0, p1, mods=Qt.NoModifier):
 
 
 def test_full_workflow(win, tmp_path):
-    paths = sorted(str(p) for p in SAMPLES.glob("*.mid"))
+    paths = [str(SAMPLES / name) for name in
+             ("bass_96ppq.mid", "drums_format0.mid", "piano_96bpm.mid", "vocal_lyrics.mid")]
     assert paths, "run tools/make_demo_midi.py first"
     win.import_paths(paths)
     ctl, tl = win.ctl, win.timeline

@@ -193,8 +193,11 @@ class Workspace:
     def end(self) -> Fraction:
         return max((t.end for t in self.tracks), default=ZERO)
 
+    def has_solos(self) -> bool:
+        return any(t.soloed for t in self.tracks)
+
     def global_tracks(self) -> list[Track]:
-        solo = any(t.soloed for t in self.tracks)
+        solo = self.has_solos()
         return [t for t in self.tracks if (t.soloed if solo else not t.muted)]
 
     def sync_ranges(self) -> None:
@@ -205,6 +208,16 @@ class Workspace:
 
 
     # -- mutation ----------------------------------------------------------
+    def _add_track(self, track: Track, index: int | None = None) -> None:
+        """New tracks always start audible to export, joining an existing solo group."""
+        track.muted = False
+        track.soloed = self.has_solos()
+        track.color = TRACK_COLORS[next(self._color_cycle) % len(TRACK_COLORS)]
+        self.tracks.insert(len(self.tracks) if index is None else index, track)
+        for r in self.ranges:
+            r.set_included(track.id, True)
+        self.sync_ranges()
+
     def add_import(self, source: Source, tracks: list[Track]) -> list[str]:
         """Add an imported source and its tracks. Returns informational notes.
 
@@ -215,11 +228,7 @@ class Workspace:
         notes: list[str] = []
         self.sources.append(source)
         for t in tracks:
-            t.color = TRACK_COLORS[next(self._color_cycle) % len(TRACK_COLORS)]
-            self.tracks.append(t)
-            for r in self.ranges:         # locked ranges include newly added tracks
-                r.set_included(t.id, True)
-        self.sync_ranges()
+            self._add_track(t)
         if not source.tempo_map.is_empty:
             if self.tempo_source_id is None:
                 self.adopt_tempo_map(source.id)
@@ -289,12 +298,8 @@ class Workspace:
         src, clip = found
         like = like or src
         t = Track(id=new_id(), name=like.name, source_id=clip.source_id or src.source_id, clips=[],
-                  original_name=like.original_name, muted=like.muted, soloed=like.soloed,
-                  color=TRACK_COLORS[next(self._color_cycle) % len(TRACK_COLORS)])
-        self.tracks.insert(len(self.tracks) if index is None else index, t)
-        for r in self.ranges:             # locked ranges include newly created tracks
-            r.set_included(t.id, True)
-        self.sync_ranges()
+                  original_name=like.original_name)
+        self._add_track(t, index)
         self.move_clip_to_track(clip_id, t.id)
         return t
 

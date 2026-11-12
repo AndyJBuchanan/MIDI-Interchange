@@ -280,8 +280,8 @@ def test_no_toggle_when_range_too_narrow(song):
     assert tl.toggle_rect(r, 0) is None
     menu = tl.range_menu(r.id)
     acts = {a.text(): a for a in menu.actions()}
-    assert acts["Lead"].isChecked()
-    acts["Lead"].trigger()
+    assert "Lead" not in acts
+    acts["Exclude All Tracks"].trigger()
     assert not r.includes(ctl.ws.tracks[LEAD].id)
     acts["Include All Tracks"].trigger()
     assert all(r.includes(i) for i in tids(song))

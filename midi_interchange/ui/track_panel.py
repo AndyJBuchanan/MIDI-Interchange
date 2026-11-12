@@ -107,7 +107,7 @@ class TrackHeader(QFrame):
         self.solo_btn.setChecked(track.soloed)
         self.mute_btn.setStyleSheet(
             f"QToolButton:checked {{ background: {(theme.DISABLED if track.soloed else theme.ACCENT).name()}; }}")
-        self.solo_btn.setStyleSheet(f"QToolButton:checked {{ background: {theme.ACCENT.name()}; }}")
+        self.solo_btn.setStyleSheet(f"QToolButton:checked {{ background: {theme.SOLO.name()}; }}")
         self.color_btn.setStyleSheet(f"QToolButton {{ background: {track.color}; border: 1px solid #111;"
                                      f" border-radius: 3px; }}")
         chans = ",".join(str(c + 1) for c in track.channels)
@@ -176,7 +176,8 @@ class TrackPanel(QWidget):
             button.setText(label)
             button.setCheckable(True)
             button.setToolTip(tip)
-            button.setStyleSheet(f"QToolButton:checked {{ background: {theme.ACCENT.name()}; }}")
+            color = theme.SOLO if label == "S" else theme.ACCENT
+            button.setStyleSheet(f"QToolButton:checked {{ background: {color.name()}; }}")
             button.clicked.connect(slot)
             button.clicked.connect(self.rebuild)
         ctl.tracksChanged.connect(self.rebuild)
@@ -211,7 +212,7 @@ class TrackPanel(QWidget):
                 desc += "\n(Workspace tempo map is taken from this source)"
             h.refresh(t, desc, label)
         self.title.setText(f"TRACKS  {len(ws.global_tracks())}/{len(ws.tracks)}" if ws.tracks else "TRACKS")
-        self.clear_m.setChecked(any(t.muted for t in ws.tracks))
+        self.clear_m.setChecked(any(t.muted and not t.soloed for t in ws.tracks))
         self.clear_s.setChecked(any(t.soloed for t in ws.tracks))
         self._layout()
 
