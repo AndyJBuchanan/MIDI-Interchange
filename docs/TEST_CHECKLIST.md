@@ -124,6 +124,15 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 - [x] Drop a file onto a trimmed clip's exact visible start and end: it replaces it.
 - [x] Hold a trim drag past the clip's original end with the pointer at the window edge: the view doesn't scroll. Then zoom in so the original end is off screen: the drag does scroll, so you can reach it.
 
+## 8e. About box (`feature/about-box`)
+
+- [ ] Click **About** at the right end of the toolbar: a dialog opens with the icon, "MIDI Interchange", the version, the description, "© 2026 Andy Buchanan" and the GitHub link.
+- [ ] Click the link: the GitHub page opens in the default browser.
+- [ ] OK, Return and Esc each close the dialog.
+- [ ] Resize the window: the About button stays at the right edge.
+- [ ] Repeat in the packaged app (the icon still shows).
+- [ ] Windows, at release: check the same button.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.

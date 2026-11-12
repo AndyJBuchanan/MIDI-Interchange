@@ -53,6 +53,7 @@ Shortcuts are shown for macOS; on Windows use Ctrl for ⌘ and Alt for ⌥ (Opti
 | Tracks | Click the name to rename, drag ⋮⋮ to reorder, ✕ to remove. Right-click a header (or a clip ▸ Track) for Enable/Disable, Rename, Solo for Export / Unsolo, Move Up/Down, Merge Into (another track), Save This Track…, Source Info… and Remove Track |
 | Start again | File ▸ New (⌘N, also on the toolbar) clears the workspace; Undo brings it back. Export settings are kept |
 | Undo / redo | ⌘Z / ⇧⌘Z cover everything |
+| About | The About button at the right end of the toolbar shows the version and the project link |
 
 ### Choosing what to hand on
 

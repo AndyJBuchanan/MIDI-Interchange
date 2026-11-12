@@ -204,7 +204,7 @@ From `.vscode/tasks.json`. Each one picks the macOS/Linux or Windows command aut
 
 ## Building standalone apps
 
-`scripts/build_macos.sh` and `scripts/build_windows.ps1` create a separate `.venv-build/`, install the requirements, and run PyInstaller with `midi_interchange.spec`. The spec's exclude list keeps out unused Qt modules such as WebEngine and Multimedia. Some Qt plugins still pull in QML/Quick, VirtualKeyboard and Pdf, which is why the app is about 100 MB. On macOS it also produces a `.app` bundle that registers `.mid`, `.midi` and `.smf` document types. The macOS script then packages that bundle into a compressed DMG with an Applications shortcut (drag to install) and prints the DMG's SHA-256. The version comes from the `VERSION = "x.y.z"` line at the top of `midi_interchange.spec`. It feeds the macOS `CFBundleShortVersionString`/`CFBundleVersion`, the Windows exe version resource and the Windows zip name. Set `PYTHON=python3.13` (macOS) or `$env:PY_VERSION="3.13"` (Windows) to build with a different interpreter. On macOS the script also signs and notarises; see [macOS signing and notarisation](#macos-signing-and-notarisation).
+`scripts/build_macos.sh` and `scripts/build_windows.ps1` create a separate `.venv-build/`, install the requirements, and run PyInstaller with `midi_interchange.spec`. The spec's exclude list keeps out unused Qt modules such as WebEngine and Multimedia. Some Qt plugins still pull in QML/Quick, VirtualKeyboard and Pdf, which is why the app is about 100 MB. On macOS it also produces a `.app` bundle that registers `.mid`, `.midi` and `.smf` document types. The macOS script then packages that bundle into a compressed DMG with an Applications shortcut (drag to install) and prints the DMG's SHA-256. The version comes from the `__version__ = "x.y.z"` line in `midi_interchange/__init__.py`, which the spec imports. It feeds the macOS `CFBundleShortVersionString`/`CFBundleVersion`, the Windows exe version resource and the Windows zip name. Set `PYTHON=python3.13` (macOS) or `$env:PY_VERSION="3.13"` (Windows) to build with a different interpreter. On macOS the script also signs and notarises; see [macOS signing and notarisation](#macos-signing-and-notarisation).
 
 - Build on the platform you're targeting. PyInstaller doesn't cross-compile, so build the Windows exe on Windows and the macOS app on a Mac.
 - A macOS build runs on the CPU architecture it was built on (arm64 on Apple silicon).
@@ -227,7 +227,7 @@ What the installer does:
 - **Install location:** by default it installs for the current user only, with no UAC prompt, into `%LOCALAPPDATA%\Programs\MIDI Interchange`. The wizard also offers *Install for all users*, which goes into `C:\Program Files\MIDI Interchange` and needs admin rights.
 - **Shortcuts and uninstaller:** it adds a Start-menu shortcut, an optional desktop shortcut, and an entry in *Settings ▸ Apps*. Uninstalling removes all of these, along with the files and registry keys.
 - **"Open with" for MIDI files:** it adds the app to *Open with* for `.mid`, `.midi` and `.smf` (ProgID `MIDIInterchange.mid`, under `HKCU` or `HKLM`). It deliberately doesn't claim to be the default handler; since Windows 10, users choose that themselves.
-- **Upgrades:** an upgrade installs over the old version and deletes the old `_internal\` first, so no stale DLLs are left behind. Windows recognises upgrades by the `AppId` GUID in `installer.iss`. **Never change it.** The version comes from `VERSION` in the spec.
+- **Upgrades:** an upgrade installs over the old version and deletes the old `_internal\` first, so no stale DLLs are left behind. Windows recognises upgrades by the `AppId` GUID in `installer.iss`. **Never change it.** The version comes from `__version__` in `midi_interchange/__init__.py`.
 - **Silent installs** (for testing or deployment): `Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER`, optionally with `/DIR="..."`. Uninstall silently with `unins000.exe /VERYSILENT` in the install folder.
 
 How the script works:
@@ -301,7 +301,7 @@ Notes:
 
 - The first signing run triggers a keychain prompt to allow `codesign` to use the private key. Choose **Always Allow**. While the prompt is open, the build waits, and if it waits too long the timestamp request fails with "timestamps differ by N seconds". Rerun after allowing access.
 - Only the DMG is submitted. Its notarisation ticket also covers the app inside, which is why the script can staple the app in `dist/`. The copy *inside* the DMG isn't stapled, so if a user drags it out while offline, Gatekeeper checks it online the first time it opens.
-- Before shipping a new release, bump `VERSION` at the top of `midi_interchange.spec`. It sets `CFBundleShortVersionString`, `CFBundleVersion` and the Windows version. The full process is in [RELEASING.md](RELEASING.md).
+- Before shipping a new release, bump `__version__` in `midi_interchange/__init__.py`. It sets `CFBundleShortVersionString`, `CFBundleVersion` and the Windows version. The full process is in [RELEASING.md](RELEASING.md).
 
 **macOS build status (2026-11-09):**
 - Built on Apple silicon with Python 3.12 and PyInstaller 6.x. The DMG is about 39 MB and the app about 100 MB.

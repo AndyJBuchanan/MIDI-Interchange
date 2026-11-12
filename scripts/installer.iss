@@ -1,5 +1,5 @@
 ; Inno Setup script for the Windows installer. Built by scripts\build_windows.ps1, which passes:
-;   /DAppVersion=<x.y.z>      from VERSION in midi_interchange.spec
+;   /DAppVersion=<x.y.z>      from __version__ in midi_interchange/__init__.py
 ;   /DAppSourceDir=<path>     the PyInstaller one-folder output (dist\MIDI Interchange)
 ;   /DOutputDir=<path>        where the Setup exe goes (dist)
 ; Manual build: "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" /DAppVersion=0.1.0 ^
