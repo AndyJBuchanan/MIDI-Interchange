@@ -24,7 +24,7 @@ Option-drag a clip's left or right edge to trim it. An edge can't go past the cl
 
 This applies to whole exports, range exports (preserve, rebase & concatenate, separate) and drag-out. Each clip's trims are applied with the range edge rules, from the one place where they're written:
 
-- **A note that started before the left edge** sounds from the edge. The option to drop it instead (`partial_notes`, which already exists for ranges) covers trim edges too, so there's one rule. It's not exposed in the UI yet (see [Future settings page](../DESIGN_NOTES.md#future-settings-page)).
+- **A note that started before the left edge** sounds from the edge. The option to drop it instead (`partial_notes`, which already exists for ranges) covers trim edges too, so there's one rule. It's not exposed in the UI yet (see [Future settings page](../ROADMAP.md#future-settings-page)).
 - **A note running past the right edge** is released at the edge, so no notes hang.
 - **Settings at the left edge:** the program, controller, pitch bend, channel pressure and key signature in force there are written at the edge, as at a range start.
 - **Lyrics, text and markers** are kept only inside the trims.

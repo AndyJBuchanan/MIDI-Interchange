@@ -229,7 +229,7 @@ For each app check: does the drop import at all (if not, note the formats listed
 - SMPTE-division files are rejected with a clear message.
 - On Windows, opening several files at once from Explorer opens several windows; drag them onto one window instead.
 
-The plan for what comes next is in the "To do" section of [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md).
+Everything still to do, agreed or not, is listed in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Run from source (macOS / Windows)
 

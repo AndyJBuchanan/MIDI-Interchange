@@ -28,7 +28,7 @@ This came from the clip-trims studio test (2026-11-12): replace the include tick
 - Each range still stores a collapsed include/exclude result (`Range.excluded`), rather than separate per-range mute and solo states.
 - A new range starts unlocked. Its included tracks are set from the effective global M/S result when it is created.
 - Track M/S changes and global clear-M/clear-S actions update every unlocked range to match the effective global result. This includes changes to other tracks' eligibility caused by entering or leaving solo.
-- An unlocked range's track checkboxes are greyed out and cannot be edited, but continue to show its current export inclusion state. Clicking a greyed-out checkbox does nothing for now (agreed 2026-11-12; recorded in DESIGN_NOTES as a possible later change: click to lock and apply).
+- An unlocked range's track checkboxes are greyed out and cannot be edited, but continue to show its current export inclusion state. Clicking a greyed-out checkbox does nothing for now (agreed 2026-11-12; recorded in ROADMAP.md as a possible later change: click to lock and apply).
 - Each range gets a padlock in the range header, inline with its track checkboxes. The padlock shows the range's track lock state.
 - Clicking the padlock to **lock** the range preserves its current track inclusion, enables its checkboxes for independent editing, and prevents subsequent track/global M/S changes from altering that range.
 - Clicking again to **unlock** immediately replaces its track inclusion with the current global M/S result, greys out the checkboxes and resumes following global changes. Previous manual checkbox choices are discarded.

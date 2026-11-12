@@ -37,7 +37,7 @@ Implementation: external previews and internal gestures share the timeline's edg
 
 Studio follow-up: a drop whose destination lane is outside the vertical view had no visible position indicator. A fixed ruler line and triangle now show the drop time regardless of the destination lane's visibility. Paint tests cover destinations both above and below the view; manual retest passed (2026-11-12).
 
-Esc follow-up: Finder → Finder cancels; Finder → MIDI Interchange does not. Cubase → Finder and Cubase → MIDI Interchange both fail to cancel. Details are recorded in [INTEROP_FINDINGS.md](../INTEROP_FINDINGS.md#esc-during-incoming-drags-studio-report-2026-11-12). The Cubase behaviour is not specific to this destination; the Finder difference is still unexplained. By user agreement (2026-11-12), investigation is deferred to [future work in DESIGN_NOTES.md](../DESIGN_NOTES.md#to-do-agreed-not-started), with no further investigation on this branch.
+Esc follow-up: Finder → Finder cancels; Finder → MIDI Interchange does not. Cubase → Finder and Cubase → MIDI Interchange both fail to cancel. Details are recorded in [INTEROP_FINDINGS.md](../INTEROP_FINDINGS.md#esc-during-incoming-drags-studio-report-2026-11-12). The Cubase behaviour is not specific to this destination; the Finder difference is still unexplained. By user agreement (2026-11-12), investigation is deferred to [future work in ROADMAP.md](../ROADMAP.md#later-after-more-real-world-use), with no further investigation on this branch.
 
 ## Rules for the build session
 

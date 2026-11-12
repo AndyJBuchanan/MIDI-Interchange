@@ -21,7 +21,7 @@ Plain MIDI files via file URLs are the one route that works almost everywhere. M
 | M1 Functional vertical slice | **Done.** Every M1 bullet works in the GUI, and the brief's success criterion is covered by a headless GUI test (`tests/test_ui.py::test_full_workflow`). |
 | M2 Interchange | **Partly done.** Drag-in accepts file URLs and raw MThd data; drag-out offers file URLs to temp files; individual-track export and source provenance are done. Native file promises and virtual files are **not** done (see Risks). Even so, hand tests on macOS (2026-11-09) show drag in and out working with Cubase 16, Scaler 3, Staccato.ai and Reason 14 (Reason drag-out confirmed 2026-11-10); drag-in with RapidComposer 6 (drag-out not yet confirmed); and drag-out to Logic Pro, which can't drag MIDI out. Cubase drags out only one clip at a time, even to the Finder (a Cubase limitation). Details in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md). Clipboard import was investigated and isn't viable for those DAWs. |
 | M3 Advanced ranges | **Mostly done.** Multiple named ranges, resize and move, concatenation, separate-range export, per-range track selection, the boundary policy and whole-output trim are done. Per-track trim and per-range drag handles are **not** done. |
-| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, Developer ID signed, hardened runtime). They're notarised and stapled, and Gatekeeper accepts them. On Windows, the one-folder build, zip and Inno Setup installer build and launch (x64, 2026-11-09), but aren't code-signed. Workspace persistence is **not** done (keeping one session between runs is planned; see To do). |
+| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, Developer ID signed, hardened runtime). They're notarised and stapled, and Gatekeeper accepts them. On Windows, the one-folder build, zip and Inno Setup installer build and launch (x64, 2026-11-09), but aren't code-signed. Workspace persistence is **not** done (keeping one session between runs is planned; see [ROADMAP.md](ROADMAP.md)). |
 
 User priority, given with the brief: the timeline is the primary UI element and must work early and well. It was built in M1, not deferred.
 
@@ -138,7 +138,7 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 3. **DAW interop is only partly tested.** On macOS, plain file-URL drags work with Cubase 16, Reason 14, RapidComposer 6, Scaler 3, Staccato.ai and Logic Pro in the directions each app supports; no native promise support was needed. Cubase drags out only one clip at a time (its limitation, confirmed with the Finder); drag-out to Reason works (2026-11-10), drag-out to RapidComposer isn't confirmed. Synthesizer V hasn't been tested (Omnivocal is out of scope for drag tests: it takes its MIDI from Cubase, not by drag and drop), and nothing has been tested on Windows. See [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md). Results go in the README checklist; don't claim compatibility for a target until it's ticked.
 4. **Per-track auto-trim.** `Track.auto_trim` exists in the model but the exporter ignores it.
 5. **Per-range drag handles.** Not built; the drag tile exports the current mode and selection.
-6. **Workspace persistence.** Not built. QSettings stores only window and splitter state. Keeping one session between runs is planned (To do).
+6. **Workspace persistence.** Not built. QSettings stores only window and splitter state. Keeping one session between runs is planned ([ROADMAP.md](ROADMAP.md)).
 7. **Packaging.**
    - **macOS:** the DMG is Developer ID signed, notarised and stapled, using a git-ignored local config.
    - **Still missing:** an Intel or universal2 build (arm64 only for now) and stapling the app inside the DMG.
@@ -146,38 +146,12 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
    - **Size:** about 100 MB, because Qt plugins pull in QML/Quick, VirtualKeyboard and Pdf despite the spec's exclude list. Trimming those plugins could save a lot.
    - **Windows:** builds and launches on Windows 11 x64. It's unsigned, so SmartScreen warns. The Inno Setup installer (`scripts/installer.iss`) registers the app under *Open with* for MIDI files but deliberately doesn't claim the default handler. With no single-instance handoff, opening several files from Explorer starts several windows. Drag-in/drag-out against DAWs isn't tested yet. User-facing shortcut hints are platform-aware (`⌘`/`⌥` on macOS, `Ctrl+`/`Alt+` elsewhere); keep any new ones that way.
 8. **Clip moves** apply to whole clips only; there's no splitting.
-9. **Mixed channels after clip moves (remember this).** A clip moved or dropped onto another track keeps its own MIDI channel(s). Nothing warns or rewrites yet, so a track can export notes on several channels. Decide later whether to warn, or offer "rewrite to the track's channel". **Seen in practice (2026-11-10):** Reason 14 splits a multi-channel track into one track per channel on import (INTEROP_FINDINGS). Documented; to be handled by the planned track export channel feature (To do).
+9. **Mixed channels after clip moves (remember this).** A clip moved or dropped onto another track keeps its own MIDI channel(s). Nothing warns or rewrites yet, so a track can export notes on several channels. Decide later whether to warn, or offer "rewrite to the track's channel". **Seen in practice (2026-11-10):** Reason 14 splits a multi-channel track into one track per channel on import (INTEROP_FINDINGS). Documented; to be handled by the planned track export channel feature ([ROADMAP.md](ROADMAP.md)).
 10. **Clipboard import.** Not built, and not planned: Cubase puts only an in-process pointer on the clipboard, Reason an encrypted blob, and Logic a text listing of regions with no notes. The only public convention found is `public.midi-audio` (Pro Tools, Sibelius), worth revisiting after a capture from either (INTEROP_FINDINGS.md).
 
-## To do (agreed, not started)
+## To do
 
-Planned features (decided 2026-11-10), each on its own branch:
-
-- **Export / drag filename decoration:** names are mostly fixed today (a range-name join, "Verse + Chorus", was added 2026-11-10). Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
-- **Track export channel (one feature, design still open):** covers both the mixed-channel policy (Risk 9; Reason splits multi-channel tracks on import) and changing a clip's channel. Likely shape: a control in the track header that sets the export channel for every clip on the track, whatever the clips' or the track's original channels. Keep a way to leave channels as they are, since a deliberately multi-channel track is possible today.
-- **Session persistence (not save/load):** keep the one current workspace between runs. Write it to disk on exit, restore it at startup, and say so if it couldn't be restored cleanly, e.g. after a crash or a crash on exit. No project files, no Save/Open of workspaces. (Open question: also write it periodically, so a crash loses little?) It must keep clip trims (`trim_start`, `trim_end`).
-
-Seen in studio testing 2026-11-12:
-
-- **Drag-in auto-scroll:** built, studio-tested and merged to main (PR #7); edge scrolling, dropping, leave/re-enter restoration, the ruler drop marker and internal-drag checks passed. Esc investigation is deferred below. See [the plan](plans/drag-in-autoscroll.md).
-- **Mute and solo:** built on `feature/mute-solo`, awaiting studio testing. Track M/S controls and global clears replace the include tickboxes; unlocked ranges follow the global result, while locked ranges keep independently editable track choices. See [the plan](plans/mute-solo.md) and TEST_CHECKLIST section 8g. Automated suite: 229 passed.
-
-Suggested (studio, 2026-11-10), not yet agreed:
-
-- **Scroll bar zoom:** drag the ends of the horizontal scroll bar to zoom, as other apps do.
-
-Later, after more real-world use:
-
-- **Investigate Esc cancellation of incoming macOS drags** (deferred by agreement, 2026-11-12; outside the current drag-in auto-scroll work). Finder → Finder cancels, but Finder → MIDI Interchange does not; Cubase → Finder and Cubase → MIDI Interchange both fail to cancel. Investigate the Finder difference and whether native handling can help, without assuming the destination can cancel another app's drag. Keep timeline restoration on drag leave. See [the recorded results](INTEROP_FINDINGS.md#esc-during-incoming-drags-studio-report-2026-11-12).
-- **Clicking a greyed-out range checkbox (mute/solo):** on an unlocked range it does nothing for now (agreed 2026-11-12). A possible later change: the click locks the range and applies the change in one step. See [the mute/solo plan](plans/mute-solo.md).
-- **Keys and modifiers:** review the UI's keyboard shortcuts and drag modifiers as a whole, including Shift on clip drags. Shift currently keeps the clip's time (track change only), unlike range drags, where Shift bypasses snap; kept for now.
-
-## Future settings page
-
-Not planned yet. Options that already exist in code, or are planned, without any UI, collected so a settings page can expose them later:
-
-- **Notes that started before an edge** (`ExportOptions.partial_notes`, default on): sound from a range or clip-trim edge, or are dropped.
-- **Replace on drop compares** (`Placement.compare_full_extent`, default visible edges): a dropped clip replaces one whose trimmed start and end match, or whose full extent matches.
+All outstanding work, agreed or not, is listed in [ROADMAP.md](ROADMAP.md).
 
 ## Issues found and fixed during development
 

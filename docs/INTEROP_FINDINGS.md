@@ -47,7 +47,7 @@ These aren't MIDI Interchange bugs or feature requests. They are more evidence t
 
 The Cubase result also occurs without MIDI Interchange involved. The Finder → MIDI Interchange difference remains unresolved; these observations do not establish its cause. The current drag-in auto-scroll code restores the timeline on a drag-leave event, but does not itself cancel the native source drag.
 
-Investigation deferred to [future work](DESIGN_NOTES.md#to-do-agreed-not-started) by user agreement (2026-11-12); no further investigation in the current drag-in auto-scroll work.
+Investigation deferred to [future work](ROADMAP.md#later-after-more-real-world-use) by user agreement (2026-11-12); no further investigation in the current drag-in auto-scroll work.
 
 Qt's [`QDrag.cancel()`](https://doc.qt.io/qt-6/qdrag.html#cancel) cancels Qt-initiated drags and is documented as implemented only on Windows and X11. It provides no supported way here to cancel another application's macOS drag. Any replacement behaviour (such as rejecting a drop after Esc without ending the source drag) would need an explicit plan change and must not be described as native drag cancellation.
 
