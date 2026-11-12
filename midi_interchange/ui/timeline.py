@@ -352,15 +352,16 @@ class Timeline(QAbstractScrollArea):
     def _paint_track_regions(self, p: QPainter, track: Track, top: int, t0: float, t1: float, w: int) -> None:
         """An off track is greyed except inside the ranges that include it: a
         range shows what it exports."""
-        on = QRegion()
-        if not track.enabled:
-            for r in self.ctl.ws.ranges:
-                if r.includes(track.id) and not r.is_empty:
-                    x0, x1 = round(self.x_of(float(r.start))), round(self.x_of(float(r.end)))
-                    on += QRegion(x0, top, max(x1 - x0, 0), self.lane_h)
-        if on.isEmpty():
-            self._paint_track(p, track, top, t0, t1, w, track.enabled)
-            return
+        on = QRegion(0, top, w, self.lane_h) if track in self.ctl.ws.global_tracks() else QRegion()
+        covered, included = QRegion(), QRegion()
+        for r in self.ctl.ws.ranges:
+            if not r.is_empty:
+                x0, x1 = round(self.x_of(float(r.start))), round(self.x_of(float(r.end)))
+                region = QRegion(x0, top, max(x1 - x0, 0), self.lane_h)
+                covered += region
+                if r.includes(track.id):
+                    included += region
+        on = (on - covered) + included
         off = QRegion(0, top, w, self.lane_h) - on
         for region, enabled in ((off, False), (on, True)):
             if region.isEmpty():
@@ -530,7 +531,7 @@ class Timeline(QAbstractScrollArea):
         if x1 < 0 or x0 > self.viewport().width():
             return
         hatch = QBrush(theme.EXCLUDED_HATCH, Qt.BDiagPattern)
-        accent = QColor(theme.ACCENT if selected else theme.RANGE_TOGGLE)
+        accent = QColor((theme.ACCENT if selected else theme.RANGE_TOGGLE) if r.track_locked else theme.DISABLED)
         for i, track in enumerate(self.ctl.ws.tracks):
             top = self.lane_top(i)
             if top + self.lane_h < y0 or top > y1:
@@ -631,7 +632,16 @@ class Timeline(QAbstractScrollArea):
             label = range_label(r.name, i)
             label += f"   {tm.format_bbt(r.start)} – {tm.format_bbt(r.end)}"
             p.setPen(theme.TEXT if selected else theme.TEXT_DIM)
-            vis_left = max(rect.left(), 0) + 5
+            lock = self.lock_rect(r)
+            if lock is not None:
+                p.setPen(QPen(theme.ACCENT if r.track_locked else theme.TEXT_DIM, 1.5))
+                p.setBrush(Qt.NoBrush)
+                p.drawRoundedRect(lock.adjusted(2, 6, -2, 0), 1, 1)
+                shackle = lock.adjusted(4, 0, -4, -6)
+                if not r.track_locked:
+                    shackle.translate(3, 0)
+                p.drawArc(shackle, 0, 180 * 16)
+            vis_left = max(rect.left(), 0) + 24
             avail = int(rect.right() - vis_left - 5)
             if avail > 12:
                 p.drawText(QPointF(vis_left, RANGE_TOP + 2 + (RANGE_H - 4 + fs.ascent() - fs.descent()) / 2),
@@ -645,6 +655,12 @@ class Timeline(QAbstractScrollArea):
         if self._hover_x is not None and self._drag is None:
             p.setPen(QPen(theme.HOVER_LINE, 1))
             p.drawLine(QPointF(self._hover_x + 0.5, 0), QPointF(self._hover_x + 0.5, HEADER_H))
+
+    def lock_rect(self, r) -> QRectF | None:
+        x0, x1 = self.x_of(float(r.start)), self.x_of(float(r.end))
+        if x1 - x0 < TOGGLE_GAP + TOGGLE_PX + 4:
+            return None
+        return QRectF(round(x0) + TOGGLE_GAP, RANGE_TOP + 3, TOGGLE_PX, TOGGLE_PX)
 
     def toggle_rect(self, r, lane: int) -> QRectF | None:
         """Where a range's include toggle sits in a lane, or None when the range
@@ -681,6 +697,10 @@ class Timeline(QAbstractScrollArea):
             if ce is not None:
                 return ce
         ranges = sorted(self.ctl.ws.ranges, key=lambda r: r.id != self.ctl.selected_range_id)
+        for r in ranges:
+            lock = self.lock_rect(r)
+            if lock is not None and lock.contains(pos):
+                return ("lock", r.id)
         if y >= HEADER_H:
             i = self.lane_at(y)
             if i >= 0:
@@ -731,7 +751,10 @@ class Timeline(QAbstractScrollArea):
             return
         bypass = bool(e.modifiers() & Qt.ShiftModifier)
         self._press_pos = pos
-        if hit[0] == "toggle":
+        if hit[0] == "lock":
+            r = self.ctl.ws.range(hit[1])
+            self.ctl.set_range_locked(r.id, not r.track_locked)
+        elif hit[0] == "toggle":
             self._flip_toggle(hit)
         elif hit[0] == "edge":
             self.ctl.checkpoint()
@@ -885,14 +908,17 @@ class Timeline(QAbstractScrollArea):
     def _flip_toggle(self, hit: tuple) -> None:
         _kind, rid, tid = hit
         r = self.ctl.ws.range(rid)
-        if r is not None:
+        if r is not None and r.track_locked:
             self.ctl.select_range(rid)
             self.ctl.set_range_track_included(rid, tid, not r.includes(tid))
         self.viewport().update()
 
     def mouseDoubleClickEvent(self, e: QMouseEvent) -> None:
         hit = self._hit(e.position())
-        if hit[0] == "toggle":          # a quick second click is another click, not "edit range"
+        if hit[0] == "lock":
+            r = self.ctl.ws.range(hit[1])
+            self.ctl.set_range_locked(r.id, not r.track_locked)
+        elif hit[0] == "toggle":          # a quick second click is another click, not "edit range"
             self._flip_toggle(hit)
         elif hit[0] in ("body", "edge"):
             self.ctl.select_range(hit[1])
@@ -911,13 +937,18 @@ class Timeline(QAbstractScrollArea):
         hit = self._hit(pos, mods)
         vp = self.viewport()
         tip = ""
-        if hit[0] == "toggle":
+        if hit[0] == "lock":
             vp.setCursor(Qt.PointingHandCursor)
+            r = self.ctl.ws.range(hit[1])
+            tip = "Unlock: follow global mute/solo" if r.track_locked else "Lock: edit range tracks independently"
+        elif hit[0] == "toggle":
             r, t = self.ctl.ws.range(hit[1]), self.ctl.ws.track(hit[2])
+            vp.setCursor(Qt.PointingHandCursor if r and r.track_locked else Qt.ArrowCursor)
             if r is not None and t is not None:
                 label = range_label(r.name, self.ctl.ws.ranges.index(r))
                 tip = (f"“{t.name}” is {'included in' if r.includes(t.id) else 'excluded from'} {label}"
-                       f" — click to {'exclude' if r.includes(t.id) else 'include'}")
+                       + (f" — click to {'exclude' if r.includes(t.id) else 'include'}"
+                          if r.track_locked else " — lock the range to edit tracks"))
         elif hit[0] in ("edge", "clip_edge"):
             vp.setCursor(Qt.SizeHorCursor)
         elif hit[0] == "body":
@@ -982,7 +1013,7 @@ class Timeline(QAbstractScrollArea):
 
     def _context_menu(self, hit: tuple, e: QMouseEvent) -> None:
         gp = e.globalPosition().toPoint()
-        if hit[0] in ("body", "edge", "toggle"):
+        if hit[0] in ("body", "edge", "toggle", "lock"):
             self.ctl.select_range(hit[1])
             self.range_menu(hit[1]).exec(gp)
         elif hit[0] == "clip":
@@ -999,16 +1030,10 @@ class Timeline(QAbstractScrollArea):
         m.addAction("Delete Range", lambda: ctl.delete_range(rid))
         if r is None or not ctl.ws.tracks:
             return m
-        m.addSection("Tracks in this range")
-        for t in ctl.ws.tracks:
-            a = m.addAction(t.name)
-            a.setCheckable(True)
-            a.setChecked(r.includes(t.id))
-            a.toggled.connect(lambda on, tid=t.id: ctl.set_range_track_included(rid, tid, on))
         m.addSeparator()
         m.addAction("Include All Tracks", lambda: ctl.set_range_tracks(rid, True))
         m.addAction("Exclude All Tracks", lambda: ctl.set_range_tracks(rid, False))
-        m.addAction("Reset to Track Toggles", lambda: ctl.set_range_tracks(rid, None))
+        m.addAction("Unlock", lambda: ctl.set_range_tracks(rid, None))
         return m
 
     # ------------------------------------------------------------------ wheel / keys / gestures

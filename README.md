@@ -51,7 +51,7 @@ Shortcuts are shown for macOS; on Windows use Ctrl for ⌘ and Alt for ⌥ (Opti
 | Copy a clip | ⌥⌘-drag it, or right-click ▸ Duplicate Clip (placed straight after it) |
 | Clip tools | Right-click a clip: Duplicate, Butt Against Previous Clip, Restore Full Clip (on a trimmed clip), Move Clip to Track (or New Track), Delete Clip |
 | Overlaps | Clips may overlap on a track; the overlap is tinted red and both clips' notes are exported, merged |
-| Tracks | Click the name to rename, drag ⋮⋮ to reorder, ✕ to remove. Right-click a header (or a clip ▸ Track) for Enable/Disable, Rename, Solo for Export / Unsolo, Move Up/Down, Merge Into (another track), Save This Track…, Source Info… and Remove Track |
+| Tracks | Click the name to rename, drag ⋮⋮ to reorder, ✕ to remove. Right-click a header (or a clip ▸ Track) for Mute/Unmute, Rename, Move Up/Down, Merge Into (another track), Save This Track…, Source Info… and Remove Track |
 | Start again | File ▸ New (⌘N, also on the toolbar) clears the workspace; Undo brings it back. Export settings are kept |
 | Undo / redo | ⌘Z / ⇧⌘Z cover everything |
 | About | The About button at the right end of the toolbar shows the version and the project link |
@@ -60,13 +60,13 @@ Shortcuts are shown for macOS; on Windows use Ctrl for ⌘ and Alt for ⌥ (Opti
 
 | Action | How |
 |---|---|
-| Choose tracks | Each track's checkbox includes it in the export (Edit ▸ Enable/Disable All Tracks for all of them) |
+| Choose tracks | Track **M** mutes and **S** solos; several tracks can be soloed. ⌥-click S for exclusive solo, ⌥-click M to set all mutes. The boxed M/S buttons above the tracks clear all mutes/solos |
 | Create a range | Drag across empty timeline space (in the ruler or in the lanes) |
 | Resize / move a range | Drag an edge (in any row) / drag the body in the range strip |
 | Snap | Snap list on the toolbar, or Timing ▸ Snap: off, bar, beat (the default), 1/8, 1/16, 1/32, 1/8T, 1/16T. Hold Shift while dragging to bypass it |
 | Name a range, exact positions | Pick it in the Range list in the bottom panel (or double-click it, or right-click ▸ Edit Range…), then type a name, and `bar.beat.tick` (480 ticks per quarter) into Start/End |
 | Delete / cycle ranges | Backspace or Delete (or the panel's Delete button, Edit ▸ Delete Range) / Tab. Escape deselects. Clear All Ranges is on the toolbar and the Edit menu |
-| Tracks per range | Click the range's checkbox in a track's lane (at the range's inner left edge) to leave that track out of the range; the excluded section is hatched. Right-click the range for the same list, plus Include All, Exclude All and Reset to Track Toggles. A new range starts with the track checkboxes; after that its own checkboxes win. A track switched off is still drawn in colour inside ranges that include it. ⌥-click a track's checkbox to set it in every range too |
+| Tracks per range | New ranges follow global M/S, with greyed checkboxes. Click the padlock in the range header to lock its track selection and enable independent checkbox editing. Locked ranges ignore subsequent global M/S changes; unlocking immediately restores the current global result. Right-click ▸ Include All / Exclude All locks the range first. Lane colours inside ranges show what each range exports |
 
 ### Exporting
 

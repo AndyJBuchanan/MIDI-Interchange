@@ -148,12 +148,13 @@ def test_copy_lone_clip_below_last_lane_makes_new_track(win):
 def test_solo_and_unsolo(win):
     ctl = win.ctl
     bass, keys = ctl.ws.tracks
-    ctl.set_track_enabled(keys.id, False)
-    ctl.solo_track(keys.id)
-    assert (bass.enabled, keys.enabled) == (False, True) and ctl.is_soloed(keys.id)
-    ctl.solo_track(bass.id)                       # switch solo: the original selection is kept
-    ctl.unsolo()
-    assert (bass.enabled, keys.enabled) == (True, False) and ctl.solo is None
+    ctl.set_mute(keys.id, True)
+    ctl.toggle_solo(keys.id)
+    assert ctl.ws.global_tracks() == [keys] and keys.muted
+    ctl.toggle_solo(bass.id, exclusive=True)
+    ctl.clear_solos()
+    assert ctl.ws.global_tracks() == [bass] and keys.muted
+
 
 
 @pytest.mark.parametrize("area_h", [10, 26, 40, 120, 400])

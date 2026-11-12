@@ -114,7 +114,8 @@ class Track:
     source_id: str
     clips: list[Clip]
     original_name: str = ""
-    enabled: bool = True
+    muted: bool = False         # retained under solo; solo overrides it without clearing it
+    soloed: bool = False
     color: str = TRACK_COLORS[0]
     auxiliary: bool = False      # holds only meta/sysex data (lyrics, markers, ...)
     channels: tuple[int, ...] = ()
@@ -192,10 +193,31 @@ class Workspace:
     def end(self) -> Fraction:
         return max((t.end for t in self.tracks), default=ZERO)
 
-    def enabled_tracks(self) -> list[Track]:
-        return [t for t in self.tracks if t.enabled]
+    def has_solos(self) -> bool:
+        return any(t.soloed for t in self.tracks)
+
+    def global_tracks(self) -> list[Track]:
+        solo = self.has_solos()
+        return [t for t in self.tracks if (t.soloed if solo else not t.muted)]
+
+    def sync_ranges(self) -> None:
+        included = {t.id for t in self.global_tracks()}
+        for r in self.ranges:
+            if not r.track_locked:
+                r.excluded = {t.id for t in self.tracks if t.id not in included}
+
 
     # -- mutation ----------------------------------------------------------
+    def _add_track(self, track: Track, index: int | None = None) -> None:
+        """New tracks always start audible to export, joining an existing solo group."""
+        track.muted = False
+        track.soloed = self.has_solos()
+        track.color = TRACK_COLORS[next(self._color_cycle) % len(TRACK_COLORS)]
+        self.tracks.insert(len(self.tracks) if index is None else index, track)
+        for r in self.ranges:
+            r.set_included(track.id, True)
+        self.sync_ranges()
+
     def add_import(self, source: Source, tracks: list[Track]) -> list[str]:
         """Add an imported source and its tracks. Returns informational notes.
 
@@ -206,10 +228,7 @@ class Workspace:
         notes: list[str] = []
         self.sources.append(source)
         for t in tracks:
-            t.color = TRACK_COLORS[next(self._color_cycle) % len(TRACK_COLORS)]
-            self.tracks.append(t)
-            for r in self.ranges:         # a new track starts with its own toggle in every range
-                r.set_included(t.id, t.enabled)
+            self._add_track(t)
         if not source.tempo_map.is_empty:
             if self.tempo_source_id is None:
                 self.adopt_tempo_map(source.id)
@@ -228,6 +247,7 @@ class Workspace:
     def remove_track(self, track_id: str) -> None:
         self.tracks = [t for t in self.tracks if t.id != track_id]
         self.prune_sources()
+        self.sync_ranges()
 
     def prune_sources(self) -> None:
         # Sources stay referenced while any clip uses them; keep the
@@ -240,6 +260,7 @@ class Workspace:
         if gone:
             self.tracks = [t for t in self.tracks if t.clips]
             self.prune_sources()
+        self.sync_ranges()
         return gone
 
     def find_clip(self, clip_id: str) -> tuple[Track, Clip] | None:
@@ -277,11 +298,8 @@ class Workspace:
         src, clip = found
         like = like or src
         t = Track(id=new_id(), name=like.name, source_id=clip.source_id or src.source_id, clips=[],
-                  original_name=like.original_name, enabled=like.enabled,
-                  color=TRACK_COLORS[next(self._color_cycle) % len(TRACK_COLORS)])
-        self.tracks.insert(len(self.tracks) if index is None else index, t)
-        for r in self.ranges:             # ... and in each range, the state of the track it is like
-            r.set_included(t.id, r.includes(like.id))
+                  original_name=like.original_name)
+        self._add_track(t, index)
         self.move_clip_to_track(clip_id, t.id)
         return t
 

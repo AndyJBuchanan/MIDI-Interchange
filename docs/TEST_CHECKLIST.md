@@ -143,8 +143,32 @@ Esc cancellation failed in the studio and is deferred to [future work](DESIGN_NO
 
 - [x] Drag a file whose destination lane is above or below the visible tracks: the fixed timeline ruler still shows the drop time with an amber line and triangle. Move the pointer and auto-scroll; the ruler marker follows. Drop or leave the window: the marker disappears. (Studio retest passed, 2026-11-12.)
 - [x] Move the pointer over the track headers or export panel during the drag: auto-scroll stops and the usual drop placement applies.
-- [ ] Drop several files, Cancel the "Place dropped files" dialog, and check the view returns to where it was before the drag.
+- [x] Drop several files, Cancel the "Place dropped files" dialog, and check the view returns to where it was before the drag.
 - [x] Option-drag an existing clip past the end: the timeline grows. Draw or resize a range past the end too. Release: only the normal content/range padding remains. Check trim scrolling still stops at the clip's original extent.
+
+## 8g. Mute, solo and range track locks (`feature/mute-solo`)
+
+- [x] Track M/S buttons toggle mute/solo. Several solos work together. Option-click S solos only that track; repeat on the only solo to unsolo it.
+- [x] Mute a track, solo it, then unsolo it: it exports during solo and returns to muted afterwards. Its M indication is greyed while solo overrides it. Compare the display with Cubase.
+- [x] Mute a soloed track: solo clears. Unmute it: solo stays off. Option-click M applies the clicked track's new mute state to all tracks; muting all clears all solos.
+- [x] The boxed M/S buttons above the tracks light when needed and clear all mutes/solos. Clear mutes also clears a mute remembered under solo; unsolo afterwards leaves that track unmuted.
+- [x] Create a range: its greyed checkboxes show the current global M/S result. Clicking them changes nothing. Changing track/global M/S updates all unlocked ranges.
+- [x] Click the padlock in the range header: the range locks and its checkboxes become editable. Global M/S changes leave its track choices alone. Click again: the range immediately follows global M/S and its checkboxes become greyed.
+- [x] Right-click a range: Include All/Exclude All lock it and apply the choice; Unlock resumes following global M/S. Check a narrow range through its context menu. (Individual track menu entries removed in feedback follow-up.)
+- [x] Import a new track: it is included in locked ranges and follows global M/S in unlocked ones. Repeat while solo is active.
+- [x] Lane colours inside ranges match their actual export choices, including a globally muted track included in a locked range. Outside ranges, colours follow global M/S.
+- [x] Save and drag whole and range exports to Cubase and Reason, using Preserve, Rebase and Separate. Check track membership and notes, especially locked ranges that override global M/S.
+- [x] Undo/redo each action: global changes and their unlocked-range updates undo together; locks, manual track choices and remembered mutes restore correctly.
+
+## 8h. Mute/solo studio feedback retest
+
+The original section 8g checks passed locally. These follow-up changes also passed manual retesting:
+
+- [x] Track and global S controls light red; M remains yellow/orange.
+- [x] Only a mute remembered under that track's solo: the top M stays unlit. A separate explicit mute lights it. Clear mutes still clears hidden mutes; unsolo afterwards leaves the track unmuted.
+- [x] About shows version 0.2.2.
+- [x] Range right-click menu has no individual track entries or "Tracks in this range" heading. Edit, Delete, Include All, Exclude All and Unlock remain.
+- [x] Add tracks by drag-in/import and by moving/copying a clip to a new track, including from a muted source: each new track is unmuted and included. With solo already active it joins the solo group; with no solo active it stays non-soloed. Check locked/unlocked ranges and undo/redo.
 
 ## 9. New document
 

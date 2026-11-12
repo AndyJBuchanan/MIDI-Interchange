@@ -49,6 +49,8 @@ def tids(win):
 
 def add_ranges(win, mode, spans):
     rs = [win.ctl.add_range(F(s), F(e)) for s, e in spans]
+    for r in rs:
+        win.ctl.set_range_locked(r.id, True)
     win.ctl.set_export_mode(mode)
     return rs
 
@@ -97,31 +99,34 @@ def check(win, tmp_path, monkeypatch, per_file: list[list]) -> None:
 def test_new_range_starts_from_track_toggles(song):
     ctl = song.ctl
     lead = ctl.ws.tracks[LEAD]
-    ctl.set_track_enabled(lead.id, False)
+    ctl.set_mute(lead.id, True)
     r = ctl.add_range(F(0), F(4))
+    ctl.set_range_locked(r.id, True)
     assert [r.includes(i) for i in tids(song)] == [True, False, True]
 
 
-def test_track_toggle_changes_do_not_reach_existing_ranges(song):
+def test_mute_changes_do_not_reach_locked_ranges(song):
     ctl = song.ctl
     bass, lead = ctl.ws.tracks[BASS1], ctl.ws.tracks[LEAD]
-    ctl.set_track_enabled(lead.id, False)
+    ctl.set_mute(lead.id, True)
     r = ctl.add_range(F(0), F(4))
-    ctl.set_track_enabled(lead.id, True)
-    ctl.set_track_enabled(bass.id, False)
+    ctl.set_range_locked(r.id, True)
+    ctl.set_mute(lead.id, False)
+    ctl.set_mute(bass.id, True)
     assert not r.includes(lead.id) and r.includes(bass.id)
-    ctl.set_all_enabled(False)
+    ctl.set_mute(bass.id, True, all_tracks=True)
     assert [r.includes(i) for i in tids(song)] == [True, False, True]
 
 
 def test_include_exclude_all_and_reset(song):
     ctl = song.ctl
     r = ctl.add_range(F(0), F(4))
+    ctl.set_range_locked(r.id, True)
     ctl.set_range_tracks(r.id, False)
     assert not any(r.includes(i) for i in tids(song))
     ctl.set_range_tracks(r.id, True)
     assert all(r.includes(i) for i in tids(song))
-    ctl.set_track_enabled(ctl.ws.tracks[BASS2].id, False)
+    ctl.set_mute(ctl.ws.tracks[BASS2].id, True)
     ctl.set_range_tracks(r.id, None)
     assert [r.includes(i) for i in tids(song)] == [True, True, False]
 
@@ -129,6 +134,7 @@ def test_include_exclude_all_and_reset(song):
 def test_undo_redo_range_toggles(song):
     ctl = song.ctl
     r = ctl.add_range(F(0), F(4))
+    ctl.set_range_locked(r.id, True)
     lead = ctl.ws.tracks[LEAD].id
     ctl.set_range_track_included(r.id, lead, False)
     assert not ctl.ws.ranges[0].includes(lead)
@@ -145,15 +151,16 @@ def test_undo_redo_range_toggles(song):
 def test_tracks_created_after_the_range(song):
     ctl, ws = song.ctl, song.ctl.ws
     r = ctl.add_range(F(0), F(4))
+    ctl.set_range_locked(r.id, True)
     lead = ws.tracks[LEAD]
     ctl.set_range_track_included(r.id, lead.id, False)
     # a new import starts with its own toggle (on)
     drop(song, "keys_part.mid")
     keys = ws.tracks[-1]
     assert keys.name == "Keys" and r.includes(keys.id)
-    # a clip moved onto a new track takes the range state of the track it came from
+    # a newly created track is included in locked ranges
     t = ws.new_track_for_clip(lead.clips[0].id, like=lead)
-    assert t is not None and not r.includes(t.id)
+    assert t is not None and r.includes(t.id)
 
 
 # -- export ---------------------------------------------------------------------------
@@ -196,7 +203,7 @@ def test_track_in_no_range_is_left_out(song, tmp_path, monkeypatch):
 def test_disabled_track_still_exports_from_a_range_that_includes_it(song, tmp_path, monkeypatch):
     ctl = song.ctl
     add_ranges(song, ExportMode.REBASE, [(0, 4)])
-    ctl.set_track_enabled(ctl.ws.tracks[LEAD].id, False)
+    ctl.set_mute(ctl.ws.tracks[LEAD].id, True)
     seg = [(0, 4, 0)]
     check(song, tmp_path, monkeypatch, [[seg, seg, seg]])
 
@@ -205,7 +212,7 @@ def test_whole_export_ignores_range_toggles(song, tmp_path, monkeypatch):
     ctl = song.ctl
     (r,) = add_ranges(song, ExportMode.WHOLE, [(0, 4)])
     ctl.set_range_track_included(r.id, ctl.ws.tracks[BASS1].id, False)
-    ctl.set_track_enabled(ctl.ws.tracks[LEAD].id, False)
+    ctl.set_mute(ctl.ws.tracks[LEAD].id, True)
     whole = [(0, 1000, 0)]
     check(song, tmp_path, monkeypatch, [[whole, None, whole]])
 
@@ -245,6 +252,7 @@ def _prepare(song):
 def test_click_toggle_in_lane(song):
     ctl = song.ctl
     r = ctl.add_range(F(4), F(12))
+    ctl.set_range_locked(r.id, True)
     tl = _prepare(song)
     lead = ctl.ws.tracks[LEAD].id
     rect = tl.toggle_rect(r, LEAD)
@@ -268,11 +276,12 @@ def test_no_toggle_when_range_too_narrow(song):
     ctl = song.ctl
     tl = _prepare(song)
     r = ctl.add_range(F(4), F(4) + F(1, 4))      # 7.5 px at 30 px/beat
+    ctl.set_range_locked(r.id, True)
     assert tl.toggle_rect(r, 0) is None
     menu = tl.range_menu(r.id)
     acts = {a.text(): a for a in menu.actions()}
-    assert acts["Lead"].isChecked()
-    acts["Lead"].trigger()
+    assert "Lead" not in acts
+    acts["Exclude All Tracks"].trigger()
     assert not r.includes(ctl.ws.tracks[LEAD].id)
     acts["Include All Tracks"].trigger()
     assert all(r.includes(i) for i in tids(song))
@@ -281,6 +290,7 @@ def test_no_toggle_when_range_too_narrow(song):
 def test_excluded_section_is_drawn_dimmed_with_toggle_states(song):
     ctl = song.ctl
     r = ctl.add_range(F(4), F(12))
+    ctl.set_range_locked(r.id, True)
     ctl.set_range_track_included(r.id, ctl.ws.tracks[LEAD].id, False)
     tl = _prepare(song)
     img = tl.viewport().grab().toImage()
@@ -383,30 +393,29 @@ def test_separate_drag_files_with_the_same_range_name_all_arrive(song, monkeypat
     assert _drag_names(song, monkeypatch) == ["Verse.mid", "Chorus.mid", "Chorus (2).mid"]
 
 
-def test_alt_click_track_toggle_sets_every_range(song):
+def test_alt_click_mute_updates_unlocked_ranges(song):
     ctl = song.ctl
     rs = add_ranges(song, ExportMode.REBASE, [(0, 4), (8, 12)])
+    for r in rs:
+        ctl.set_range_locked(r.id, False)
+    ctl.set_range_locked(rs[1].id, True)
     lead = ctl.ws.tracks[LEAD].id
-    cb = song.track_panel.header(lead).enabled_cb
-    QTest.mouseClick(cb, Qt.LeftButton, Qt.NoModifier, cb.rect().center())
-    assert not ctl.ws.track(lead).enabled and all(r.includes(lead) for r in rs)   # plain click: track only
-    ctl.set_track_enabled(lead, True)
+    cb = song.track_panel.header(lead).mute_btn
     depth = len(ctl._undo)
     QTest.mouseClick(cb, Qt.LeftButton, Qt.AltModifier, cb.rect().center())
-    assert not ctl.ws.track(lead).enabled and not any(r.includes(lead) for r in rs)
-    assert len(ctl._undo) == depth + 1, "one undo step"
+    assert all(t.muted for t in ctl.ws.tracks)
+    assert not any(rs[0].includes(t.id) for t in ctl.ws.tracks)
+    assert all(rs[1].includes(t.id) for t in ctl.ws.tracks)
+    assert len(ctl._undo) == depth + 1
     ctl.undo()
-    assert ctl.ws.track(lead).enabled and all(r.includes(lead) for r in ctl.ws.ranges)
-    # Alt-click on a track already in that state still brings the ranges in line
-    ctl.set_range_track_included(ctl.ws.ranges[0].id, lead, False)
-    ctl.set_track_enabled(lead, True, ranges_too=True)
-    assert all(r.includes(lead) for r in ctl.ws.ranges)
+    assert all(not t.muted for t in ctl.ws.tracks)
 
 
 def test_off_track_is_drawn_normally_inside_ranges_that_include_it(song):
     ctl = song.ctl
-    ctl.add_range(F(4), F(12))
-    ctl.set_track_enabled(ctl.ws.tracks[LEAD].id, False)       # still included by the range
+    r = ctl.add_range(F(4), F(12))
+    ctl.set_range_locked(r.id, True)
+    ctl.set_mute(ctl.ws.tracks[LEAD].id, True)       # still included by the range
     tl = _prepare(song)
     img = tl.viewport().grab().toImage()
 

@@ -41,7 +41,6 @@ class Controller(QObject):
         self.snap: SnapSetting = "beat"
         self.export_mode = ExportMode.REBASE   # default (2026-11-10); with no ranges, export is whole
         self.trim = False
-        self.solo: tuple[str, dict[str, bool]] | None = None   # (soloed track id, enabled states before)
         self._undo: list[tuple[dict, str | None]] = []
         self._redo: list[tuple[dict, str | None]] = []
 
@@ -128,7 +127,6 @@ class Controller(QObject):
             return
         self.checkpoint()
         self.ws.clear()
-        self.solo = None
         self.selected_range_id = None
         self.tracksChanged.emit()
         self.tempoChanged.emit()
@@ -242,22 +240,51 @@ class Controller(QObject):
             self.tracksChanged.emit()
 
     # -- tracks --------------------------------------------------------------
-    def set_track_enabled(self, track_id: str, enabled: bool, ranges_too: bool = False) -> None:
-        """Switch a track on/off. ``ranges_too`` (Option/Alt-click) also sets the
-        track's toggle in every range to match, as one undo step."""
-        t = self.ws.track(track_id)
-        if t is None:
+    def _ms_changed(self) -> None:
+        self.ws.sync_ranges()
+        self.tracksChanged.emit()
+        self.rangesChanged.emit()
+
+    def set_mute(self, track_id: str, muted: bool, all_tracks: bool = False) -> None:
+        track = self.ws.track(track_id)
+        if track is None:
             return
-        ranges = [r for r in self.ws.ranges if r.includes(track_id) != enabled] if ranges_too else []
-        if t.enabled == enabled and not ranges:
+        targets = self.ws.tracks if all_tracks else [track]
+        if not any(t.muted != muted or (muted and t.soloed) for t in targets):
             return
         self.checkpoint()
-        t.enabled = enabled
-        for r in ranges:
-            r.set_included(track_id, enabled)
-        self.tracksChanged.emit()
-        if ranges:
-            self.rangesChanged.emit()
+        for t in targets:
+            t.muted = muted
+            if muted:
+                t.soloed = False
+        self._ms_changed()
+
+    def toggle_solo(self, track_id: str, exclusive: bool = False) -> None:
+        track = self.ws.track(track_id)
+        if track is None:
+            return
+        sole = track.soloed and sum(t.soloed for t in self.ws.tracks) == 1
+        on = not sole if exclusive else not track.soloed
+        self.checkpoint()
+        if exclusive:
+            for t in self.ws.tracks:
+                t.soloed = False
+        track.soloed = on
+        self._ms_changed()
+
+    def clear_mutes(self) -> None:
+        if any(t.muted for t in self.ws.tracks):
+            self.checkpoint()
+            for t in self.ws.tracks:
+                t.muted = False
+            self._ms_changed()
+
+    def clear_solos(self) -> None:
+        if any(t.soloed for t in self.ws.tracks):
+            self.checkpoint()
+            for t in self.ws.tracks:
+                t.soloed = False
+            self._ms_changed()
 
     def rename_track(self, track_id: str, name: str) -> None:
         t = self.ws.track(track_id)
@@ -290,42 +317,6 @@ class Controller(QObject):
             self.ws.remove_track(track_id)
             self.tracksChanged.emit()
 
-    def solo_track(self, track_id: str) -> None:
-        """Enable only this track for export; unsolo() restores the previous selection."""
-        if self.ws.track(track_id) is None:
-            return
-        self.checkpoint()
-        # soloing another track while one is soloed keeps the original selection to restore
-        still = self.solo is not None and self.is_soloed(self.solo[0])
-        before = self.solo[1] if still else {t.id: t.enabled for t in self.ws.tracks}
-        for t in self.ws.tracks:
-            t.enabled = t.id == track_id
-        self.solo = (track_id, before)
-        self.tracksChanged.emit()
-
-    def is_soloed(self, track_id: str) -> bool:
-        """True while `track_id` is soloed and its solo hasn't been changed by hand since."""
-        if self.solo is None or self.solo[0] != track_id:
-            return False
-        return all(t.enabled == (t.id == track_id) for t in self.ws.tracks)
-
-    def unsolo(self) -> None:
-        """Restore the track selection from before the solo (tracks added since stay enabled)."""
-        if self.solo is None:
-            return
-        self.checkpoint()
-        before = self.solo[1]
-        for t in self.ws.tracks:
-            t.enabled = before.get(t.id, True)
-        self.solo = None
-        self.tracksChanged.emit()
-
-    def set_all_enabled(self, enabled: bool) -> None:
-        self.checkpoint()
-        for t in self.ws.tracks:
-            t.enabled = enabled
-        self.tracksChanged.emit()
-
     def move_clip(self, track_id: str, clip_id: str, offset: Fraction) -> None:
         """Live clip move within its track (caller checkpoints once at drag start)."""
         self.move_clip_live(clip_id, offset)
@@ -339,7 +330,7 @@ class Controller(QObject):
 
     # -- ranges -----------------------------------------------------------------
     def add_range(self, start: Fraction, end: Fraction) -> Range:
-        r = Range(start, end, excluded={t.id for t in self.ws.tracks if not t.enabled})
+        r = Range(start, end, excluded={t.id for t in self.ws.tracks if t not in self.ws.global_tracks()})
         self.ws.ranges.append(r)
         if self.export_mode is ExportMode.WHOLE:
             self.export_mode = ExportMode.REBASE
@@ -379,23 +370,34 @@ class Controller(QObject):
     def set_range_track_included(self, range_id: str, track_id: str, included: bool) -> None:
         """Include/exclude one track in one range (the range's toggle wins over the track's)."""
         r = self.ws.range(range_id)
-        if r is None or self.ws.track(track_id) is None or r.includes(track_id) == included:
+        if r is None or not r.track_locked or self.ws.track(track_id) is None or r.includes(track_id) == included:
             return
         self.checkpoint()
         r.set_included(track_id, included)
         self.rangesChanged.emit()
 
+    def set_range_locked(self, range_id: str, locked: bool) -> None:
+        r = self.ws.range(range_id)
+        if r is None or r.track_locked == locked:
+            return
+        self.checkpoint()
+        r.track_locked = locked
+        self.ws.sync_ranges()
+        self.rangesChanged.emit()
+
     def set_range_tracks(self, range_id: str, included: bool | None) -> None:
-        """Include all (True), exclude all (False) or reset to the track toggles (None)."""
         r = self.ws.range(range_id)
         if r is None:
             return
-        want = {t.id: (t.enabled if included is None else included) for t in self.ws.tracks}
-        if all(r.includes(i) == on for i, on in want.items()):
+        if included is None:
+            self.set_range_locked(range_id, False)
+            return
+        if r.track_locked and all(r.includes(t.id) == included for t in self.ws.tracks):
             return
         self.checkpoint()
-        for i, on in want.items():
-            r.set_included(i, on)
+        r.track_locked = True
+        for t in self.ws.tracks:
+            r.set_included(t.id, included)
         self.rangesChanged.emit()
 
     def clear_ranges(self) -> None:

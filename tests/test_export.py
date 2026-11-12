@@ -162,13 +162,13 @@ def test_separate_files(tmp_path):
 
 def test_track_selection_and_disabled_tracks():
     ws = load(smf([track(note(0, 60, 0, Q), "A"), track(note(1, 60, 0, Q), "B"), track(note(2, 60, 0, Q), "C")]))
-    ws.tracks[1].enabled = False
+    ws.tracks[1].muted = True
     mf = build_exports(ws)[0].midi
     names = [m.name for t in mf.tracks for m in t if m.type == "track_name"]
     assert names == ["A", "C"]
     mf = build_exports(ws, ExportOptions(track_ids=[ws.tracks[1].id]))[0].midi
-    assert [m.name for t in mf.tracks for m in t if m.type == "track_name"] == ["B"]
-    assert ws.tracks[1].enabled is False  # individual export does not change state
+    assert [m.name for t in mf.tracks for m in t if m.type == "track_name"] == []
+    assert ws.tracks[1].muted is True  # individual export does not change state
 
 
 def test_renamed_and_reordered_tracks():

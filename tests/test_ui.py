@@ -46,7 +46,8 @@ def drag(widget, p0, p1, mods=Qt.NoModifier):
 
 
 def test_full_workflow(win, tmp_path):
-    paths = sorted(str(p) for p in SAMPLES.glob("*.mid"))
+    paths = [str(SAMPLES / name) for name in
+             ("bass_96ppq.mid", "drums_format0.mid", "piano_96bpm.mid", "vocal_lyrics.mid")]
     assert paths, "run tools/make_demo_midi.py first"
     win.import_paths(paths)
     ctl, tl = win.ctl, win.timeline
@@ -95,8 +96,9 @@ def test_full_workflow(win, tmp_path):
     hdr._commit_name()
     assert bass.name == "Low End"
     drums = next(t for t in ctl.ws.tracks if t.name == "Drums")
-    win.track_panel.header(drums.id).enabled_cb.setChecked(False)
-    assert drums.enabled is False
+    ctl.set_range_locked(r.id, True)
+    win.track_panel.header(drums.id).mute_btn.click()
+    assert drums.muted is True
 
     # export (rebase) and verify
     from midi_interchange.core.export_smf import ExportMode, save_exports

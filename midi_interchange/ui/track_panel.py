@@ -54,10 +54,17 @@ class TrackHeader(QFrame):
         self.color_btn.setFixedSize(14, 14)
         self.color_btn.setToolTip("Track colour")
         self.color_btn.clicked.connect(self._pick_color)
-        self.enabled_cb = QCheckBox(self)
-        self.enabled_cb.setToolTip("Include in export\n" + ("⌥" if sys.platform == "darwin" else "Alt+")
-                                   + "click: set this track in every range too")
-        self.enabled_cb.toggled.connect(self._toggled)
+        self.mute_btn = QToolButton(self)
+        self.solo_btn = QToolButton(self)
+        for button, label, tip in ((self.mute_btn, "M", "Mute; Alt/Option-click: set all mutes"),
+                                   (self.solo_btn, "S", "Solo; Alt/Option-click: exclusive solo")):
+            button.setText(label)
+            button.setCheckable(True)
+            button.setFixedSize(22, 22)
+            button.setToolTip(tip)
+        self.mute_btn.clicked.connect(self._mute_clicked)
+        self.solo_btn.clicked.connect(lambda: ctl.toggle_solo(track_id,
+            bool(QGuiApplication.keyboardModifiers() & Qt.AltModifier)))
         self.name_edit = QLineEdit(self)
         self.name_edit.setFrame(False)
         self.name_edit.setAcceptDrops(False)
@@ -81,7 +88,8 @@ class TrackHeader(QFrame):
         row.setSpacing(4)
         row.addWidget(self.grip)
         row.addWidget(self.color_btn)
-        row.addWidget(self.enabled_cb)
+        row.addWidget(self.mute_btn)
+        row.addWidget(self.solo_btn)
         row.addWidget(self.name_edit, 1)
         row.addWidget(self.remove_btn)
         col = QVBoxLayout(self)
@@ -95,9 +103,11 @@ class TrackHeader(QFrame):
         if not self.name_edit.hasFocus() and self.name_edit.text() != track.name:
             self.name_edit.setText(track.name)
             self.name_edit.setCursorPosition(0)
-        self.enabled_cb.blockSignals(True)
-        self.enabled_cb.setChecked(track.enabled)
-        self.enabled_cb.blockSignals(False)
+        self.mute_btn.setChecked(track.muted)
+        self.solo_btn.setChecked(track.soloed)
+        self.mute_btn.setStyleSheet(
+            f"QToolButton:checked {{ background: {(theme.DISABLED if track.soloed else theme.ACCENT).name()}; }}")
+        self.solo_btn.setStyleSheet(f"QToolButton:checked {{ background: {theme.SOLO.name()}; }}")
         self.color_btn.setStyleSheet(f"QToolButton {{ background: {track.color}; border: 1px solid #111;"
                                      f" border-radius: 3px; }}")
         chans = ",".join(str(c + 1) for c in track.channels)
@@ -108,11 +118,13 @@ class TrackHeader(QFrame):
         self.name_edit.setEnabled(True)
         self.name_edit.setStyleSheet(
             "QLineEdit { background: transparent; font-weight: 600; color: %s; }"
-            "QLineEdit:focus { background: #1b1c1f; }" % (theme.TEXT.name() if track.enabled else theme.TEXT_DIM.name()))
+            "QLineEdit:focus { background: #1b1c1f; }" % (theme.TEXT.name() if track in self.ctl.ws.global_tracks() else theme.TEXT_DIM.name()))
 
-    def _toggled(self, on: bool) -> None:
-        alt = bool(QGuiApplication.keyboardModifiers() & Qt.AltModifier)
-        self.ctl.set_track_enabled(self.track_id, on, ranges_too=alt)
+    def _mute_clicked(self) -> None:
+        track = self.ctl.ws.track(self.track_id)
+        if track:
+            self.ctl.set_mute(track.id, True if track.soloed else not track.muted,
+                             bool(QGuiApplication.keyboardModifiers() & Qt.AltModifier))
 
     def _commit_name(self) -> None:
         self.ctl.rename_track(self.track_id, self.name_edit.text())
@@ -157,6 +169,17 @@ class TrackPanel(QWidget):
         self.title = QLabel("TRACKS", self)
         self.title.setStyleSheet(f"color: {theme.TEXT_DIM.name()}; font-weight: 600; letter-spacing: 1px;")
 
+        self.clear_m = QToolButton(self)
+        self.clear_s = QToolButton(self)
+        for button, label, slot, tip in ((self.clear_m, "M", ctl.clear_mutes, "Clear all mutes"),
+                                         (self.clear_s, "S", ctl.clear_solos, "Clear all solos")):
+            button.setText(label)
+            button.setCheckable(True)
+            button.setToolTip(tip)
+            color = theme.SOLO if label == "S" else theme.ACCENT
+            button.setStyleSheet(f"QToolButton:checked {{ background: {color.name()}; }}")
+            button.clicked.connect(slot)
+            button.clicked.connect(self.rebuild)
         ctl.tracksChanged.connect(self.rebuild)
         ctl.tempoChanged.connect(self.rebuild)
         timeline.verticalOffsetChanged.connect(self._set_offset)
@@ -188,7 +211,9 @@ class TrackPanel(QWidget):
             if any(x.id == ws.tempo_source_id for x in srcs):
                 desc += "\n(Workspace tempo map is taken from this source)"
             h.refresh(t, desc, label)
-        self.title.setText(f"TRACKS  {len(ws.enabled_tracks())}/{len(ws.tracks)}" if ws.tracks else "TRACKS")
+        self.title.setText(f"TRACKS  {len(ws.global_tracks())}/{len(ws.tracks)}" if ws.tracks else "TRACKS")
+        self.clear_m.setChecked(any(t.muted and not t.soloed for t in ws.tracks))
+        self.clear_s.setChecked(any(t.soloed for t in ws.tracks))
         self._layout()
 
     def _layout(self) -> None:
@@ -202,7 +227,9 @@ class TrackPanel(QWidget):
             y = i * lane_h - self._voffset
             h.setGeometry(0, y, w, lane_h)
             h.setVisible(y + lane_h > 0 and y < self.lanes.height())
-        self.title.setGeometry(10, 0, w - 20, HEADER_H)
+        self.title.setGeometry(10, 0, w - 70, HEADER_H)
+        self.clear_m.setGeometry(w - 56, 16, 22, 22)
+        self.clear_s.setGeometry(w - 30, 16, 22, 22)
         self.title.raise_()
         self.update()
 
