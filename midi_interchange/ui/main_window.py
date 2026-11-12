@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
         self.timeline.trackContextMenuRequested.connect(self.track_menu)
         self.timeline.clipContextMenuRequested.connect(self.clip_menu)
         self.timeline.rangeEditRequested.connect(lambda _rid: self.export_panel.focus_range_name())
+        self.timeline.externalDragMoved.connect(self._external_drag_moved)
         self.track_panel.trackContextMenuRequested.connect(self.track_menu)
         self._update_undo_actions()
         self._update_tempo_label()
@@ -272,6 +273,7 @@ class MainWindow(QMainWindow):
         e.acceptProposedAction()
         self._drag_payloads, self._drag_diagnostics, self._drag_parsed = [], [], None
         if e.source() is None:
+            self.timeline.begin_drag(external=True)
             # Read the payload now so the cursor can say which track names match.
             # Some apps only hand data over on drop; then names stay unknown.
             try:
@@ -291,6 +293,8 @@ class MainWindow(QMainWindow):
     def dragLeaveEvent(self, _e) -> None:
         self.overlay.hide()
         self.timeline.set_drop_indicator(None)
+        self.timeline.end_drag(cancel=True)
+        self._drag_payloads, self._drag_diagnostics, self._drag_parsed = [], [], None
 
     def drop_placement(self, pos: QPointF, bypass_snap: bool = False) -> tuple[Placement, int | None]:
         """Placement for a drop at a window position, plus the timeline lane it points at."""
@@ -315,7 +319,17 @@ class MainWindow(QMainWindow):
             self.timeline.set_drop_indicator(None)
             return
         bypass = bool(e.modifiers() & Qt.ShiftModifier)
-        pl, lane = self.drop_placement(e.position(), bypass)
+        pos = e.position()
+        pt = self.timeline.viewport().mapFrom(self, pos.toPoint())
+        self.timeline.update_external_drag(QPointF(pt), bypass)
+        self._preview_drop(pos, bypass)
+
+    def _external_drag_moved(self, pos: QPointF, bypass: bool) -> None:
+        pt = self.timeline.viewport().mapTo(self, pos.toPoint())
+        self._preview_drop(QPointF(pt), bypass)
+
+    def _preview_drop(self, pos: QPointF, bypass: bool) -> None:
+        pl, lane = self.drop_placement(pos, bypass)
         bbt = self.ctl.ws.tempo_map.format_bbt(pl.time)
         n_files = len(self._drag_payloads)
         many = f"{n_files} files" if n_files > 1 else ""
@@ -339,8 +353,11 @@ class MainWindow(QMainWindow):
         self.overlay.hide()
         self.timeline.set_drop_indicator(None)
         if e.source() is not None:  # our own drag-out tile
+            self.timeline.end_drag()
             return
         placement, _lane = self.drop_placement(e.position(), bool(e.modifiers() & Qt.ShiftModifier))
+        scroll = self.timeline.horizontalScrollBar().value()
+        self.timeline.end_drag()
         payloads, diagnostics = self._drag_payloads, self._drag_diagnostics
         if not payloads:
             payloads, diagnostics = extract_payloads(e.mimeData())
@@ -348,12 +365,13 @@ class MainWindow(QMainWindow):
         e.acceptProposedAction()
         if len(payloads) > 1:
             # Ask after the drop completes, so the source app isn't left waiting on a modal dialog.
-            QTimer.singleShot(0, lambda: self._finish_drop(payloads, diagnostics, placement, ask=True))
+            QTimer.singleShot(0, lambda: self._finish_drop(payloads, diagnostics, placement, ask=True,
+                                                        scroll=scroll))
         else:
-            self._finish_drop(payloads, diagnostics, placement, ask=False)
+            self._finish_drop(payloads, diagnostics, placement, ask=False, scroll=scroll)
 
     def _finish_drop(self, payloads: list[Payload], diagnostics: list[str], placement: Placement,
-                     ask: bool) -> None:
+                     ask: bool, scroll: int | None = None) -> None:
         if ask:
             box = QMessageBox(self)
             box.setWindowTitle("Place dropped files")
@@ -376,6 +394,10 @@ class MainWindow(QMainWindow):
                 return
             placement.end_to_end = box.clickedButton() is seq
         errors = self.ctl.import_payloads(payloads, placement) if payloads else []
+        if scroll is not None:
+            # Clearing the reach can clamp the view before the new content is
+            # imported. Keep the drop in view once the content length is known.
+            self.timeline.horizontalScrollBar().setValue(scroll)
         if not payloads:
             errors += diagnostics
         elif diagnostics:

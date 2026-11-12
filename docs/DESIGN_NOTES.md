@@ -157,10 +157,10 @@ Planned features (decided 2026-11-10), each on its own branch:
 - **Track export channel (one feature, design still open):** covers both the mixed-channel policy (Risk 9; Reason splits multi-channel tracks on import) and changing a clip's channel. Likely shape: a control in the track header that sets the export channel for every clip on the track, whatever the clips' or the track's original channels. Keep a way to leave channels as they are, since a deliberately multi-channel track is possible today.
 - **Session persistence (not save/load):** keep the one current workspace between runs. Write it to disk on exit, restore it at startup, and say so if it couldn't be restored cleanly, e.g. after a crash or a crash on exit. No project files, no Save/Open of workspaces. (Open question: also write it periodically, so a crash loses little?) It must keep clip trims (`trim_start`, `trim_end`).
 
-Seen in studio testing 2026-11-12, not yet built (see [plans/next-drag-in-scroll-and-mute-solo.md](plans/next-drag-in-scroll-and-mute-solo.md)):
+Seen in studio testing 2026-11-12:
 
-- **Drag-in auto-scroll:** dragging MIDI in from another app doesn't scroll the timeline at the right edge of the window, so later positions can't be reached in one drag.
-- **Mute and solo:** the track include tickbox becomes a mute control, with a solo button and a cancel-all control in the top left panel.
+- **Drag-in auto-scroll:** built and studio-tested on `feature/drag-in-autoscroll`; edge scrolling, dropping, leave/re-enter restoration, the ruler drop marker and internal-drag checks passed. Esc investigation is deferred below. See [the plan](plans/drag-in-autoscroll.md).
+- **Mute and solo:** not yet built; the track include tickbox becomes a mute control, with a solo button and a cancel-all control in the top left panel. See [the plan](plans/mute-solo.md).
 
 Suggested (studio, 2026-11-10), not yet agreed:
 
@@ -168,6 +168,7 @@ Suggested (studio, 2026-11-10), not yet agreed:
 
 Later, after more real-world use:
 
+- **Investigate Esc cancellation of incoming macOS drags** (deferred by agreement, 2026-11-12; outside the current drag-in auto-scroll work). Finder → Finder cancels, but Finder → MIDI Interchange does not; Cubase → Finder and Cubase → MIDI Interchange both fail to cancel. Investigate the Finder difference and whether native handling can help, without assuming the destination can cancel another app's drag. Keep timeline restoration on drag leave. See [the recorded results](INTEROP_FINDINGS.md#esc-during-incoming-drags-studio-report-2026-11-12).
 - **Keys and modifiers:** review the UI's keyboard shortcuts and drag modifiers as a whole, including Shift on clip drags. Shift currently keeps the clip's time (track change only), unlike range drags, where Shift bypasses snap; kept for now.
 
 ## Future settings page

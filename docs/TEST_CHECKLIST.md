@@ -126,12 +126,24 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 
 ## 8e. About box (`feature/about-box`)
 
-- [ ] Click **About** at the right end of the toolbar: a dialog opens with the icon, "MIDI Interchange", the version, the description, "© 2026 Andy Buchanan" and the GitHub link.
-- [ ] Click the link: the GitHub page opens in the default browser.
-- [ ] OK, Return and Esc each close the dialog.
-- [ ] Resize the window: the About button stays at the right edge.
-- [ ] Repeat in the packaged app (the icon still shows).
+- [x] Click **About** at the right end of the toolbar: a dialog opens with the icon, "MIDI Interchange", the version, the description, "© 2026 Andy Buchanan" and the GitHub link.
+- [x] Click the link: the GitHub page opens in the default browser.
+- [x] OK, Return and Esc each close the dialog.
+- [x] Resize the window: the About button stays at the right edge.
+- [x] Repeat in the packaged app (the icon still shows).
 - [ ] Windows, at release: check the same button.
+
+## 8f. Drag-in auto-scroll (`feature/drag-in-autoscroll`)
+
+- [x] Drag a MIDI part from Cubase (or a MIDI file from Finder) over the timeline's rightmost 20 px and hold still: it scrolls, the insertion label follows, and the timeline keeps growing beyond its old end. Repeat at the left edge to scroll back.
+- [x] Drop late in the song: the clip lands at the indicated time, stays in view, and the timeline ends at the content end plus normal padding. Scroll far right, then back left before dropping: the timeline doesn't keep the furthest drag reach.
+- [x] Repeat the long drag and leave the window: scrolling stops, timeline length and horizontal scroll return to where they were before the drag. Re-enter and check a fresh drag works.
+
+Esc cancellation failed in the studio and is deferred to [future work](DESIGN_NOTES.md#to-do-agreed-not-started) by agreement (2026-11-12), outside this feature's completion checks. Finder → Finder cancels; Finder → MIDI Interchange, Cubase → Finder and Cubase → MIDI Interchange do not. The automated drag-leave test doesn't cover native Esc cancellation.
+
+- [x] Drag a file whose destination lane is above or below the visible tracks: the fixed timeline ruler still shows the drop time with an amber line and triangle. Move the pointer and auto-scroll; the ruler marker follows. Drop or leave the window: the marker disappears. (Studio retest passed, 2026-11-12.)
+- [x] Move the pointer over the track headers or export panel during the drag: auto-scroll stops and the usual drop placement applies.
+- [x] Option-drag an existing clip past the end: the timeline grows. Draw or resize a range past the end too. Release: only the normal content/range padding remains. Check trim scrolling still stops at the clip's original extent.
 
 ## 9. New document
 

@@ -34,6 +34,7 @@ Shortcuts are shown for macOS; on Windows use Ctrl for ⌘ and Alt for ⌥ (Opti
   - **Over a track header:** the same, at bar 1.
   - **Anywhere else:** new track(s), at the cursor time over the timeline or at bar 1 elsewhere.
 - Dropped DAW clips carry no position of their own, so this is how you put them where they belong.
+- Hold a dragged MIDI part near either edge of the timeline to scroll. The timeline grows as you drag right; dropping keeps only the length needed for the content, and leaving the window during the drag restores the previous view. Esc cancellation on macOS depends on the drag source and destination; it doesn't currently work for incoming Finder or Cubase drags in studio tests.
 - **Several files at once:** you're asked: **End to End** (each file starts where the previous one ends, on **one** new track named after the first file's track; multi-track files line up by track position) or **All at Cursor** (each file at the cursor, with the usual name matching).
 - **Round trips:** when a multi-track file matches the track you drop it on, its other tracks also join their same-named tracks, and the rest become new tracks.
   - A file that repeats a track name (Staccato.ai files can) pairs its copies in order with the existing same-named tracks.
