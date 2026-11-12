@@ -417,7 +417,8 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Export failed", str(exc))
             return
         start_dir = self.settings.value("last_save_dir", os.path.expanduser("~"))
-        default = os.path.join(start_dir, self.ctl.default_export_name(track_ids) + ".mid")
+        basename = "Export" if len(results) > 1 else self.ctl.default_export_name(track_ids)
+        default = os.path.join(start_dir, basename + ".mid")
         title = "Save MIDI" if len(results) == 1 else f"Save {len(results)} MIDI files (range name is appended)"
         path, _ = QFileDialog.getSaveFileName(self, title, default, "MIDI files (*.mid)")
         if not path:
