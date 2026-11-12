@@ -122,7 +122,7 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 - [x] Move, ⌥⌘-copy, Duplicate, Butt Against Previous and Merge Into keep the trim. Butting uses the trimmed start.
 - [x] Zoom far out so a clip is only a few pixels wide: ⌥-drag moves it instead of trimming.
 - [x] Drop a file onto a trimmed clip's exact visible start and end: it replaces it.
-- [ ] Hold a trim drag past the clip's original end with the pointer at the window edge: the view doesn't scroll. Then zoom in so the original end is off screen: the drag does scroll, so you can reach it.
+- [x] Hold a trim drag past the clip's original end with the pointer at the window edge: the view doesn't scroll. Then zoom in so the original end is off screen: the drag does scroll, so you can reach it.
 
 ## 9. New document
 
