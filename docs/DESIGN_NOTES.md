@@ -159,8 +159,8 @@ Planned features (decided 2026-11-10), each on its own branch:
 
 Seen in studio testing 2026-11-12:
 
-- **Drag-in auto-scroll:** built and studio-tested on `feature/drag-in-autoscroll`; edge scrolling, dropping, leave/re-enter restoration, the ruler drop marker and internal-drag checks passed. Esc investigation is deferred below. See [the plan](plans/drag-in-autoscroll.md).
-- **Mute and solo:** not yet built; the track include tickbox becomes a mute control, with a solo button and a cancel-all control in the top left panel. See [the plan](plans/mute-solo.md).
+- **Drag-in auto-scroll:** built, studio-tested and merged to main (PR #7); edge scrolling, dropping, leave/re-enter restoration, the ruler drop marker and internal-drag checks passed. Esc investigation is deferred below. See [the plan](plans/drag-in-autoscroll.md).
+- **Mute and solo:** not yet built; the track include tickbox becomes a mute control, with a solo button and a cancel-all control in the top left panel. Plan in progress.
 
 Suggested (studio, 2026-11-10), not yet agreed:
 

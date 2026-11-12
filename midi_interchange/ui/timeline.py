@@ -180,7 +180,8 @@ class Timeline(QAbstractScrollArea):
         self._drag_reach = None
         self._drag_scroll_start = self.horizontalScrollBar().value()
 
-    def end_drag(self, *, cancel: bool = False) -> None:
+    def end_drag(self, *, cancel: bool = False) -> int | None:
+        """Finish a drag; returns the scroll value from when it began (restored here if `cancel`)."""
         self._autoscroll.stop()
         scroll_start = self._drag_scroll_start
         self._external_drag = False
@@ -190,6 +191,7 @@ class Timeline(QAbstractScrollArea):
         if cancel and scroll_start is not None:
             self.horizontalScrollBar().setValue(scroll_start)
         self.viewport().update()
+        return scroll_start
 
     def update_external_drag(self, pos: QPointF, bypass: bool) -> None:
         if self._external_drag and self.viewport().rect().contains(pos.toPoint()):

@@ -192,3 +192,26 @@ def test_drop_time_visible_in_ruler_when_destination_is_below_view(win, new_trac
     tl.set_drop_indicator(None)
     image = tl.viewport().grab().toImage()
     assert image.pixelColor(round(x * scale), round(3 * scale)) != theme.ACCENT
+
+
+def test_cancelled_multi_file_drop_restores_pre_drag_view(win, monkeypatch, tmp_path):
+    from PySide6.QtCore import QUrl
+    from PySide6.QtWidgets import QMessageBox
+    w, data = win
+    tl = w.timeline
+    for n in ("a.mid", "b.mid"):
+        (tmp_path / n).write_bytes(data)
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(tmp_path / n)) for n in ("a.mid", "b.mid")])
+    pos = QPoint(tl.viewport().width() - 5, HEADER_H + 25)
+    pt = tl.viewport().mapTo(w, pos)
+    before = tl.horizontalScrollBar().value()
+    tracks_before = len(w.ctl.ws.tracks)
+    w.dragEnterEvent(QDragEnterEvent(pt, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+    scroll_far(tl, pos)
+    assert tl.horizontalScrollBar().value() > before
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: 0)  # no button clicked = Cancel
+    w.dropEvent(QDropEvent(QPointF(pt), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+    QApplication.processEvents()
+    assert tl.horizontalScrollBar().value() == before
+    assert len(w.ctl.ws.tracks) == tracks_before

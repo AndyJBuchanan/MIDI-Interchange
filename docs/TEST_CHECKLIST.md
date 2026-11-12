@@ -143,6 +143,7 @@ Esc cancellation failed in the studio and is deferred to [future work](DESIGN_NO
 
 - [x] Drag a file whose destination lane is above or below the visible tracks: the fixed timeline ruler still shows the drop time with an amber line and triangle. Move the pointer and auto-scroll; the ruler marker follows. Drop or leave the window: the marker disappears. (Studio retest passed, 2026-11-12.)
 - [x] Move the pointer over the track headers or export panel during the drag: auto-scroll stops and the usual drop placement applies.
+- [ ] Drop several files, Cancel the "Place dropped files" dialog, and check the view returns to where it was before the drag.
 - [x] Option-drag an existing clip past the end: the timeline grows. Draw or resize a range past the end too. Release: only the normal content/range padding remains. Check trim scrolling still stops at the clip's original extent.
 
 ## 9. New document

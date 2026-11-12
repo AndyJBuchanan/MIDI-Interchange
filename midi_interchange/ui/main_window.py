@@ -357,7 +357,7 @@ class MainWindow(QMainWindow):
             return
         placement, _lane = self.drop_placement(e.position(), bool(e.modifiers() & Qt.ShiftModifier))
         scroll = self.timeline.horizontalScrollBar().value()
-        self.timeline.end_drag()
+        pre_drag_scroll = self.timeline.end_drag()
         payloads, diagnostics = self._drag_payloads, self._drag_diagnostics
         if not payloads:
             payloads, diagnostics = extract_payloads(e.mimeData())
@@ -366,12 +366,12 @@ class MainWindow(QMainWindow):
         if len(payloads) > 1:
             # Ask after the drop completes, so the source app isn't left waiting on a modal dialog.
             QTimer.singleShot(0, lambda: self._finish_drop(payloads, diagnostics, placement, ask=True,
-                                                        scroll=scroll))
+                                                        scroll=scroll, cancel_scroll=pre_drag_scroll))
         else:
             self._finish_drop(payloads, diagnostics, placement, ask=False, scroll=scroll)
 
     def _finish_drop(self, payloads: list[Payload], diagnostics: list[str], placement: Placement,
-                     ask: bool, scroll: int | None = None) -> None:
+                     ask: bool, scroll: int | None = None, cancel_scroll: int | None = None) -> None:
         if ask:
             box = QMessageBox(self)
             box.setWindowTitle("Place dropped files")
@@ -391,6 +391,8 @@ class MainWindow(QMainWindow):
             box.setDefaultButton(same)
             box.exec()
             if box.clickedButton() not in (seq, same):
+                if cancel_scroll is not None:  # cancelled: back to the view from before the drag
+                    self.timeline.horizontalScrollBar().setValue(cancel_scroll)
                 return
             placement.end_to_end = box.clickedButton() is seq
         errors = self.ctl.import_payloads(payloads, placement) if payloads else []

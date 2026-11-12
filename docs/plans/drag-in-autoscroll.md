@@ -1,6 +1,6 @@
 # Plan: drag-in auto-scroll and timeline length
 
-Status: **built and studio-tested** (2026-11-12). Branch: `feature/drag-in-autoscroll` from `main`. All current feature checks passed, including leave/re-enter restoration and the ruler drop marker. Esc investigation is deferred to future work by agreement. Automated suite: 210 tests passed.
+Status: **built, studio-tested and merged to main via PR #7** (2026-11-12). All current feature checks passed, including leave/re-enter restoration and the ruler drop marker. Esc investigation is deferred to future work by agreement. Automated suite: 210 tests passed. Cancelling the multi-file "Place dropped files" dialog restores the pre-drag view.
 
 This came from the clip-trims studio test (2026-11-12): MIDI dragged in from another app can't reach later in the song, because the timeline doesn't scroll at the edge.
 
