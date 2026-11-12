@@ -10,11 +10,17 @@ Interaction
   drag on empty space (ruler or lanes)     create a range
   drag a range edge (any row)              resize
   drag a range body in the range strip     move
+  Alt/Option-drag a clip's left or right    trim that edge (never past the clip's original
+  edge (cursor turns to ↔)                  start or end; snaps like a clip move, Shift
+                                           bypasses; a clip too narrow for both edges
+                                           can only be moved). Restore Full Clip is in
+                                           the clip's right-click menu.
   Alt/Option-drag a clip                   move the clip, in time and across tracks
                                            (below the last track: onto a new track)
   Alt+Ctrl / Option-Cmd-drag a clip        copy the clip
   Shift while dragging a clip              keep its time; change track only
   Shift while dragging a range             bypass snap
+  (a plain drag on a range edge always moves the range edge; Option picks the clip edge)
   Cmd/Ctrl + wheel, pinch                  zoom around the cursor
   wheel / trackpad                         scroll (Shift+wheel = horizontal)
   Delete / Backspace                       delete selected range
@@ -39,6 +45,7 @@ from PySide6.QtWidgets import QAbstractScrollArea, QMenu
 
 from ..core.document import Clip, Track
 from ..core.events import TEXT_META, display_text, pair_notes
+from ..core.export_smf import clip_window
 from ..core.names import range_label
 from ..core.timing import ZERO, quantize
 from .controller import Controller
@@ -64,18 +71,22 @@ class ClipRender:
     pmin: int
     pmax: int
     texts: list[tuple[float, str, str]]          # time, meta type, text
+    trims: tuple = ()                            # the trims this was built for
 
 
 def build_render(clip: Clip) -> ClipRender:
     notes, _ = pair_notes(clip.events, clip.length)
     rows = [(float(n.start), float(n.end), n.pitch, n.velocity) for n in notes]
+    lo, hi = clip_window(clip, clip.full_start, None)       # text outside the trims is not shown
     texts = [(float(e.time), e.msg.type, display_text(e.msg))
-             for e in clip.events if e.msg.type in TEXT_META]
+             for e in clip.events if e.msg.type in TEXT_META
+             and e.time + clip.offset >= lo and (hi is None or e.time + clip.offset < hi)]
     pitches = [r[2] for r in rows]
     return ClipRender(
         starts=[r[0] for r in rows], notes=rows,
         max_len=max((r[1] - r[0] for r in rows), default=0.0),
-        pmin=min(pitches, default=60), pmax=max(pitches, default=60), texts=texts)
+        pmin=min(pitches, default=60), pmax=max(pitches, default=60), texts=texts,
+        trims=(clip.trim_start, clip.trim_end))
 
 
 def note_rows(area_top: float, area_h: float, pmin: int, pmax: int) -> tuple[float, float, float]:
@@ -188,7 +199,7 @@ class Timeline(QAbstractScrollArea):
 
     def render_for(self, clip: Clip) -> ClipRender:
         r = self._cache.get(clip.id)
-        if r is None:
+        if r is None or r.trims != (clip.trim_start, clip.trim_end):
             r = self._cache[clip.id] = build_render(clip)
         return r
 
@@ -601,8 +612,31 @@ class Timeline(QAbstractScrollArea):
         return QRectF(round(x0) + TOGGLE_GAP, self.lane_top(lane) + 4, TOGGLE_PX, TOGGLE_PX)
 
     # ------------------------------------------------------------------ hit testing
-    def _hit(self, pos: QPointF) -> tuple:
+    def _clip_edge_hit(self, pos: QPointF) -> tuple | None:
+        """("clip_edge", track id, clip id, "start"|"end") when `pos` is within the grab
+        zone of a clip's edge. A clip narrower than two grab zones has none (it can only be moved)."""
+        i = self.lane_at(pos.y())
+        if i < 0:
+            return None
+        track = self.ctl.ws.tracks[i]
+        best = None
+        for clip in track.clips:
+            x0, x1 = self.x_of(float(clip.start)), self.x_of(float(clip.end))
+            if x1 - x0 <= 2 * EDGE_PX:
+                continue
+            for edge, x in (("start", x0), ("end", x1)):
+                d = abs(x - pos.x())
+                if d <= EDGE_PX and (best is None or d < best[0]):
+                    best = (d, track.id, clip.id, edge)
+        return None if best is None else ("clip_edge", *best[1:])
+
+    def _hit(self, pos: QPointF, mods=Qt.NoModifier) -> tuple:
+        """What is under `pos`. Option/Alt held prefers a clip's edge (trim) over a range edge."""
         x, y = pos.x(), pos.y()
+        if y >= HEADER_H and mods & Qt.AltModifier:
+            ce = self._clip_edge_hit(pos)
+            if ce is not None:
+                return ce
         ranges = sorted(self.ctl.ws.ranges, key=lambda r: r.id != self.ctl.selected_range_id)
         if y >= HEADER_H:
             i = self.lane_at(y)
@@ -646,7 +680,7 @@ class Timeline(QAbstractScrollArea):
     def mousePressEvent(self, e: QMouseEvent) -> None:
         self.setFocus()
         pos = e.position()
-        hit = self._hit(pos)
+        hit = self._hit(pos, e.modifiers())
         if e.button() == Qt.RightButton:
             self._context_menu(hit, e)
             return
@@ -666,12 +700,15 @@ class Timeline(QAbstractScrollArea):
             self._drag = {"kind": "move", "rid": hit[1], "grab": self.time_at(pos.x(), True) - r.start,
                           "checkpointed": False}
             self.viewport().setCursor(Qt.ClosedHandCursor)
+        elif hit[0] == "clip_edge":
+            self.ctl.checkpoint()
+            self._drag = {"kind": "trim", "cid": hit[2], "edge": hit[3]}
         elif hit[0] == "clip" and e.modifiers() & Qt.AltModifier:
             track = self.ctl.ws.track(hit[1])
             clip = next(c for c in track.clips if c.id == hit[2])
-            self._drag = {"kind": "clip", "cid": hit[2], "orig_off": clip.offset, "origin": track.copy(),
+            self._drag = {"kind": "clip", "cid": hit[2], "orig_off": clip.start, "origin": track.copy(),
                           "copy": bool(e.modifiers() & Qt.ControlModifier),
-                          "grab": quantize(self.t_of(pos.x())) - clip.offset, "checkpointed": False}
+                          "grab": quantize(self.t_of(pos.x())) - clip.start, "checkpointed": False}
             self.viewport().setCursor(Qt.DragCopyCursor if self._drag["copy"] else Qt.ClosedHandCursor)
         else:
             self._drag = {"kind": "create", "anchor": self.time_at(pos.x(), bypass), "rid": None}
@@ -688,7 +725,7 @@ class Timeline(QAbstractScrollArea):
             self._update_cursor(pos, e.modifiers())
             self.viewport().update(0, 0, self.viewport().width(), HEADER_H)
             return
-        self._check_autoscroll(pos.x())
+        self._check_autoscroll(pos.x(), bypass)
         self._drag_to(pos.x(), bypass, pos.y())
 
     def _drag_to(self, x: float, bypass: bool, y: float | None = None) -> None:
@@ -697,6 +734,9 @@ class Timeline(QAbstractScrollArea):
             return
         if d["kind"] == "clip":
             self._drag_clip(x, y, bypass)
+            return
+        if d["kind"] == "trim":
+            self.ctl.trim_clip_live(d["cid"], d["edge"], quantize(max(self.t_of(x), 0.0)), bypass)
             return
         t = self.time_at(x, bypass)
         if d["kind"] == "create":
@@ -761,13 +801,13 @@ class Timeline(QAbstractScrollArea):
                 pending_copy = d["copy"] and not d["checkpointed"]   # the copy isn't made yet
                 to_new = not (last is cur_track and len(cur_track.clips) == 1 and not pending_copy)
                 dest_id = None if to_new else cur_track.id
-        if new_off == clip.offset and dest_id == cur_track.id and not to_new:
+        if new_off == clip.start and dest_id == cur_track.id and not to_new:
             return
         if not d["checkpointed"]:
             self.ctl.checkpoint()
             d["checkpointed"] = True
             if d["copy"]:
-                dup = self.ctl.duplicate_clip(d["cid"], offset=clip.offset, checkpoint=False)
+                dup = self.ctl.duplicate_clip(d["cid"], offset=clip.start, checkpoint=False)
                 if dup is None:
                     return
                 d["cid"] = dup
@@ -823,7 +863,7 @@ class Timeline(QAbstractScrollArea):
         self.viewport().update(0, 0, self.viewport().width(), HEADER_H)
 
     def _update_cursor(self, pos: QPointF, mods) -> None:
-        hit = self._hit(pos)
+        hit = self._hit(pos, mods)
         vp = self.viewport()
         tip = ""
         if hit[0] == "toggle":
@@ -833,7 +873,7 @@ class Timeline(QAbstractScrollArea):
                 label = range_label(r.name, self.ctl.ws.ranges.index(r))
                 tip = (f"“{t.name}” is {'included in' if r.includes(t.id) else 'excluded from'} {label}"
                        f" — click to {'exclude' if r.includes(t.id) else 'include'}")
-        elif hit[0] == "edge":
+        elif hit[0] in ("edge", "clip_edge"):
             vp.setCursor(Qt.SizeHorCursor)
         elif hit[0] == "body":
             vp.setCursor(Qt.OpenHandCursor)
@@ -844,31 +884,43 @@ class Timeline(QAbstractScrollArea):
         if vp.toolTip() != tip:
             vp.setToolTip(tip)
 
-    def _check_autoscroll(self, x: float) -> None:
+    def _may_scroll(self, x: float, bypass: bool) -> bool:
+        """Auto-scroll direction check: a trim drag scrolls only while its edge can still
+        move that way. Other drags always may."""
+        d = self._drag
+        if d is None or d["kind"] != "trim":
+            return True
         w = self.viewport().width()
-        if x < 20 or x > w - 20:
+        direction = -1 if x < 20 else 1 if x > w - 20 else 0
+        return direction != 0 and self.ctl.trim_can_move(d["cid"], d["edge"], direction, bypass)
+
+    def _check_autoscroll(self, x: float, bypass: bool = False) -> None:
+        w = self.viewport().width()
+        if (x < 20 or x > w - 20) and self._may_scroll(x, bypass):
             if not self._autoscroll.isActive():
                 self._autoscroll.start()
         else:
             self._autoscroll.stop()
 
     def _autoscroll_tick(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        pt = self.viewport().mapFromGlobal(QCursor.pos())
+        self._autoscroll_step(pt.x(), pt.y(), bool(QApplication.keyboardModifiers() & Qt.ShiftModifier))
+
+    def _autoscroll_step(self, x: float, y: float, bypass: bool) -> None:
         if self._drag is None:
             self._autoscroll.stop()
             return
-        x = self.viewport().mapFromGlobal(QCursor.pos()).x()
         w = self.viewport().width()
         hbar = self.horizontalScrollBar()
-        if x < 20:
-            hbar.setValue(hbar.value() - max(4, int(20 - x)))
-        elif x > w - 20:
-            hbar.setValue(hbar.value() + max(4, int(x - (w - 20))))
-        else:
+        if not (x < 20 or x > w - 20) or not self._may_scroll(x, bypass):
             self._autoscroll.stop()
             return
-        from PySide6.QtWidgets import QApplication
-        y = self.viewport().mapFromGlobal(QCursor.pos()).y()
-        self._drag_to(min(max(x, 0), w), bool(QApplication.keyboardModifiers() & Qt.ShiftModifier), y)
+        if x < 20:
+            hbar.setValue(hbar.value() - max(4, int(20 - x)))
+        else:
+            hbar.setValue(hbar.value() + max(4, int(x - (w - 20))))
+        self._drag_to(min(max(x, 0), w), bypass, y)
 
     def _context_menu(self, hit: tuple, e: QMouseEvent) -> None:
         gp = e.globalPosition().toPoint()

@@ -20,8 +20,9 @@ Rules (agreed 2026-11-09, modelled on Cubase/Reason):
   (names.song_title), never guessed from one name, so "Lead - Verse"
   never joins "Lead - Chorus". Exact matches are paired first, then these.
 * A clip landing on an existing track **replaces** any clip already there with
-  exactly the same start and end (a like-for-like round trip). Partial overlaps
-  are kept and tinted. Clips added by the same drop are never replaced.
+  exactly the same start and end (a like-for-like round trip). A trimmed clip
+  counts by its visible edges (``Placement.compare_full_extent`` compares the
+  full extents instead). Partial overlaps are kept and tinted. Clips added by the same drop are never replaced.
 * Dropped anywhere else: every imported track becomes a new track (the way to
   avoid matching).
 * Several *files* may be laid end to end (revised 2026-11-10): each file starts
@@ -50,6 +51,7 @@ class Placement:
     time: Fraction = ZERO
     target_track_id: str | None = None
     end_to_end: bool = False
+    compare_full_extent: bool = False    # replace-on-drop compares full extents, not visible edges
 
 
 def names_match(track: Track, name: str) -> bool:
@@ -171,7 +173,7 @@ def plan_drop(ws: Workspace, files: list[tuple[Source, list[Track]]], placement:
 
 
 def source_length(tracks: list[Track]) -> Fraction:
-    return max((c.offset + c.length for t in tracks for c in t.clips), default=ZERO)
+    return max((c.end for t in tracks for c in t.clips), default=ZERO)
 
 
 def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
@@ -197,13 +199,14 @@ def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
         length = source_length(tracks)
         for t in tracks:
             for c in t.clips:
-                c.offset += cursor
+                c.set_start(c.start + cursor)
         fresh: list[Track] = []
         for t, dest in zip(tracks, dests):
             if isinstance(dest, Track):
                 for c in t.clips:
-                    same = [o for o in dest.clips
-                            if o.id in old_clips and o.start == c.start and o.end == c.end]
+                    edges = ((lambda x: (x.full_start, x.full_end)) if placement.compare_full_extent
+                             else (lambda x: (x.start, x.end)))
+                    same = [o for o in dest.clips if o.id in old_clips and edges(o) == edges(c)]
                     for o in same:
                         dest.clips.remove(o)
                         old_clips.discard(o.id)

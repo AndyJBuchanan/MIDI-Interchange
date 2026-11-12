@@ -82,6 +82,7 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - the key signature
   - The tempo and time signature in effect at `s` are written at the segment start.
   - SysEx and poly aftertouch are **not** carried.
+- **Clip edge trims** (built 2026-11-11, [plans/clip-edge-trims.md](plans/clip-edge-trims.md)): a `Clip` keeps `events` and `length` as its full extent and has `trim_start`/`trim_end` (clip time); `start`/`end` are the visible edges and `set_start` positions a clip by its visible start. Exports apply trims with the range edge rules, from the same code (`clip_window` and `_extract_clips` in `core/export_smf.py`): each clip's window is the segment cut to its trims, `partial_notes` governs notes that started before a trimmed start, notes are released at a trimmed end, settings in force are written at the window start, and lyrics/text/markers outside the trims are dropped. A whole export writes untrimmed clips byte-exact and sends only trimmed clips through that code. Channel badges and Source Info use `visible_msgs`, the same code. Replace on drop compares visible edges (`Placement.compare_full_extent` compares full extents; not in the UI).
 - **Trim** applies to the whole output only. It moves every track by the same amount, so alignment is never broken.
 - Output is format 1: a conductor track first (named after the song when every exported clip comes from one song, else unnamed), then the exported tracks in panel order.
 - Building an export never changes the workspace (tested).
@@ -152,10 +153,14 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 
 Planned features (decided 2026-11-10), each on its own branch:
 
-- **Clip edge trims:** drag a clip's left or right edge to trim it, limited to the clip's original extent.
 - **Export / drag filename decoration:** names are mostly fixed today (a range-name join, "Verse + Chorus", was added 2026-11-10). Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
 - **Track export channel (one feature, design still open):** covers both the mixed-channel policy (Risk 9; Reason splits multi-channel tracks on import) and changing a clip's channel. Likely shape: a control in the track header that sets the export channel for every clip on the track, whatever the clips' or the track's original channels. Keep a way to leave channels as they are, since a deliberately multi-channel track is possible today.
-- **Session persistence (not save/load):** keep the one current workspace between runs. Write it to disk on exit, restore it at startup, and say so if it couldn't be restored cleanly, e.g. after a crash or a crash on exit. No project files, no Save/Open of workspaces. (Open question: also write it periodically, so a crash loses little?)
+- **Session persistence (not save/load):** keep the one current workspace between runs. Write it to disk on exit, restore it at startup, and say so if it couldn't be restored cleanly, e.g. after a crash or a crash on exit. No project files, no Save/Open of workspaces. (Open question: also write it periodically, so a crash loses little?) It must keep clip trims (`trim_start`, `trim_end`).
+
+Seen in studio testing 2026-11-12, not yet built (see [plans/next-drag-in-scroll-and-mute-solo.md](plans/next-drag-in-scroll-and-mute-solo.md)):
+
+- **Drag-in auto-scroll:** dragging MIDI in from another app doesn't scroll the timeline at the right edge of the window, so later positions can't be reached in one drag.
+- **Mute and solo:** the track include tickbox becomes a mute control, with a solo button and a cancel-all control in the top left panel.
 
 Suggested (studio, 2026-11-10), not yet agreed:
 
@@ -164,6 +169,13 @@ Suggested (studio, 2026-11-10), not yet agreed:
 Later, after more real-world use:
 
 - **Keys and modifiers:** review the UI's keyboard shortcuts and drag modifiers as a whole, including Shift on clip drags. Shift currently keeps the clip's time (track change only), unlike range drags, where Shift bypasses snap; kept for now.
+
+## Future settings page
+
+Not planned yet. Options that already exist in code, or are planned, without any UI, collected so a settings page can expose them later:
+
+- **Notes that started before an edge** (`ExportOptions.partial_notes`, default on): sound from a range or clip-trim edge, or are dropped.
+- **Replace on drop compares** (`Placement.compare_full_extent`, default visible edges): a dropped clip replaces one whose trimmed start and end match, or whose full extent matches.
 
 ## Issues found and fixed during development
 

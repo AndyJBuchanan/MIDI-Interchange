@@ -418,6 +418,8 @@ class MainWindow(QMainWindow):
         m.addAction("Duplicate Clip (after it)", lambda: self.ctl.duplicate_clip(clip_id))
         a = m.addAction("Butt Against Previous Clip", lambda: self.ctl.snap_clip_to_previous(clip_id))
         a.setEnabled(any(c is not clip and c.start < clip.start for c in track.clips))
+        if clip.is_trimmed:
+            m.addAction("Restore Full Clip", lambda: self.ctl.restore_clip(clip_id))
         mv = m.addMenu("Move Clip to Track")
         for t in ws.tracks:
             if t.id != track.id:
