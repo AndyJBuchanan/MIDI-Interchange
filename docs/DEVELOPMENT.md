@@ -19,44 +19,48 @@ Development so far has been on macOS (Apple silicon) with Python 3.12 and PySide
 
 ## Get the code
 
-The repository is public on GitHub at **https://github.com/AndyJBuchanan/MIDI-Interchange**, owned by the maintainer's *personal* account `AndyJBuchanan`. Clone it, then **configure the clone before you commit or push** (below):
+The repository is public on GitHub at **https://github.com/AndyJBuchanan/MIDI-Interchange**. To read the code, build it or run the tests, a plain clone is enough and needs no GitHub login:
 
 ```bash
-git clone https://AndyJBuchanan@github.com/AndyJBuchanan/MIDI-Interchange.git
+git clone https://github.com/AndyJBuchanan/MIDI-Interchange.git
 ```
 
-Putting `AndyJBuchanan@` in the URL makes git ask for that account's login specifically. To read the code only, the plain URL works with no login.
+To propose changes, fork the repository on GitHub first, then clone **your fork** (`https://github.com/<your-github-username>/MIDI-Interchange.git`) and add the original as `upstream`:
 
-> **History rewrite (2026-11-09).** Before the first push, every commit's author was changed from a work address to the no-reply address below, and every commit hash changed. Any copy made before then, such as the Windows working tree, has the old hashes and the work email. Don't push from it: clone again, and move any uncommitted changes across as a patch.
+```bash
+git remote add upstream https://github.com/AndyJBuchanan/MIDI-Interchange.git
+```
+
+Then set up Python and run the tests as described below. Before you commit or push from a clone, **configure it** (next section).
 
 ### Configure each clone: identity and GitHub login
 
-This is a personal project, but the build machines may also be signed in to *work* git and GitHub accounts. That includes a global `user.email`, other `gh` accounts, SSH keys and logins saved by credential managers. So set this repo's settings in the repo itself (`--local`), and never change global settings for it.
+If your machine is also signed in to other git or GitHub accounts, such as a work account, a global `user.email`, other `gh` accounts, SSH keys or logins saved by credential managers, it's easy to commit or push as the wrong person. So set these in the repo itself (`--local`), and don't change your global settings for it. If you only have one account, steps 1 and 2 are all you need.
 
-**1. Commit identity.** Set it in this repo only, and use GitHub's no-reply address so no real email gets published:
+**1. Commit identity.** Use your name and GitHub's no-reply address, so no real email gets published. Your no-reply address is on GitHub under Settings ▸ Emails, and looks like `<id>+<your-github-username>@users.noreply.github.com`:
 
 ```bash
-git config --local user.name "Andy Buchanan"
+git config --local user.name "<Your Name>"
 ```
 ```bash
-git config --local user.email "9151489+AndyJBuchanan@users.noreply.github.com"
+git config --local user.email "<id>+<your-github-username>@users.noreply.github.com"
 ```
 
-Check it with `git config user.email`: it must print the no-reply address, not the machine's global email.
+Check it with `git config user.email`: it must print that address, not the machine's global email.
 
-**2. GitHub CLI login as the personal account.** Run:
+**2. GitHub CLI login.** The GitHub CLI (`gh`) is used for pushing and for releases ([RELEASING.md](RELEASING.md)). Install it from [cli.github.com](https://cli.github.com), then run:
 
 ```bash
 gh auth login --hostname github.com --git-protocol https --web
 ```
 
 - When it asks **"Authenticate Git with your GitHub credentials?"**, answer **No**. Saying yes sets up git globally, so every github.com push from every repo would use whichever `gh` account happens to be active.
-- The browser approval uses whichever account that browser is signed in to. Check that the page shows **AndyJBuchanan** before you authorise; a private window is safest.
+- The browser approval uses whichever account that browser is signed in to. Check that the page shows **your own username** before you authorise; a private window is safest.
 - A `gh` that already has another github.com account keeps it, and the new login becomes the active account.
 
-Check the result with `gh api user --jq .login`, which must print `AndyJBuchanan`, and `gh auth status`.
+Check the result with `gh api user --jq .login`, which must print your username, and `gh auth status`.
 
-**3. Point this repo's git login at `gh` as AndyJBuchanan.** The empty first value removes every login helper set elsewhere, such as the macOS keychain helper (`osxkeychain`) or Git Credential Manager on Windows. Either could return a work login.
+**3. Point this repo's git login at `gh` (only if the machine has other github.com logins).** The empty first value removes every login helper set elsewhere, such as the macOS keychain helper (`osxkeychain`) or Git Credential Manager on Windows. Either could return a different account's login.
 
 ```bash
 git config --local credential.https://github.com.helper ""
@@ -65,18 +69,18 @@ git config --local credential.https://github.com.helper ""
 git config --local --add credential.https://github.com.helper '!gh auth git-credential'
 ```
 ```bash
-git config --local credential.https://github.com.username AndyJBuchanan
+git config --local credential.https://github.com.username <your-github-username>
 ```
 
 On Windows, run these three commands in **Git Bash**, not PowerShell. Windows PowerShell 5.1 drops the empty `""` argument, so the existing helpers wouldn't be removed.
 
-Check it without printing the token. This should show only `gh auth git-credential get` being run and `username=AndyJBuchanan`:
+Check it without printing the token. This should show only `gh auth git-credential get` being run and `username=<your-github-username>`:
 
 ```bash
 printf 'protocol=https\nhost=github.com\n\n' | GIT_TRACE=1 git credential fill 2>&1 | grep -E "run_command|^username="
 ```
 
-The remote then needs no other setup: `git push` and `git pull` sign in through `gh` as AndyJBuchanan, whichever `gh` account is active.
+The remote then needs no other setup: `git push` and `git pull` sign in through `gh` as you, whichever `gh` account is active.
 
 ### Without GitHub
 
@@ -305,7 +309,7 @@ Notes:
 
 **macOS build status (2026-11-09):**
 - Built on Apple silicon with Python 3.12 and PyInstaller 6.x. The DMG is about 39 MB and the app about 100 MB.
-- The app is Developer ID signed (team 729JFYTH57), with the hardened runtime and timestamp, and needs no extra entitlements.
+- The app is Developer ID signed (your team: `<TEAMID>`), with the hardened runtime and timestamp, and needs no extra entitlements.
 - The first notarisation submission was **Accepted** with no issues (207 binaries ticketed). The ticket is stapled to both the DMG and `dist/` app, and `spctl` reports **Notarized Developer ID** for each.
 - A copy of the DMG marked with the quarantine flag, as if downloaded, opens and the app inside passes Gatekeeper and launches.
 
