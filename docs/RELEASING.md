@@ -2,7 +2,7 @@
 
 How to set the version, build the end-user downloads on both platforms and publish a GitHub release. Machine setup (Python, the signing certificate, notarisation, Inno Setup, the `gh` login) is in [DEVELOPMENT.md](DEVELOPMENT.md).
 
-Users download the app; they don't build it. Each release ships three files:
+Users download the app; they don't build it. You can build everything on your own machines. Signing with your own Apple Developer ID is optional (without it the Mac app is ad-hoc signed and Gatekeeper warns), and publishing a GitHub release needs write access to the repository you publish to (your fork, or the main repository if you maintain it). Each release ships three files:
 
 | File | Platform | Built on | Notes |
 |---|---|---|---|
@@ -58,7 +58,7 @@ git pull && git status --short     # must be clean, at the release commit
 scripts/build_macos.sh
 ```
 
-The build is only usable if the output shows the notary JSON with `"status":"Accepted"`, the stapling and validation lines, and `source=Notarized Developer ID` for both the DMG and the app. Run without `SKIP_NOTARIZE`. Copy the printed SHA-256 into the release notes.
+This section assumes you've set up signing and notarisation ([DEVELOPMENT.md](DEVELOPMENT.md#macos-signing-and-notarisation)). Without it the script still builds, with ad-hoc signing and a warning; that's fine for your own machine but Gatekeeper warns other users, so skip the notarisation checks below. For a release you ship, the build is only usable if the output shows the notary JSON with `"status":"Accepted"`, the stapling and validation lines, and `source=Notarized Developer ID` for both the DMG and the app. Run without `SKIP_NOTARIZE`. Copy the printed SHA-256 into the release notes.
 
 Quick check: mount the DMG, drag the app to a scratch folder and launch it. Finder ▸ Get Info should show the new version.
 
@@ -85,7 +85,7 @@ shasum -a 256 dist/MIDI-Interchange-<ver>-*
 
 ### 5. Publish the GitHub release
 
-Confirm `gh` is your personal account first. It must print `AndyJBuchanan`:
+Publishing uses the GitHub CLI (`gh`). Confirm it's signed in as the account that owns, or can write to, the repository you're publishing to. It must print your own username:
 
 ```bash
 gh api user --jq .login
@@ -100,10 +100,10 @@ git tag -a v<ver>[-label] <commit> -m "MIDI Interchange <ver>[ label]"
 git push origin v<ver>[-label]
 ```
 
-Create the release. Add `--prerelease` for any tag with a label, and use `--draft` if you want to check it on GitHub before publishing:
+Create the release. `<owner>` is the GitHub account or organisation that holds the repository (`AndyJBuchanan` for the main project, or your own username for a fork). Add `--prerelease` for any tag with a label, and use `--draft` if you want to check it on GitHub before publishing:
 
 ```bash
-gh release create v<ver>[-label] -R AndyJBuchanan/MIDI-Interchange --verify-tag --prerelease --title "MIDI Interchange <ver> (<label>)" --notes-file docs/releases/v<ver>[-label].md dist/MIDI-Interchange-<ver>-macOS-arm64.dmg dist/MIDI-Interchange-<ver>-Windows-x64-Setup.exe dist/MIDI-Interchange-<ver>-Windows-x64.zip
+gh release create v<ver>[-label] -R <owner>/MIDI-Interchange --verify-tag --prerelease --title "MIDI Interchange <ver> (<label>)" --notes-file docs/releases/v<ver>[-label].md dist/MIDI-Interchange-<ver>-macOS-arm64.dmg dist/MIDI-Interchange-<ver>-Windows-x64-Setup.exe dist/MIDI-Interchange-<ver>-Windows-x64.zip
 ```
 
 Check the release on GitHub: all three files are attached, and the notes and their SHA-256 lines are right. Download the DMG with a browser and open it; Gatekeeper must not warn.
@@ -111,7 +111,7 @@ Check the release on GitHub: all three files are attached, and the notes and the
 To add or replace a file afterwards, for example when the Windows files come later:
 
 ```bash
-gh release upload v<ver>[-label] -R AndyJBuchanan/MIDI-Interchange --clobber <file>
+gh release upload v<ver>[-label] -R <owner>/MIDI-Interchange --clobber <file>
 ```
 
 ## Release history

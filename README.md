@@ -22,69 +22,178 @@ The current release is **[v0.2.0-pre](https://github.com/AndyJBuchanan/MIDI-Inte
 - **Hand on exactly what the next app needs.** Mark ranges, choose which tracks each range sends, and drag the result straight into the next app, or into a folder.
 - **Keep what matters intact.** Notes cut cleanly at range edges with nothing stuck, instrument and controller settings are carried into each range, and lyrics, markers and other MIDI data survive.
 
-## Using it
+## How to use it
 
-Shortcuts are shown for macOS; on Windows use Ctrl for ⌘ and Alt for ⌥ (Option).
+Shortcuts are shown for macOS; on Windows use Ctrl for ⌘ and Alt for ⌥ (Option). The pictures below were made from a small demo song by [tools/make_readme_screenshots.py](tools/make_readme_screenshots.py), so they show the real app.
 
-### Bringing MIDI in
+### The idea in one minute
 
-- Drag MIDI from another app, or `.mid` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import adds to the workspace.
-- While you drag, a cursor and label show where it will land, and **what the label says is what happens**:
-  - **Over a track lane:** it joins that track at the cursor's (snapped) time, but **only if the names match** (ignoring case and spacing; a renamed track still matches its original name). If nothing matches, it arrives as new track(s) at that time, and the label and status bar say why.
-  - **Over a track header:** the same, at bar 1.
-  - **Anywhere else:** new track(s), at the cursor time over the timeline or at bar 1 elsewhere.
-- Dropped DAW clips carry no position of their own, so this is how you put them where they belong.
-- Hold a dragged MIDI part near either edge of the timeline to scroll. The timeline grows as you drag right; dropping keeps only the length needed for the content, and leaving the window during the drag restores the previous view. Esc cancellation on macOS depends on the drag source and destination; it doesn't currently work for incoming Finder or Cubase drags in studio tests.
-- **Several files at once:** you're asked: **End to End** (each file starts where the previous one ends, on **one** new track named after the first file's track; multi-track files line up by track position) or **All at Cursor** (each file at the cursor, with the usual name matching).
-- **Round trips:** when a multi-track file matches the track you drop it on, its other tracks also join their same-named tracks, and the rest become new tracks.
-  - A file that repeats a track name (Staccato.ai files can) pairs its copies in order with the existing same-named tracks.
-  - A dropped clip with exactly the same start and end as one already on the track **replaces** it (a trimmed clip counts by its visible edges); partial overlaps are kept and tinted.
-  - **Song titles:** Staccato.ai names tracks "part - song" and changes the song between generations. If no name matches exactly, names are compared again without a known song title, so "Drums - Staccato Generation" joins "Drums - Industrial EBM Anthem"; the status bar says when it did. A song title is known only from the file itself (its tempo track's name, or an ending all its tracks share), so DAW clips such as "Lead - Verse" and "Lead - Chorus" never match.
-- The first file with a tempo map sets the workspace tempo. Timing ▸ Tempo Map lets you adopt another file's map.
+MIDI Interchange has one big canvas: the **timeline**. Everything you bring in shows up on it as **clips** on **tracks**, laid out in bars and beats. You work in three steps:
 
-### Reorganising what you hold
+1. **Collect.** Drag MIDI in from your other apps (or open files) and drop it where it belongs on the timeline.
+2. **Choose.** Mark **ranges** on the timeline: the bars you want to hand on. Decide which tracks each range sends.
+3. **Hand on.** Drag the result into the next app, or save it as MIDI files. Your sources are never changed.
 
-| Action | How |
+Ranges are optional, but they're what make this a palette rather than a file shuffler: you pick the verse from one app, the chorus from another, drop the drums out of one range, and export the lot as one file or as separate files.
+
+### The window
+
+![The main window, annotated](docs/images/01-window.png)
+
+1. **Toolbar:** New, Open, Save MIDI, Undo/Redo, zoom, the Snap list, Clear All Ranges, and About at the far right.
+2. **Ruler and info rows:** bar numbers, then tempo, time signature and markers.
+3. **Range strip:** your ranges, as amber bars. This is where you make and move them.
+4. **Track headers:** colour, **M**ute, **S**olo, name, and a ✕ to remove. Drag ⋮⋮ to reorder.
+5. **Lanes:** one per track, showing its clips with their notes, lyrics and text. The timeline is this whole area.
+6. **Bottom panel:** the selected range's name and exact positions, then the export controls: the mode, the **Drag MIDI out** tile and **Save MIDI…**.
+
+Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 to fit everything. The **Snap** list (off, bar, beat, 1/8, 1/16, 1/32, 1/8T, 1/16T) controls how drags line up with the grid; hold **Shift** while dragging to ignore it.
+
+### Step 1: Bring MIDI in
+
+Drag MIDI from another app, or `.mid` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold.
+
+![Dragging a clip in, with the landing preview](docs/images/02-drag-in.png)
+
+While you drag, a line on the timeline and a label show exactly where the MIDI will land (1), and **what the label says is what happens**:
+
+- **Over a track's lane:** it joins that track at the line's (snapped) time, but **only if the names match** (ignoring case and spacing; a renamed track still matches its original name). If nothing matches, it arrives as new track(s) at that time, and the label and status bar say why.
+- **Over a track header:** the same, at bar 1.
+- **Anywhere else:** new track(s), at the line's time over the timeline or at bar 1 elsewhere.
+
+Clips dragged out of a DAW carry no position of their own, so this is how you put each one where it belongs: drop the verse at bar 1, the chorus at bar 9, onto the same track.
+
+Dragging near either edge of the timeline scrolls it, and it grows as you drag right, so you can reach later in the song. Dropping keeps only the length needed for the content, and leaving the window mid-drag restores the previous view. (Esc doesn't cancel an incoming drag from Finder or Cubase on macOS; that depends on the other app.)
+
+**Dropping several files at once** asks how to place them:
+
+- **End to End:** each file starts where the previous one ends, on **one** new track named after the first file's track. Multi-track files line up by track position.
+- **All at Cursor:** each file lands at the cursor, with the usual name matching.
+
+**Round trips** work the way you'd hope. Send tracks to another app, then drop what comes back on one of its tracks: when a multi-track file matches the track you drop it on, its other tracks also join their same-named tracks, and the rest become new tracks.
+
+- A file that repeats a track name (Staccato.ai files can) pairs its copies in order with the existing same-named tracks.
+- A dropped clip with exactly the same start and end as one already on the track **replaces** it (a trimmed clip counts by its visible edges). Partial overlaps are kept and tinted.
+- **Song titles:** Staccato.ai names tracks "part - song" and changes the song between generations. If no name matches exactly, names are compared again without a known song title, so "Drums - Staccato Generation" joins "Drums - Industrial EBM Anthem"; the status bar says when it did. A song title is known only from the file itself (its tempo track's name, or an ending all its tracks share), so DAW clips such as "Lead - Verse" and "Lead - Chorus" never match.
+
+The first file with a tempo map sets the workspace tempo. Timing ▸ Tempo Map lets you adopt another file's map.
+
+### Step 2: Tidy what you hold
+
+Once things are on the timeline you can shuffle them. None of this changes your source files.
+
+![Moved, trimmed, duplicated and overlapping clips](docs/images/05-clips.png)
+
+1. **Trim** a clip: ⌥-drag its left or right edge (the cursor turns to ↔). Here the Bass verse has lost its last bar. Notes outside a trim are left out of exports, and right-click ▸ **Restore Full Clip** puts both edges back.
+2. **Duplicate** a clip: right-click ▸ Duplicate Clip, or ⌥⌘-drag it. The copy goes straight after the original; here the Keys verse was copied into bars 5–9.
+3. **Move** a clip: ⌥-drag it in time and onto another track. Here the Lead chorus slid back over the end of its verse. **Overlaps** are allowed and tinted red; both clips' notes are exported, merged.
+
+The rest of the rules, in one place:
+
+- **Moving:** drag below the last track to make a new track. Hold Shift to keep the clip's time (a track change only). A track left empty is removed (Undo restores it). A plain move snaps the clip's visible start to the grid.
+- **Trimming:** the edge snaps like a move (Shift bypasses it) and can't go past where the clip's MIDI originally started or ended. An edge placed off the grid with Shift stays there until the clip is moved. A clip too narrow to hold both edges can only be moved: zoom in to trim it. A plain drag on a clip edge still makes or resizes a range.
+- **Butt Against Previous Clip** (right-click) closes the gap before a clip, using its trimmed start.
+
+![The clip and track right-click menus](docs/images/07-menus.png)
+
+The **clip menu** (left) has Duplicate, Butt Against Previous Clip, Restore Full Clip (on a trimmed clip), Move Clip to Track (or New Track) and Delete Clip. Its **Track:** submenu, and a right-click on a track header, give the **track menu** (right): Mute/Unmute, Rename, Move Up/Down, **Merge Into** another track, **Save This Track…** (exports just that track, even if it's muted), Source Info… and Remove Track.
+
+Tracks: click a name to rename it, drag ⋮⋮ to reorder, ✕ to remove. File ▸ New (⌘N, also on the toolbar) clears the workspace, and Undo brings it back. **Undo / redo** (⌘Z / ⇧⌘Z) cover everything.
+
+### Step 3: Mark ranges
+
+A **range** is a stretch of the timeline you want to hand on. Ranges are the heart of the app.
+
+**No ranges? You get everything.** Until you mark a range, an export is the whole timeline, with each track's mute and solo settings deciding which tracks are included. Ranges only come into play once you've made at least one.
+
+![Two ranges, the second selected](docs/images/03-ranges.png)
+
+- **Make one** by dragging across empty timeline space, in the ruler or in the lanes. It snaps to the grid (Shift bypasses). Here "Verse" covers bars 1–5 and "Chorus" bars 9–13.
+- **Resize or move** a range (1): drag an edge (in any row), or drag its body in the range strip.
+- **Select** a range (2) by clicking it. It turns brighter and its details appear in the bottom panel (3).
+- **Name it and set exact positions** in the panel: type a name, and `bar.beat.tick` (480 ticks per quarter) into Start and End. You can also pick it in the Range list, double-click it, or right-click ▸ Edit Range…. Unnamed ranges are called "Range 1", "Range 2" and so on, in order.
+- **Delete** with Backspace or Delete, the panel's Delete button, or Edit ▸ Delete Range. **Tab** cycles through the ranges, **Escape** deselects, and **Clear All Ranges** (toolbar and Edit menu) removes them all.
+
+Notes that straddle a range's edge are cut cleanly, with nothing left hanging, and the instrument and controller settings in force are carried into the start of each range.
+
+### Step 4: Say who plays in each range
+
+**For the whole song: Mute and Solo.** Each track has **M** (mute) and **S** (solo). Several tracks can be soloed at once; ⌥-click **S** for an exclusive solo, and ⌥-click **M** to set every mute at once. The boxed **M** and **S** buttons above the track headers clear all mutes or all solos.
+
+![Bass muted, Drums and Lead soloed](docs/images/06-mute-solo.png)
+
+Here Bass is muted (1), Lead and Drums are soloed (2), so only those two play: the others are dimmed. The boxed buttons (3) light up while any mute or solo is active, and click to clear them.
+
+**For one range: include and exclude.** A new range simply follows the global mute and solo, shown by greyed checkboxes. To make a range different, **lock** it:
+
+![The Chorus range locked, with Drums and Keys left out](docs/images/04-range-tracks.png)
+
+- Click the **padlock** in the range's header (1) to lock its track selection. Its checkboxes (2) become live: untick one to leave that track out of this range only. The left-out section is hatched (3, 4): the range still takes its time there, but that track is silent.
+- A locked range **ignores later global mute/solo changes**. Unlock it and it immediately follows the global result again.
+- Right-click a range for **Include All Tracks**, **Exclude All Tracks** (both lock the range first) and **Unlock**.
+- Colours inside a range show what it will export, so you can read the result straight off the timeline. The panel's length line says how many tracks it sends ("2 of 4 tracks").
+
+A track that no exported range includes is left out of the file altogether.
+
+### Step 5: Hand it on
+
+Pick a mode in the **Export** list at the bottom. With **no ranges defined, the whole timeline is exported**, with the tracks' mute and solo settings deciding which tracks go. Once you have ranges, you choose how to combine them:
+
+![One workspace, three ways to export it](docs/images/08-export-modes.png)
+
+- **Whole workspace:** the whole timeline, as it sits. The tracks' mutes and solos decide which tracks are included.
+- **Ranges · keep positions:** one file; the ranges keep their places on the timeline, and any gaps stay empty. Overlapping or touching ranges merge.
+- **Ranges · rebase & concatenate** (the default once you have ranges): one file, with the ranges **joined back to back** from bar 1, in the order they're listed. Verse, then Chorus, with no gap.
+- **Ranges · separate files:** **one file per range**, each starting at bar 1.
+
+Tick **Trim leading/trailing silence** to cut the output down to its first and last note (or lyric); every track moves by the same amount, so they stay aligned.
+
+Then either:
+
+- **Save MIDI…** (⌘S) to write files. For separate files, the name you choose gets each range's name added.
+- Drag the **Drag MIDI out** tile straight into another app or a folder. The tile and the line beside the Trim box say how many tracks and files will go.
+
+**File names:** a named range uses its name and an unnamed one uses "Range 1", "Range 2"… A one-range export is named after it (`Verse.mid`); a combined export joins the labels (`Verse + Chorus.mid`); and separate files dragged out are named by their range alone (`Verse.mid`; a repeat gets " (2)"). Separate files from **Save MIDI…** suggest `Export.mid`, giving `Export - Verse.mid` and `Export - Chorus.mid`. Whole exports are named after the track when there is one track, otherwise "MIDI Interchange Export".
+
+An export whose clips all come from one song keeps the song's title in its tempo track, so it can be matched again when it comes back.
+
+### Everything you can do (quick reference)
+
+| To… | Do this |
 |---|---|
-| Move a clip | ⌥-drag it in time and onto another track; drag below the last track for a new one. Hold Shift to keep its time (track change only). A track left empty is removed (Undo restores it) |
-| Trim a clip | ⌥-drag its left or right edge (the cursor turns to ↔). The edge snaps like a clip move (Shift bypasses the snap) and can't go past where the clip's MIDI originally started or ended. Notes and settings outside the trims are left out of exports and drag-out; right-click ▸ **Restore Full Clip** puts both edges back. An edge placed off the grid with Shift stays there until the clip is moved. A plain move snaps the clip's visible start to the grid; Shift keeps its time. Duplicate places the copy straight after the visible end, so the two abut. A plain drag on a clip edge still makes or resizes a range. A clip too narrow to hold both edges can only be moved: zoom in to trim it |
+| Bring MIDI in | Drag MIDI or `.mid` files/folders onto the window; File ▸ Open (⌘O); Open with… from the Finder/Explorer; command-line paths |
+| Place a drop | Drop over a lane (joins a same-named track at that time), a header (bar 1), or empty space (new tracks) |
+| Place several files | Choose End to End or All at Cursor when asked |
+| Move a clip | ⌥-drag it. Shift keeps its time; drag below the last track for a new track |
+| Trim a clip | ⌥-drag its left or right edge. Right-click ▸ Restore Full Clip to undo the trim |
 | Copy a clip | ⌥⌘-drag it, or right-click ▸ Duplicate Clip (placed straight after it) |
-| Clip tools | Right-click a clip: Duplicate, Butt Against Previous Clip, Restore Full Clip (on a trimmed clip), Move Clip to Track (or New Track), Delete Clip |
-| Overlaps | Clips may overlap on a track; the overlap is tinted red and both clips' notes are exported, merged |
-| Tracks | Click the name to rename, drag ⋮⋮ to reorder, ✕ to remove. Right-click a header (or a clip ▸ Track) for Mute/Unmute, Rename, Move Up/Down, Merge Into (another track), Save This Track…, Source Info… and Remove Track |
-| Start again | File ▸ New (⌘N, also on the toolbar) clears the workspace; Undo brings it back. Export settings are kept |
+| Butt a clip against the previous one | Right-click ▸ Butt Against Previous Clip |
+| Move a clip to another track | Right-click ▸ Move Clip to Track (or New Track) |
+| Delete a clip | Right-click ▸ Delete Clip |
+| Rename a track | Click its name |
+| Reorder tracks | Drag ⋮⋮, or right-click ▸ Move Up / Move Down |
+| Combine tracks | Right-click ▸ Merge Into (another track) |
+| Remove a track | ✕, or right-click ▸ Remove Track |
+| Save just one track | Right-click ▸ Save This Track… |
+| See where a track came from | Right-click ▸ Source Info… |
+| Mute / solo | **M** / **S** on a track. ⌥-click S for exclusive solo, ⌥-click M for all mutes. Boxed M / S above the tracks clear them |
+| Make a range | Drag across empty timeline space (ruler or lanes) |
+| Resize / move a range | Drag an edge (in any row) / drag the body in the range strip |
+| Name a range, exact positions | Range list or double-click ▸ type a name and `bar.beat.tick` Start/End in the bottom panel; or right-click ▸ Edit Range… |
+| Delete / cycle / deselect ranges | Backspace or Delete (or the panel's Delete, Edit ▸ Delete Range) / Tab / Escape. Clear All Ranges is on the toolbar and the Edit menu |
+| Choose tracks per range | Padlock in the range header, then tick or untick its checkboxes; right-click ▸ Include All / Exclude All / Unlock |
+| Snap | Snap list on the toolbar, or Timing ▸ Snap. Hold Shift while dragging to bypass it |
+| Zoom | ⌘ + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit), or the toolbar |
+| Lane height | ⌥ + wheel, or ⌘⇧= / ⌘⇧- (View ▸ Taller / Shorter Lanes) |
+| Choose an export mode | The Export list: whole workspace, keep positions, rebase & concatenate, separate files |
+| Trim silence | Tick Trim leading/trailing silence |
+| Export | **Save MIDI…** (⌘S), or drag the **Drag MIDI out** tile into another app or a folder |
+| Start again | File ▸ New (⌘N, also on the toolbar). Export settings are kept; Undo brings your work back |
 | Undo / redo | ⌘Z / ⇧⌘Z cover everything |
+| Tempo | The first file with a tempo map sets it. Timing ▸ Tempo Map adopts another file's |
 | About | The About button at the right end of the toolbar shows the version and the project link |
 
-### Choosing what to hand on
-
-| Action | How |
-|---|---|
-| Choose tracks | Track **M** mutes and **S** solos; several tracks can be soloed. ⌥-click S for exclusive solo, ⌥-click M to set all mutes. The boxed M/S buttons above the tracks clear all mutes/solos |
-| Create a range | Drag across empty timeline space (in the ruler or in the lanes) |
-| Resize / move a range | Drag an edge (in any row) / drag the body in the range strip |
-| Snap | Snap list on the toolbar, or Timing ▸ Snap: off, bar, beat (the default), 1/8, 1/16, 1/32, 1/8T, 1/16T. Hold Shift while dragging to bypass it |
-| Name a range, exact positions | Pick it in the Range list in the bottom panel (or double-click it, or right-click ▸ Edit Range…), then type a name, and `bar.beat.tick` (480 ticks per quarter) into Start/End |
-| Delete / cycle ranges | Backspace or Delete (or the panel's Delete button, Edit ▸ Delete Range) / Tab. Escape deselects. Clear All Ranges is on the toolbar and the Edit menu |
-| Tracks per range | New ranges follow global M/S, with greyed checkboxes. Click the padlock in the range header to lock its track selection and enable independent checkbox editing. Locked ranges ignore subsequent global M/S changes; unlocking immediately restores the current global result. Right-click ▸ Include All / Exclude All locks the range first. Lane colours inside ranges show what each range exports |
-
-### Exporting
-
-- Pick a mode in the bottom panel's Export list:
-  - **Whole workspace**
-  - **Ranges · keep positions**
-  - **Ranges · rebase & concatenate** (the default): the ranges back to back from bar 1
-  - **Ranges · separate files**: one file per range
-- Tick **Trim leading/trailing silence** to trim the output as a whole; tracks stay aligned.
-- Then **Save MIDI…** (⌘S), or drag the **Drag MIDI out** tile straight into another app or a folder. The tile and the line beside the Trim box say how many tracks and files will go.
-- **File names:** a one-track export is named after the track; otherwise after the range names ("Verse + Chorus"). Separate files dragged out are named after their range ("Verse.mid"; a repeat gets " (2)"); Save MIDI… adds the range name to the name you choose.
-- An export whose clips all come from one song keeps the song's title in its tempo track, so it can be matched again when it comes back.
-
-### Viewing
-
-- Zoom: ⌘ + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit).
-- Lane height: ⌥ + wheel (a small step per notch), or ⌘⇧= / ⌘⇧- (View ▸ Taller/Shorter Lanes).
-- Each lane shows its notes, lyrics and text; the rows above show tempo, time signature, markers and the ranges. The status bar shows the position under the pointer.
+Each lane shows its clips' notes, lyrics and text; the rows above show tempo, time signature, markers and the ranges. The status bar shows the position under the pointer.
 
 ## Works with
 
