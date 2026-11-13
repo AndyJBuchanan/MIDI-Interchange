@@ -244,7 +244,7 @@ How the script works:
 Not done yet on Windows:
 
 - **No code signing.** Windows SmartScreen shows "Windows protected your PC" for a downloaded zip; users click **More info ▸ Run anyway**, or unblock the zip first (file Properties ▸ Unblock). Signing needs an Authenticode certificate (OV/EV, or Azure Trusted Signing) and `signtool sign /fd sha256 /tr <timestamp-url> /td sha256` on the exe before zipping.
-- **Opening several files from Explorer opens several windows.** Selecting more than one file and using *Open with* starts one app instance per file, because there's no single-instance handoff yet. Command-line paths do load into one window (`"MIDI Interchange.exe" a.mid b.mid`), and so does dropping files onto the window.
+- **Single-instance file handoff needs Windows studio verification.** Additional launches pass their files to the existing window over a local Qt socket. Process-level tests cover ownership, acknowledgment and crash recovery; verify the packaged Explorer association on Windows before release.
 - **The installer isn't signed either.** It needs the same certificate as the exe (sign the exe before running Inno Setup, then sign the Setup exe; Inno's `SignTool` directive can automate both).
 - Drag-in/drag-out against Windows DAWs hasn't been tested (see the README checklist).
 
@@ -333,6 +333,20 @@ docs/                          brief, design notes, this guide, RELEASING.md, re
 - Add a regression test for any change to import or export behaviour. Round-trip and boundary tests are in `tests/test_roundtrip.py` and `tests/test_export.py`.
 - Record decisions or changes of direction in `docs/DESIGN_NOTES.md`. Don't edit `docs/DESIGN_BRIEF.md`.
 - Record DAW interop results in the README checklist. Only tick a box once that drag has actually been tested.
+
+## Session persistence and compatibility
+
+`main.py` owns the lifecycle: acquire the per-user instance lock, restore, release queued imports, then save on idle/exit. Constructing `MainWindow` alone does not load or save sessions. Tests use temporary directories and INI settings; they must never touch normal user session storage or drag temp files.
+
+- `core/session.py` owns the explicit JSON codec, validation, rejected-file preservation and atomic storage. It records app version for provenance; **`SCHEMA_VERSION` decides compatibility**. Bump it when model fields, their meanings or invariants change incompatibly. Update `RECORDS`, validators and round-trip tests together. The field-coverage test deliberately fails when a persisted model gains a field. Unsupported schemas are preserved and skipped; there is no implicit migration.
+- `ui/session.py` owns dirty generations, the 120-second/15-second idle gate and one background writer. Snapshots reuse `Workspace.snapshot()`; MIDI event lists, source records and tempo maps are shared as immutable data. Future code must replace these values rather than mutate data already captured by undo or a save. The worker never reads live widgets/model state. Periodic and final saves share the same path; shutdown waits for the latest state.
+- `single_instance.py` uses `QLockFile` plus a user-access local Qt socket. Request IDs prevent repeat delivery of an acknowledged request. Requests wait for restoration and use normal additive import. Single-instance enforcement stays active with persistence disabled.
+
+The session directory is Qt's `QStandardPaths.AppLocalDataLocation` with the existing organization/application name `MIDI Interchange`. It holds `session.json`, an unclean-run marker and the instance lock; rejected data is retained as `session-rejected-<id>.json`. Original MIDI paths are provenance only.
+
+The existing `QSettings("MIDI Interchange", "MIDI Interchange")` store has an internal boolean **`session_persistence_enabled`**, default **true**. Read once at startup; no settings UI yet. False skips restoration and all session writes, preserves existing session files, and still permits file handoff. Re-enable to resume restoring the preserved session.
+
+Run `.venv/bin/pytest -q` for regression coverage. Local socket tests need permission to create local sockets in restricted environments. No build or release is needed for these checks.
 
 ## Troubleshooting
 

@@ -6,13 +6,6 @@ Updated 2026-11-13.
 
 ## Agreed, not started
 
-- **Session persistence (not save/load):**
-  - [Draft plan](plans/session-persistence.md); local branch `feature/session-persistence`. Save on exit and every two minutes after at least 15 seconds of inactivity. Restore settings/view with fresh undo history. Enforce one instance; second launches hand MIDI files to the existing window for additive import.
-  - Keep the one current workspace between runs.
-  - Write it to disk on exit and restore it at startup. Say so if it couldn't be restored cleanly, for example after a crash, or a crash on exit.
-  - No project files, and no Save/Open of workspaces.
-  - It must keep clip trims (`trim_start`, `trim_end`) the mute, solo and range-lock state, and track export-channel overrides.
-  - Keep checkpoint work off the interaction path; ongoing activity defers periodic saves.
 - **Export/drag filename decoration:**
   - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
   - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
@@ -60,5 +53,4 @@ The details of each are in [DESIGN_NOTES, Risks and known gaps](DESIGN_NOTES.md#
   - Stapling the app inside the DMG.
   - Trimming the app size (about 100 MB).
   - Windows code signing.
-  - A Windows single-instance handoff, so opening several files doesn't start several windows.
 - **Splitting clips** (risk 8): clip moves apply to whole clips only.

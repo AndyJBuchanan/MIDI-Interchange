@@ -197,6 +197,14 @@ An export whose clips all come from one song keeps the song's title in its tempo
 
 Each lane shows its clips' notes, lyrics and text; the rows above show tempo, time signature, markers and the ranges. The status bar shows the position under the pointer.
 
+### Returning to your workspace
+
+The current workspace is restored when you reopen the app, including its MIDI data, trims, ranges, mute/solo settings, channel overrides, export settings and timeline view. Undo history starts fresh. Original files and DAW drag temp files are not needed for restoration.
+
+The app saves on exit and checkpoints pending changes every two minutes once you have been inactive for at least 15 seconds. Active work can delay a checkpoint. After a crash, changes since the last checkpoint may be lost. Incompatible or damaged sessions are preserved with a warning and the app starts empty.
+
+Only one instance runs at a time. Opening more MIDI files from Finder/Explorer or another launch adds them to the existing window. **New** clears the workspace; a normal quit saves that empty state too.
+
 ## Works with
 
 Tested by hand on macOS (2026-11-09 and 2026-11-10). Drag and drop works as far as each app allows. On Windows the app builds and its tests pass, but drag and drop with DAWs hasn't been tried yet. Details, the clipboard investigation and open issues are in [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md).
@@ -229,9 +237,7 @@ For each app check: does the drop import at all (if not, note the formats listed
 - **Drag and drop depends on the other app.** File URLs and any data starting with `MThd` are handled. Qt can't receive **macOS file promises** or **Windows virtual files**; no app tested so far needed them. If a drop carries no usable MIDI, the app lists the formats it was offered, which helps a lot in a bug report. Drag-out offers temp files (in `$TMPDIR/MIDI Interchange Drag`, pruned after 24 h).
 - **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, use the track colour box’s export-channel override, or assemble clips that share a channel.
 - Clips can be trimmed at either edge but not split.
-- The workspace isn't kept between sessions yet (planned); export what you need before quitting.
 - SMPTE-division files are rejected with a clear message.
-- On Windows, opening several files at once from Explorer opens several windows; drag them onto one window instead.
 
 Everything still to do, agreed or not, is listed in [docs/ROADMAP.md](docs/ROADMAP.md).
 
