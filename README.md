@@ -82,6 +82,8 @@ The first file with a tempo map sets the workspace tempo. Timing ▸ Tempo Map l
 
 Once things are on the timeline you can shuffle them. None of this changes your source files.
 
+Click a track's colour box to choose a palette colour or **More colours…**, and to set its **Export MIDI channel**. **Original channels** keeps each clip's MIDI channels; choosing **1–16** sends every clip on that track to that channel on Save or drag-out. The number appears in the colour box. Moving a clip to another track uses that destination's setting; source MIDI stays unchanged.
+
 ![Moved, trimmed, duplicated and overlapping clips](docs/images/05-clips.png)
 
 1. **Trim** a clip: ⌥-drag its left or right edge (the cursor turns to ↔). Here the Bass verse has lost its last bar. Notes outside a trim are left out of exports, and right-click ▸ **Restore Full Clip** puts both edges back.
@@ -222,8 +224,10 @@ For each app check: does the drop import at all (if not, note the formats listed
 
 ## Known limitations
 
+- **Reason automation lane:** importing a channel-overridden range can create an unwanted **Controller #254** automation lane, although the channel override works. Delete the unwanted lane in Reason. Its cause is unresolved; see [the findings](docs/INTEROP_FINDINGS.md#reason-unexpected-automation-lane-after-channel-override-2026-11-13).
+
 - **Drag and drop depends on the other app.** File URLs and any data starting with `MThd` are handled. Qt can't receive **macOS file promises** or **Windows virtual files**; no app tested so far needed them. If a drop carries no usable MIDI, the app lists the formats it was offered, which helps a lot in a bug report. Drag-out offers temp files (in `$TMPDIR/MIDI Interchange Drag`, pruned after 24 h).
-- **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, assemble clips that share a channel. A per-track export channel is planned.
+- **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, use the track colour box’s export-channel override, or assemble clips that share a channel.
 - Clips can be trimmed at either edge but not split.
 - The workspace isn't kept between sessions yet (planned); export what you need before quitting.
 - SMPTE-division files are rejected with a clear message.

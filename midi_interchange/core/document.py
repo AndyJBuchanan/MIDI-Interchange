@@ -120,6 +120,7 @@ class Track:
     auxiliary: bool = False      # holds only meta/sysex data (lyrics, markers, ...)
     channels: tuple[int, ...] = ()
     auto_trim: bool = False
+    export_channel: int | None = None  # displayed channel 1–16; None preserves original channels
 
     @property
     def start(self) -> Fraction:

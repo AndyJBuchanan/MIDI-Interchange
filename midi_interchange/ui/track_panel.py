@@ -5,13 +5,26 @@ import sys
 
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QMouseEvent, QPainter, QPen, QWheelEvent
-from PySide6.QtWidgets import (QCheckBox, QColorDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
+from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QWidgetAction,
                                QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
-from ..core.document import Track
+from ..core.document import TRACK_COLORS, Track
 from . import theme
 from .controller import Controller
 from .timeline import HEADER_H, Timeline
+
+
+CONTROL_SIZE = 22
+CONTROL_GAP = 4
+
+
+def channel_text_color(color: QColor) -> str:
+    """Choose whichever of black/white has the higher WCAG contrast ratio."""
+    def linear(v):
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    luminance = sum(w * linear(v) for w, v in zip(
+        (0.2126, 0.7152, 0.0722), (color.redF(), color.greenF(), color.blueF())))
+    return "#000000" if luminance > 0.179 else "#ffffff"
 
 
 class _Grip(QLabel):
@@ -51,16 +64,16 @@ class TrackHeader(QFrame):
 
         self.grip = _Grip(self)
         self.color_btn = QToolButton(self)
-        self.color_btn.setFixedSize(14, 14)
+        self.color_btn.setFixedSize(CONTROL_SIZE, CONTROL_SIZE)
         self.color_btn.setToolTip("Track colour")
-        self.color_btn.clicked.connect(self._pick_color)
+        self.color_btn.clicked.connect(self._show_color_menu)
         self.mute_btn = QToolButton(self)
         self.solo_btn = QToolButton(self)
         for button, label, tip in ((self.mute_btn, "M", "Mute; Alt/Option-click: set all mutes"),
                                    (self.solo_btn, "S", "Solo; Alt/Option-click: exclusive solo")):
             button.setText(label)
             button.setCheckable(True)
-            button.setFixedSize(22, 22)
+            button.setFixedSize(CONTROL_SIZE, CONTROL_SIZE)
             button.setToolTip(tip)
         self.mute_btn.clicked.connect(self._mute_clicked)
         self.solo_btn.clicked.connect(lambda: ctl.toggle_solo(track_id,
@@ -85,11 +98,15 @@ class TrackHeader(QFrame):
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(4)
+        row.setSpacing(CONTROL_GAP)
         row.addWidget(self.grip)
         row.addWidget(self.color_btn)
-        row.addWidget(self.mute_btn)
-        row.addWidget(self.solo_btn)
+        ms = QHBoxLayout()
+        ms.setContentsMargins(0, 0, 0, 0)
+        ms.setSpacing(0)
+        ms.addWidget(self.mute_btn)
+        ms.addWidget(self.solo_btn)
+        row.addLayout(ms)
         row.addWidget(self.name_edit, 1)
         row.addWidget(self.remove_btn)
         col = QVBoxLayout(self)
@@ -108,7 +125,11 @@ class TrackHeader(QFrame):
         self.mute_btn.setStyleSheet(
             f"QToolButton:checked {{ background: {(theme.DISABLED if track.soloed else theme.ACCENT).name()}; }}")
         self.solo_btn.setStyleSheet(f"QToolButton:checked {{ background: {theme.SOLO.name()}; }}")
-        self.color_btn.setStyleSheet(f"QToolButton {{ background: {track.color}; border: 1px solid #111;"
+        self.color_btn.setText("" if track.export_channel is None else str(track.export_channel))
+        channel_label = "Original channels" if track.export_channel is None else f"Export MIDI channel {track.export_channel}"
+        self.color_btn.setToolTip(f"Track colour / export MIDI channel\n{channel_label}")
+        foreground = channel_text_color(QColor(track.color))
+        self.color_btn.setStyleSheet(f"QToolButton {{ color: {foreground}; background: {track.color}; border: 1px solid #111;"
                                      f" border-radius: 3px; }}")
         chans = ",".join(str(c + 1) for c in track.channels)
         kind = "meta" if track.auxiliary else (f"ch {chans}" if chans else "")
@@ -132,6 +153,47 @@ class TrackHeader(QFrame):
         if t:
             self.name_edit.setText(t.name)
         self.name_edit.clearFocus()
+
+    def _build_color_menu(self) -> QMenu:
+        menu = QMenu(self)
+        track = self.ctl.ws.track(self.track_id)
+        if track is None:
+            return menu
+        palette = QWidget(menu)
+        grid = QGridLayout(palette)
+        grid.setContentsMargins(6, 6, 6, 6)
+        grid.setSpacing(CONTROL_GAP)
+        for i, color in enumerate([*TRACK_COLORS, "#ffffff", "#000000"]):
+            button = QToolButton(palette)
+            button.setFixedSize(CONTROL_SIZE, CONTROL_SIZE)
+            button.setToolTip(color)
+            button.setStyleSheet(f"background: {color}; border: 1px solid {theme.TEXT_DIM.name()};")
+            button.clicked.connect(lambda _checked=False, value=color: self._choose_color(menu, value))
+            grid.addWidget(button, i // 6, i % 6)
+        action = QWidgetAction(menu)
+        action.setDefaultWidget(palette)
+        menu.addAction(action)
+        menu.addAction("More colours…", self._pick_color)
+        menu.addSeparator()
+        channels = menu.addMenu("Export MIDI channel")
+        for channel in [None, *range(1, 17)]:
+            action = channels.addAction("Original channels" if channel is None else str(channel))
+            action.setCheckable(True)
+            action.setChecked(track.export_channel == channel)
+            action.triggered.connect(lambda _checked=False, value=channel:
+                                     self.ctl.set_export_channel(self.track_id, value))
+        return menu
+
+    def _choose_color(self, menu: QMenu, color: str) -> None:
+        menu.close()
+        self.ctl.set_track_color(self.track_id, color)
+
+    def _show_color_menu(self) -> None:
+        previous = getattr(self, "_color_menu", None)
+        if previous is not None:
+            previous.deleteLater()
+        self._color_menu = self._build_color_menu()
+        self._color_menu.popup(self.color_btn.mapToGlobal(QPoint(0, self.color_btn.height())))
 
     def _pick_color(self) -> None:
         t = self.ctl.ws.track(self.track_id)
@@ -228,8 +290,8 @@ class TrackPanel(QWidget):
             h.setGeometry(0, y, w, lane_h)
             h.setVisible(y + lane_h > 0 and y < self.lanes.height())
         self.title.setGeometry(10, 0, w - 70, HEADER_H)
-        self.clear_m.setGeometry(w - 56, 16, 22, 22)
-        self.clear_s.setGeometry(w - 30, 16, 22, 22)
+        self.clear_m.setGeometry(w - 2 * CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
+        self.clear_s.setGeometry(w - CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
         self.title.raise_()
         self.update()
 
