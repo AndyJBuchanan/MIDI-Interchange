@@ -7,11 +7,12 @@ Updated 2026-11-13.
 ## Agreed, not started
 
 - **Session persistence (not save/load):**
+  - [Draft plan](plans/session-persistence.md); local branch `feature/session-persistence`. Save on exit and every two minutes after at least 15 seconds of inactivity. Restore settings/view with fresh undo history. Enforce one instance; second launches hand MIDI files to the existing window for additive import.
   - Keep the one current workspace between runs.
   - Write it to disk on exit and restore it at startup. Say so if it couldn't be restored cleanly, for example after a crash, or a crash on exit.
   - No project files, and no Save/Open of workspaces.
   - It must keep clip trims (`trim_start`, `trim_end`) the mute, solo and range-lock state, and track export-channel overrides.
-  - **Open question:** should it also save periodically, so a crash loses little?
+  - Keep checkpoint work off the interaction path; ongoing activity defers periodic saves.
 - **Export/drag filename decoration:**
   - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
   - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
@@ -39,6 +40,7 @@ Updated 2026-11-13.
 
 Not planned yet. These options exist, or are planned, in code but have no UI. They're collected here so a settings page can expose them later.
 
+- **Session persistence:** internal enable/disable setting, default on. Gate session restoration and saving; expose a switch here later if needed. See [the plan](plans/session-persistence.md).
 - **Notes that started before an edge** (`ExportOptions.partial_notes`, default on): they sound from a range or clip-trim edge, or are dropped.
 - **What a drop replaces** (`Placement.compare_full_extent`, default visible edges): a dropped clip replaces one whose trimmed start and end match, or one whose full extent matches.
 
