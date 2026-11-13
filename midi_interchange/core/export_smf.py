@@ -456,7 +456,8 @@ def _serialize(ws: Workspace, tracks: list[Track], conductor: list[_Item],
     mf.tracks.append(_to_mido_track(conductor, end, ppq, name=encode_meta_text(song, "") if song else None))
     for track, items, tend in out_tracks:
         name = encode_meta_text(track.name, track.original_name)
-        mf.tracks.append(_to_mido_track(items, tend, ppq, name=name))
+        channel = None if track.export_channel is None else track.export_channel - 1
+        mf.tracks.append(_to_mido_track(items, tend, ppq, name=name, channel=channel))
     return mf
 
 
@@ -476,14 +477,18 @@ def _tick(t: Fraction, ppq: int) -> int:
     return math.floor(t * ppq + Fraction(1, 2))
 
 
-def _to_mido_track(items: list[_Item], end: Fraction, ppq: int, name: str | None) -> mido.MidiTrack:
+def _to_mido_track(items: list[_Item], end: Fraction, ppq: int, name: str | None,
+                   channel: int | None = None) -> mido.MidiTrack:
     trk = mido.MidiTrack()
     prev = 0
     if name is not None:
         trk.append(mido.MetaMessage("track_name", name=name, time=0))
     for it in sorted(items):
         tick = max(_tick(it.time, ppq), prev)
-        trk.append(it.msg.copy(time=tick - prev))
+        changes = {"time": tick - prev}
+        if channel is not None and hasattr(it.msg, "channel"):
+            changes["channel"] = channel
+        trk.append(it.msg.copy(**changes))
         prev = tick
     trk.append(mido.MetaMessage("end_of_track", time=max(_tick(end, ppq), prev) - prev))
     return trk

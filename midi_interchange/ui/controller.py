@@ -294,6 +294,15 @@ class Controller(QObject):
             t.name = name
             self.tracksChanged.emit()
 
+    def set_export_channel(self, track_id: str, channel: int | None) -> None:
+        if channel is not None and (type(channel) is not int or not 1 <= channel <= 16):
+            raise ValueError("Export channel must be Original channels or 1–16")
+        track = self.ws.track(track_id)
+        if track is not None and track.export_channel != channel:
+            self.checkpoint()
+            track.export_channel = channel
+            self.tracksChanged.emit()
+
     def set_track_color(self, track_id: str, color: str) -> None:
         t = self.ws.track(track_id)
         if t and t.color != color:

@@ -131,7 +131,7 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 - [x] OK, Return and Esc each close the dialog.
 - [x] Resize the window: the About button stays at the right edge.
 - [x] Repeat in the packaged app (the icon still shows).
-- [ ] Windows, at release: check the same button.
+- [x] Windows, at release: check the same button.
 
 ## 8f. Drag-in auto-scroll (`feature/drag-in-autoscroll`)
 
@@ -169,6 +169,15 @@ The original section 8g checks passed locally. These follow-up changes also pass
 - [x] About shows version 0.2.2.
 - [x] Range right-click menu has no individual track entries or "Tracks in this range" heading. Edit, Delete, Include All, Exclude All and Unlock remain.
 - [x] Add tracks by drag-in/import and by moving/copying a clip to a new track, including from a muted source: each new track is unmuted and included. With solo already active it joins the solo group; with no solo active it stays non-soloed. Check locked/unlocked ranges and undo/redo.
+
+## 8i. Track export channel (`feature/track-export-channel`)
+
+- [x] Colour/M/S boxes match in size. M and S touch, on tracks and in the top panel, with a small gap between the colour box and track M/S. Check a narrow track panel.
+- [x] Click the colour box: a compact palette and Export MIDI channel submenu appear. Select a palette colour; open More colours and accept/cancel. Esc or clicking outside dismisses the popup without a change. Each accepted change is one undo step; choosing the current setting is a no-op.
+- [x] Original channels leaves the colour box blank. Overrides 1–16 appear centred in contrasting black/white text, including light, dark and yellow colours. The tooltip explains the selected channel. The source-channel information stays unchanged.
+- [x] Assemble clips from different sources/channels on one track. With Original channels, Save and drag preserve their channels. Select 1, 10 and 16 and repeat into Cubase and Reason: all notes, controllers, programs and pressure use the override. Check Whole, Preserve, Rebase and Separate modes, including trim/range edges.
+- [x] Return to Original channels: original channel behaviour returns. Mute/solo, range locks, track choices, timing and filenames still work.
+- [x] Move/copy clips between tracks with different overrides: destination setting applies. A newly created/imported track starts at Original channels. Undo/redo restores channel settings and the header number, independently of colour.
 
 ## 9. New document
 

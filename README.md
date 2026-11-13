@@ -82,6 +82,8 @@ The first file with a tempo map sets the workspace tempo. Timing ▸ Tempo Map l
 
 Once things are on the timeline you can shuffle them. None of this changes your source files.
 
+Click a track's colour box to choose a palette colour or **More colours…**, and to set its **Export MIDI channel**. **Original channels** keeps each clip's MIDI channels; choosing **1–16** sends every clip on that track to that channel on Save or drag-out. The number appears in the colour box. Moving a clip to another track uses that destination's setting; source MIDI stays unchanged.
+
 ![Moved, trimmed, duplicated and overlapping clips](docs/images/05-clips.png)
 
 1. **Trim** a clip: ⌥-drag its left or right edge (the cursor turns to ↔). Here the Bass verse has lost its last bar. Notes outside a trim are left out of exports, and right-click ▸ **Restore Full Clip** puts both edges back.

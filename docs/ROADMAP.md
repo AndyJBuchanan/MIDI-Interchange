@@ -2,7 +2,7 @@
 
 All outstanding features and fixes, agreed or not, are listed here and only here. Each feature gets its own plan in [plans/](plans/) and its own branch when it is picked up. When something is finished, remove it from this list; its plan records how it was done.
 
-Updated 2026-11-12.
+Updated 2026-11-13.
 
 ## Agreed, not started
 
@@ -10,12 +10,8 @@ Updated 2026-11-12.
   - Keep the one current workspace between runs.
   - Write it to disk on exit and restore it at startup. Say so if it couldn't be restored cleanly, for example after a crash, or a crash on exit.
   - No project files, and no Save/Open of workspaces.
-  - It must keep clip trims (`trim_start`, `trim_end`) and the mute, solo and range-lock state.
+  - It must keep clip trims (`trim_start`, `trim_end`) the mute, solo and range-lock state, and track export-channel overrides.
   - **Open question:** should it also save periodically, so a crash loses little?
-- **Track export channel (design still open):**
-  - Covers both the mixed-channel policy and changing a clip's channel. Reason splits a multi-channel track into one track per channel on import (see [DESIGN_NOTES](DESIGN_NOTES.md#risks-and-known-gaps), risk 9).
-  - Likely shape: a control in the track header that sets the export channel for every clip on the track, whatever the clips' or the track's original channels.
-  - Keep a way to leave channels as they are, since a deliberately multi-channel track is possible today.
 - **Export/drag filename decoration:**
   - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
   - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
