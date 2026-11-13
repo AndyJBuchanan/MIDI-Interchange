@@ -25,6 +25,14 @@ Not every combination of tracks, clips or selections has been tried.
 
 No app needed macOS file promises or any other native adapter: everything that worked did so with plain file URLs.
 
+### Reason: unexpected automation lane after channel override (2026-11-13)
+
+Studio test: a range containing clips on several original MIDI channels was exported with a track override to channel 9. Reason imported the notes on the intended channel, but also displayed an unwanted **Controller #254** automation lane.
+
+The matching original-channel and overridden drag files were inspected: the lead track's events and timestamps were identical apart from their channel numbers. The override added no events. A diagnostic copy with all note-off velocities zeroed produced the same result in Reason, so changing release velocities did not remove the lane. Its exact cause remains unknown; do not identify #254 as release velocity on this evidence.
+
+Known, non-blocking interoperability issue, accepted by the user. Workaround: delete the unwanted automation lane in Reason. No MIDI filtering or further investigation is planned in this feature.
+
 ### DAWs and their hosted plugins (tested by hand, macOS, reported 2026-11-10)
 
 Dragging MIDI between a DAW and a VST plugin running inside it (for example Scaler 3 or RapidComposer as a plugin):

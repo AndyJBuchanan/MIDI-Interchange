@@ -22,6 +22,7 @@ Updated 2026-11-13.
 
 ## Later, after more real-world use
 
+- **Reason Controller #254 automation lane** (known issue, deferred by agreement, 2026-11-13): channel-override export worked, but Reason added an unwanted automation lane. Zeroing release velocities did not remove it. Users can delete the lane; further investigation is deferred. See [the findings](INTEROP_FINDINGS.md#reason-unexpected-automation-lane-after-channel-override-2026-11-13).
 - **Esc cancellation of incoming macOS drags** (deferred by agreement, 2026-11-12):
   - Finder → Finder cancels, but Finder → MIDI Interchange doesn't. Cubase → Finder and Cubase → MIDI Interchange both fail to cancel.
   - Investigate the Finder difference, and whether native handling can help. Don't assume the destination can cancel another app's drag.

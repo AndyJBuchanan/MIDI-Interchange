@@ -224,8 +224,10 @@ For each app check: does the drop import at all (if not, note the formats listed
 
 ## Known limitations
 
+- **Reason automation lane:** importing a channel-overridden range can create an unwanted **Controller #254** automation lane, although the channel override works. Delete the unwanted lane in Reason. Its cause is unresolved; see [the findings](docs/INTEROP_FINDINGS.md#reason-unexpected-automation-lane-after-channel-override-2026-11-13).
+
 - **Drag and drop depends on the other app.** File URLs and any data starting with `MThd` are handled. Qt can't receive **macOS file promises** or **Windows virtual files**; no app tested so far needed them. If a drop carries no usable MIDI, the app lists the formats it was offered, which helps a lot in a bug report. Drag-out offers temp files (in `$TMPDIR/MIDI Interchange Drag`, pruned after 24 h).
-- **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, assemble clips that share a channel. A per-track export channel is planned.
+- **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, use the track colour box’s export-channel override, or assemble clips that share a channel.
 - Clips can be trimmed at either edge but not split.
 - The workspace isn't kept between sessions yet (planned); export what you need before quitting.
 - SMPTE-division files are rejected with a clear message.
