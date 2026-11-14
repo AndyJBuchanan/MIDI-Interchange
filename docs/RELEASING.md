@@ -10,6 +10,22 @@ Users download the app; they don't build it. You can build everything on your ow
 | `MIDI-Interchange-<ver>-Windows-x64-Setup.exe` | Windows 10/11 x64 | Windows | Installer. **Recommended** for Windows users |
 | `MIDI-Interchange-<ver>-Windows-x64.zip` | Windows 10/11 x64 | Windows | Portable: extract it and run the exe |
 
+## Branches
+
+From 0.3.0, each release is assembled on its own `release/X.Y.Z` branch. `main` only moves when a release has been published, so `main` and its README always describe the app people can download.
+
+- **`main` is the latest published release.** Code reaches it only by merging a published release branch.
+- **Feature branches** (`feature/…`, one feature each) start from `main`. If a feature needs another feature that isn't published yet, start it from the release branch instead.
+- **Features merge by pull request** into the release branch, not by a straight merge. The PR's base is `release/X.Y.Z`, not `main`.
+- **Create `release/X.Y.Z` early**, from `main`, when the first feature for that release is ready to merge. Merge further features into it as they're finished, so they're tested together as you go rather than all at the end. The first commit on the branch bumps `__version__` (see below).
+- **Merge a feature only once you mean to ship it in that release.** Taking a feature back out means reverting its merge.
+- **Release work happens on the release branch:** release notes, the build, the tag, then the checksums and the release history row (the checklist below).
+- **After publishing**, merge the release branch into `main` by pull request with a merge commit, not a squash or rebase, so the tagged commit is part of `main`'s history. Then delete the release branch.
+- **Fixes to a published release** go on a new `release/X.Y.Z+1` branch made from that release's tag, and follow the same steps.
+- **Docs that describe the published app** (README fixes, roadmap, interop findings) may go straight to `main`. Plans for a feature go on its feature branch.
+
+`main` was ahead of the published release when this started: it already held the track export channel (PR #11) and a bump to 0.2.3, neither published. Both went into `release/0.3.0`.
+
 **The minimum macOS version comes from the Python used to build.** A Homebrew Python 3.12 is built for the host macOS, and the bundled Python framework then requires that version. v0.1.0-pre was built on macOS 26 with Homebrew Python, which gave a minimum of **macOS 15**; the bundled Qt needs 14.4. Check after each build:
 
 ```bash
@@ -44,15 +60,15 @@ Rules:
 
 ### 1. Prepare (any machine)
 
-1. Pull the latest `main`, and make sure the tree is clean and the tests pass: `.venv/bin/python -m pytest -q`
-2. Set `__version__` in `midi_interchange/__init__.py`, commit with a message like `Bump version to 0.2.0`, and push.
+1. Switch to the release branch (`git switch release/<ver>`) and pull. Make sure every feature PR for the release is merged into it, the tree is clean and the tests pass: `.venv/bin/python -m pytest -q`
+2. Check `__version__` in `midi_interchange/__init__.py` is `<ver>`. It's set when the release branch is created; if it isn't, set it, commit with a message like `Bump version to 0.3.0`, and push.
 3. Write the release notes in `docs/releases/v<ver>[-label].md` (copy the previous one), then commit and push.
 4. Note the commit hash (`git rev-parse --short HEAD`). Both platforms must build **this exact commit**.
 
 ### 2. Build on macOS
 
 ```bash
-git pull && git status --short     # must be clean, at the release commit
+git switch release/<ver> && git pull && git status --short     # must be clean, at the release commit
 ```
 ```bash
 scripts/build_macos.sh
@@ -67,7 +83,7 @@ Quick check: mount the DMG, drag the app to a scratch folder and launch it. Find
 Use a clone made from GitHub, not a copied working tree; see DEVELOPMENT.md, "Get the code".
 
 ```powershell
-git pull; git status --short
+git switch release/<ver>; git pull; git status --short
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 ```
 
@@ -112,6 +128,14 @@ To add or replace a file afterwards, for example when the Windows files come lat
 
 ```bash
 gh release upload v<ver>[-label] -R <owner>/MIDI-Interchange --clobber <file>
+```
+
+### 6. Merge the release into `main`
+
+Commit the release notes with their checksums, and the release history row below, on the release branch and push. Then open a pull request from `release/<ver>` into `main`, merge it with a merge commit, and delete the release branch:
+
+```bash
+gh pr create -R <owner>/MIDI-Interchange --base main --head release/<ver> --title "Release <ver>" --body "Published as v<ver>[-label]."
 ```
 
 ## Release history
