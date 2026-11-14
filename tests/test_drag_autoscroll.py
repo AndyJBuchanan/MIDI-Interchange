@@ -14,7 +14,6 @@ from helpers import conductor, note, smf, track
 from midi_interchange.interchange.payload import Payload
 from midi_interchange.ui.main_window import MainWindow
 from midi_interchange.ui import theme
-from midi_interchange.ui.timeline import HEADER_H
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +37,7 @@ def win(app):
 
 def enter(w, data, x=None):
     tl = w.timeline
-    pos = QPoint(tl.viewport().width() - 5 if x is None else x, HEADER_H + 25)
+    pos = QPoint(tl.viewport().width() - 5 if x is None else x, tl.header_h() + 25)
     pt = tl.viewport().mapTo(w, pos)
     mime = QMimeData()
     mime.setData("audio/midi", data)
@@ -142,7 +141,7 @@ def test_internal_drags_extend_and_release_recomputes_length(win, clip):
     tl = w.timeline
     tl.horizontalScrollBar().setValue(0)
     mods = Qt.AltModifier if clip else Qt.NoModifier
-    start = QPoint(20, HEADER_H + 25) if clip else QPoint(200, 10)
+    start = QPoint(20, tl.header_h() + 25) if clip else QPoint(200, 10)
     vp = tl.viewport()
     QTest.mousePress(vp, Qt.LeftButton, mods, start)
     pos = QPoint(vp.width() - 5, start.y())
@@ -162,7 +161,7 @@ def test_external_drag_outside_timeline_stops_scrolling(win):
     w, data = win
     tl = w.timeline
     mime, _, _ = enter(w, data)
-    pt = w.track_panel.mapTo(w, QPoint(10, HEADER_H + 25))
+    pt = w.track_panel.mapTo(w, QPoint(10, tl.header_h() + 25))
     w.dragMoveEvent(QDragMoveEvent(pt, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
     assert not tl._autoscroll.isActive()
     assert tl._drop_ind[1] == 0
@@ -181,7 +180,7 @@ def test_drop_time_visible_in_ruler_when_destination_is_below_view(win, new_trac
     lane = None if new_track else 0
     tl.verticalScrollBar().setValue(0 if new_track else tl.verticalScrollBar().maximum())
     if not new_track:
-        assert tl.lane_top(lane) + tl.lane_h <= HEADER_H
+        assert tl.lane_top(lane) + tl.lane_h <= tl.header_h()
     else:
         assert tl.lane_top(len(w.ctl.ws.tracks)) >= tl.viewport().height()
     tl.set_drop_indicator((lane, F(16), "Drop here"))
@@ -203,7 +202,7 @@ def test_cancelled_multi_file_drop_restores_pre_drag_view(win, monkeypatch, tmp_
         (tmp_path / n).write_bytes(data)
     mime = QMimeData()
     mime.setUrls([QUrl.fromLocalFile(str(tmp_path / n)) for n in ("a.mid", "b.mid")])
-    pos = QPoint(tl.viewport().width() - 5, HEADER_H + 25)
+    pos = QPoint(tl.viewport().width() - 5, tl.header_h() + 25)
     pt = tl.viewport().mapTo(w, pos)
     before = tl.horizontalScrollBar().value()
     tracks_before = len(w.ctl.ws.tracks)

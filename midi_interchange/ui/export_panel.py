@@ -95,7 +95,11 @@ def start_file_drag(widget: QWidget, ctl: Controller, track_ids: list[str] | Non
     widget.render(pm)
     drag.setPixmap(pm.scaledToWidth(min(pm.width(), 160), Qt.SmoothTransformation))
     drag.setHotSpot(QPoint(12, 12))
-    drag.exec(Qt.CopyAction)
+    ctl.file_drag_active = True
+    try:
+        drag.exec(Qt.CopyAction)
+    finally:
+        ctl.file_drag_active = False
     on_done(paths)
 
 

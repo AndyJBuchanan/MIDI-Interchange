@@ -41,6 +41,7 @@ class Controller(QObject):
         self.snap: SnapSetting = "beat"
         self.export_mode = ExportMode.REBASE   # default (2026-11-10); with no ranges, export is whole
         self.trim = False
+        self.file_drag_active = False  # transient native drag-out; never checkpoint mid-drag
         self._undo: list[tuple[dict, str | None]] = []
         self._redo: list[tuple[dict, str | None]] = []
 
@@ -77,6 +78,12 @@ class Controller(QObject):
         self.rangesChanged.emit()
         self.selectionChanged.emit()
         self.undoStateChanged.emit()
+
+    def restore_session(self, snap: dict, selection: str | None) -> None:
+        """Apply validated persistent state using the same refresh path as undo."""
+        self._undo.clear()
+        self._redo.clear()
+        self._apply(snap, selection)
 
     # -- import ---------------------------------------------------------------
     def parse_payloads(self, payloads: list[Payload]) -> tuple[list, list[str]]:
@@ -175,6 +182,25 @@ class Controller(QObject):
         tm = self.ws.tempo_map
         ts = tm.timesig_at(clip.start)
         return ts.bar_length if setting == "bar" else ts.beat_length if setting == "beat" else Fraction(setting)
+
+    def split_position(self, clip_id: str, time: Fraction,
+                       bypass_snap: bool = False) -> Fraction | None:
+        """Shared snapped/validated position for preview and execution."""
+        found = self.ws.find_clip(clip_id)
+        if found is None:
+            return None
+        time = self.snap_time(time, bypass_snap)
+        return time if self.ws.can_split_clip(clip_id, time, self._min_trim(found[1], bypass_snap)) else None
+
+    def split_clip(self, clip_id: str, time: Fraction, bypass_snap: bool = False) -> str | None:
+        time = self.split_position(clip_id, time, bypass_snap)
+        if time is None:
+            return None
+        clip = self.ws.find_clip(clip_id)[1]
+        self.checkpoint()
+        right = self.ws.split_clip(clip_id, time, self._min_trim(clip, bypass_snap))
+        self.tracksChanged.emit()
+        return right.id
 
     def restore_clip(self, clip_id: str) -> None:
         """Menu command: put a trimmed clip's edges back to its full extent."""

@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, Q
 from ..core.document import TRACK_COLORS, Track
 from . import theme
 from .controller import Controller
-from .timeline import HEADER_H, Timeline
+from .timeline import Timeline
 
 
 CONTROL_SIZE = 22
@@ -246,6 +246,7 @@ class TrackPanel(QWidget):
         ctl.tempoChanged.connect(self.rebuild)
         timeline.verticalOffsetChanged.connect(self._set_offset)
         timeline.laneHeightChanged.connect(lambda _h: self._layout())
+        timeline.headerHeightChanged.connect(lambda _h: self._layout())
 
     def _set_offset(self, v: int) -> None:
         self._voffset = v
@@ -281,7 +282,7 @@ class TrackPanel(QWidget):
     def _layout(self) -> None:
         lane_h = self.timeline.lane_h
         w = self.width()
-        self.lanes.setGeometry(0, HEADER_H, w, max(self.height() - HEADER_H, 0))
+        self.lanes.setGeometry(0, self.timeline.header_h(), w, max(self.height() - self.timeline.header_h(), 0))
         for i, t in enumerate(self.ctl.ws.tracks):
             h = self.headers.get(t.id)
             if h is None:
@@ -289,7 +290,7 @@ class TrackPanel(QWidget):
             y = i * lane_h - self._voffset
             h.setGeometry(0, y, w, lane_h)
             h.setVisible(y + lane_h > 0 and y < self.lanes.height())
-        self.title.setGeometry(10, 0, w - 70, HEADER_H)
+        self.title.setGeometry(10, 0, w - 70, self.timeline.header_h())
         self.clear_m.setGeometry(w - 2 * CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
         self.clear_s.setGeometry(w - CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
         self.title.raise_()
@@ -305,13 +306,13 @@ class TrackPanel(QWidget):
         w, h = self.width(), self.height()
         p.fillRect(0, 0, w, h, theme.PANEL_BG)
         for i, _t in enumerate(self.ctl.ws.tracks):
-            y = HEADER_H + i * self.timeline.lane_h - self._voffset
+            y = self.timeline.header_h() + i * self.timeline.lane_h - self._voffset
             p.fillRect(0, y + self.timeline.lane_h - 1, w, 1, theme.LANE_SEP)
-        p.fillRect(0, 0, w, HEADER_H, theme.RULER_BG)
-        p.fillRect(0, HEADER_H - 1, w, 1, theme.LANE_SEP)
+        p.fillRect(0, 0, w, self.timeline.header_h(), theme.RULER_BG)
+        p.fillRect(0, self.timeline.header_h() - 1, w, 1, theme.LANE_SEP)
         p.fillRect(w - 1, 0, 1, h, theme.LANE_SEP)
         if self._drop_index is not None:
-            y = HEADER_H + self._drop_index * self.timeline.lane_h - self._voffset
+            y = self.timeline.header_h() + self._drop_index * self.timeline.lane_h - self._voffset
             p.setPen(QPen(theme.ACCENT, 2))
             p.drawLine(0, y, w, y)
         p.end()
@@ -327,7 +328,7 @@ class TrackPanel(QWidget):
 
     # -- drag to reorder --------------------------------------------------------
     def _index_at_global(self, gp: QPoint) -> int:
-        y = self.mapFromGlobal(gp).y() + self._voffset - HEADER_H
+        y = self.mapFromGlobal(gp).y() + self._voffset - self.timeline.header_h()
         n = len(self.ctl.ws.tracks)
         return max(0, min(n, round(y / self.timeline.lane_h)))
 
