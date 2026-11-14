@@ -40,8 +40,8 @@ Ranges are optional, but they're what make this a palette rather than a file shu
 
 ![The main window, annotated](docs/images/01-window.png)
 
-1. **Toolbar:** New, Open, Save MIDI, Undo/Redo, zoom, the Snap list, Clear All Ranges, and About at the far right.
-2. **Ruler and info rows:** bar numbers, then tempo and time signature, then markers (a row of their own that appears only when there are markers to show; the **Markers** button turns it off).
+1. **Toolbar:** New, Open, Save MIDI, Undo/Redo, zoom, the Snap list, the **Markers** button, Clear All Ranges, and About at the far right.
+2. **Ruler and info rows:** bar numbers, then tempo and time signature, then markers. The **marker row** appears only when there is a marker to show: it lists the markers of the tracks an export with no ranges would include (so muting a track removes its markers), each in its track's colour. The **Markers** button (also Timing ▸ Show Markers) turns the row off; markers still show in their lanes and are still exported. The button's setting is remembered between runs.
 3. **Range strip:** your ranges, as amber bars. This is where you make and move them.
 4. **Track headers:** colour, **M**ute, **S**olo, name, and a ✕ to remove. Drag ⋮⋮ to reorder.
 5. **Lanes:** one per track, showing its clips with their notes, lyrics and text. The timeline is this whole area.
@@ -51,7 +51,7 @@ Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 
 
 ### Step 1: Bring MIDI in
 
-Drag MIDI from another app, or `.mid` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold.
+Drag MIDI from another app, or `.mid` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
 
 ![Dragging a clip in, with the landing preview](docs/images/02-drag-in.png)
 
@@ -76,13 +76,13 @@ Dragging near either edge of the timeline scrolls it, and it grows as you drag r
 - A dropped clip with exactly the same start and end as one already on the track **replaces** it (a trimmed clip counts by its visible edges). Partial overlaps are kept and tinted.
 - **Song titles:** Staccato.ai names tracks "part - song" and changes the song between generations. If no name matches exactly, names are compared again without a known song title, so "Drums - Staccato Generation" joins "Drums - Industrial EBM Anthem"; the status bar says when it did. A song title is known only from the file itself (its tempo track's name, or an ending all its tracks share), so DAW clips such as "Lead - Verse" and "Lead - Chorus" never match.
 
-The first file with a tempo map sets the workspace tempo. To adopt another file's map, right-click the ruler or the tempo row and choose Tempo Map (also in Timing ▸ Tempo Map), or right-click one of that file's tracks and choose Use This Track's Tempo Map.
+The first file with a tempo map sets the workspace tempo. To adopt another file's map, right-click the ruler, the tempo row or the marker row and choose Tempo Map (also in Timing ▸ Tempo Map; the current file is ticked), or right-click one of that file's tracks and choose Use This Track's Tempo Map (shown only for a track whose file has a tempo map). Undo reverses it.
 
 ### Step 2: Tidy what you hold
 
 Once things are on the timeline you can shuffle them. None of this changes your source files.
 
-Click a track's colour box to choose a palette colour or **More colours…**, and to set its **Export MIDI channel**. **Original channels** keeps each clip's MIDI channels; choosing **1–16** sends every clip on that track to that channel on Save or drag-out. The number appears in the colour box. Moving a clip to another track uses that destination's setting; source MIDI stays unchanged.
+Click a track's colour box to choose a palette colour or **More colours…**, and to set its **Export MIDI channel**. **Original channels** (the default for every track) keeps each clip's own MIDI channels. Choosing **1–16** sends every clip on that track to that channel: all channel messages (notes, controllers, program changes, pitch bend, pressure) in every export, whether by **Save MIDI…**, **Save This Track…** or drag-out. The number appears in the colour box. Choosing Original channels again restores the originals, and each change is one undo step. Moving a clip to another track uses that destination's setting; your source MIDI is never changed.
 
 ![Moved, trimmed, duplicated and overlapping clips](docs/images/05-clips.png)
 
@@ -100,7 +100,7 @@ The rest of the rules, in one place:
 
 The **clip menu** (left) has Duplicate, Butt Against Previous Clip, Restore Full Clip (on a trimmed clip), Move Clip to Track (or New Track) and Delete Clip. Its **Track:** submenu, and a right-click on a track header, give the **track menu** (right): Mute/Unmute, Rename, Move Up/Down, **Merge Into** another track, **Save This Track…** (exports just that track, even if it's muted), Source Info… and Remove Track.
 
-Tracks: click a name to rename it, drag ⋮⋮ to reorder, ✕ to remove. File ▸ New (⌘N, also on the toolbar) clears the workspace, and Undo brings it back. **Undo / redo** (⌘Z / ⇧⌘Z) cover everything.
+Tracks: click a name to rename it, drag ⋮⋮ to reorder, ✕ to remove. File ▸ New (⌘N, also on the toolbar) clears the workspace, and Undo brings it back (see [Returning to your workspace](#returning-to-your-workspace) for what happens if you then quit). **Undo / redo** (⌘Z / ⇧⌘Z) cover everything.
 
 ### Step 3: Mark ranges
 
@@ -148,6 +148,8 @@ Pick a mode in the **Export** list at the bottom. With **no ranges defined, the 
 - **Ranges · rebase & concatenate** (the default once you have ranges): one file, with the ranges **joined back to back** from bar 1, in the order they're listed. Verse, then Chorus, with no gap.
 - **Ranges · separate files:** **one file per range**, each starting at bar 1.
 
+Each track's **Export MIDI channel** (Step 2) is applied to the output in every mode.
+
 Tick **Trim leading/trailing silence** to cut the output down to its first and last note (or lyric); every track moves by the same amount, so they stay aligned.
 
 Then either:
@@ -172,6 +174,7 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Butt a clip against the previous one | Right-click ▸ Butt Against Previous Clip |
 | Move a clip to another track | Right-click ▸ Move Clip to Track (or New Track) |
 | Delete a clip | Right-click ▸ Delete Clip |
+| Set a track's colour or export channel | Click its colour box ▸ a colour, **More colours…**, or **Export MIDI channel** ▸ Original channels or 1–16 |
 | Rename a track | Click its name |
 | Reorder tracks | Drag ⋮⋮, or right-click ▸ Move Up / Move Down |
 | Combine tracks | Right-click ▸ Merge Into (another track) |
@@ -190,20 +193,22 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Choose an export mode | The Export list: whole workspace, keep positions, rebase & concatenate, separate files |
 | Trim silence | Tick Trim leading/trailing silence |
 | Export | **Save MIDI…** (⌘S), or drag the **Drag MIDI out** tile into another app or a folder |
-| Start again | File ▸ New (⌘N, also on the toolbar). Export settings are kept; Undo brings your work back |
+| Start again | File ▸ New (⌘N, also on the toolbar). Export settings are kept; Undo brings your work back until you quit |
+| Return to your work | Just reopen the app: the workspace is restored. Opening files while it runs adds them to the open window. See [Returning to your workspace](#returning-to-your-workspace) |
 | Undo / redo | ⌘Z / ⇧⌘Z cover everything |
-| Tempo | The first file with a tempo map sets it. Right-click the ruler or tempo row ▸ Tempo Map adopts another file's |
+| Tempo | The first file with a tempo map sets it. Right-click the ruler, tempo row or marker row ▸ Tempo Map (or Timing ▸ Tempo Map) adopts another file's; so does a track's right-click ▸ Use This Track's Tempo Map |
+| Show / hide the marker row | **Markers** on the toolbar, or Timing ▸ Show Markers. Remembered between runs; markers still export |
 | About | The About button at the right end of the toolbar shows the version and the project link |
 
-Each lane shows its clips' notes, lyrics and text; the rows above show tempo, time signature, markers (only those of tracks that would be exported) and the ranges. The status bar shows the position under the pointer.
+Each lane shows its clips' notes, lyrics and text; the rows above show tempo, time signature, markers (see the window list above) and the ranges. The status bar shows the position under the pointer.
 
 ### Returning to your workspace
 
 The current workspace is restored when you reopen the app, including its MIDI data, trims, ranges, mute/solo settings, channel overrides, export settings and timeline view. Undo history starts fresh. Original files and DAW drag temp files are not needed for restoration.
 
-The app saves on exit and checkpoints pending changes every two minutes once you have been inactive for at least 15 seconds. Active work can delay a checkpoint. After a crash, changes since the last checkpoint may be lost. Incompatible or damaged sessions are preserved with a warning and the app starts empty.
+The app saves on exit and checkpoints pending changes every two minutes once you have been inactive for at least 15 seconds. Active work can delay a checkpoint. After a crash, changes since the last checkpoint may be lost. If the saved session is incompatible or damaged, the app warns you and starts empty; the rejected file is kept only until you quit. After an unclean exit the app says so when it restores the last checkpoint.
 
-Only one instance runs at a time. Opening more MIDI files from Finder/Explorer or another launch adds them to the existing window. **New** clears the workspace; a normal quit saves that empty state too.
+Only one instance runs at a time. Opening MIDI files from Finder/Explorer or another launch adds them to the existing window (they import as in Step 1); launching again with no files just brings that window forward. **New** clears the workspace and Undo can bring it back, but undo history isn't kept: a normal quit saves the empty state, so quitting after New starts empty next time. The Markers button is remembered separately from the session.
 
 ## Works with
 
