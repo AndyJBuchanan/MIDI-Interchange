@@ -210,3 +210,39 @@ def test_split_halves_move_restore_copy_delete_independently(ws):
     assert copied.events is left.events and (copied.start, copied.end) == (2, 4)
     ws.delete_clip(left.id)
     assert ws.find_clip(right.id) and ws.find_clip(copied.id)
+
+
+@pytest.mark.parametrize('copy', [False, True])
+@pytest.mark.parametrize('new_track', [False, True])
+def test_shift_move_copy_uses_original_track_and_time(win, copy, new_track):
+    tl, ctl = win.timeline, win.ctl
+    source = ctl.ws.tracks[0]
+    original = source.clips[0]
+    duplicate = ctl.ws.duplicate_clip(original.id, offset=F(0))
+    ctl.ws.new_track_for_clip(duplicate.id)
+    ctl.tracksChanged.emit()
+    before = ctl.ws.snapshot()
+    mods = Qt.AltModifier | Qt.ShiftModifier
+    if copy:
+        mods |= Qt.ControlModifier
+    p = point(tl, 2)
+    QTest.mousePress(tl.viewport(), Qt.LeftButton, mods, p)
+    tl._drag_to(tl.x_of(4.3), True, p.y())
+    moving_id = tl._drag['cid']
+    assert ctl.ws.find_clip(moving_id)[1].start == F(23, 10)
+    if copy:
+        assert original.start == 0 and moving_id != original.id
+    dest_y = tl.lane_top(len(ctl.ws.tracks) if new_track else 1) + tl.lane_h // 2
+    tl._drag_to(tl.x_of(5.7), True, dest_y)
+    dest, moving = ctl.ws.find_clip(moving_id)
+    assert dest.id != source.id and moving.start == 0
+    # Remaining on that destination must keep using the original track as reference.
+    tl._drag_to(tl.x_of(6.4), True, tl.lane_top(ctl.ws.tracks.index(dest)) + tl.lane_h // 2)
+    assert moving.start == 0
+    tl._drag_to(tl.x_of(4.3), True, p.y())
+    assert ctl.ws.find_clip(moving_id)[0].id == source.id and moving.start == F(23, 10)
+    tl._drag_to(tl.x_of(4.3), False, p.y())
+    assert moving.start == 2
+    QTest.mouseRelease(tl.viewport(), Qt.LeftButton, Qt.AltModifier, p)
+    ctl.undo()
+    assert ctl.ws.snapshot() == before

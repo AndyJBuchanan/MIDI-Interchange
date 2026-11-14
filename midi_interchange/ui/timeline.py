@@ -20,7 +20,8 @@ Interaction
                                            (below the last track: onto a new track)
   Alt+Ctrl / Option-Cmd-drag a clip        copy the clip
   Cmd/Ctrl-click a clip                    split (Shift bypasses snap)
-  Shift while dragging a clip              keep its time; change track only
+  Shift while dragging a clip              bypass snap on source track; keep original time
+                                           on another/new track
   Shift while dragging a range             bypass snap
   (a plain drag on a range edge always moves the range edge; Option picks the clip edge)
   Cmd/Ctrl + wheel, pinch                  zoom around the cursor
@@ -957,19 +958,14 @@ class Timeline(QAbstractScrollArea):
                     d["checkpointed"] = True
                 self.ctl.update_range(r.id, start=new_start, end=new_start + r.length)
 
-    def _drag_clip(self, x: float, y: float | None, lock_time: bool) -> None:
-        """Move (or copy) a clip in time and across tracks. Shift keeps its time."""
+    def _drag_clip(self, x: float, y: float | None, shift: bool) -> None:
+        """Shift bypasses snap on the source track and locks time on other tracks."""
         d = self._drag
         ws = self.ctl.ws
         found = ws.find_clip(d["cid"])
         if found is None:
             return
         cur_track, clip = found
-        if lock_time:
-            new_off = d["orig_off"]
-        else:
-            raw = quantize(max(self.t_of(x), 0.0)) - d["grab"]
-            new_off = max(self.ctl.snap_time(max(raw, ZERO)), ZERO)
         dest_id: str | None = cur_track.id
         to_new = False
         if y is not None and y >= self.header_h():
@@ -983,6 +979,11 @@ class Timeline(QAbstractScrollArea):
                 pending_copy = d["copy"] and not d["checkpointed"]   # the copy isn't made yet
                 to_new = not (last is cur_track and len(cur_track.clips) == 1 and not pending_copy)
                 dest_id = None if to_new else cur_track.id
+        if shift and (to_new or dest_id != d["origin"].id):
+            new_off = d["orig_off"]
+        else:
+            raw = quantize(max(self.t_of(x), 0.0)) - d["grab"]
+            new_off = max(self.ctl.snap_time(max(raw, ZERO), shift), ZERO)
         if new_off == clip.start and dest_id == cur_track.id and not to_new:
             return
         if not d["checkpointed"]:

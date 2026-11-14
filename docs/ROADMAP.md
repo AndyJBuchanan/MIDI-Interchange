@@ -30,8 +30,8 @@ Updated 2026-11-14.
   - On an unlocked range, this does nothing for now (agreed 2026-11-12).
   - A possible change: the click locks the range and applies the change in one step. See [the mute/solo plan](plans/mute-solo.md).
 - **Keys and modifiers:**
-  - Review the UI's keyboard shortcuts and drag modifiers as a whole, including Shift on clip drags.
-  - Shift currently keeps a clip's time and changes only its track. On range drags, Shift bypasses snap instead. This is kept for now.
+  - Review the UI's keyboard shortcuts and drag modifiers as a whole. Shift on clip move/copy now bypasses snap on the source track and preserves original time on another/new track.
+
 
 ## Future settings page
 

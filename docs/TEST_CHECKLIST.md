@@ -231,6 +231,8 @@ Notes/failures:
 
 ## 8l. Clip splitting (`feature/clip-splitting`)
 
+Clip-splitting checks also passed on Windows.
+
 Use Cmd/Option on macOS; Ctrl/Alt on Windows. Windows checks are done before release under the usual platform policy.
 
 - [x] Hold Cmd/Ctrl over a clip: scissors and a snapped vertical preview appear. Change modifiers without moving the pointer; releasing Cmd/Ctrl or leaving the clip clears the preview. Click to split; both pieces stay adjacent. Undo/Redo reverses/restores the split in one step.
@@ -238,6 +240,8 @@ Use Cmd/Option on macOS; Ctrl/Alt on Windows. Windows checks are done before rel
 - [x] Opt/Alt shows a move arrow and moves; at a trimmable edge it shows resize and trims. Opt/Alt + Cmd/Ctrl shows a move arrow with a plus and copies, including from an edge. Plain range gestures still work.
 - [x] Move one half and use Restore Full Clip on it: it can recover the original full extent independently of its neighbour.
 - [x] Drag a split clip pair into a DAW and listen to a sustained note crossing the split: it releases and restarts at the split.
+
+- [x] With Shift held, move and copy horizontally on the source track: movement is unsnapped. Cross to another track or below the lanes: the original time is preserved. Return to the source track: unsnapped movement resumes. Release Shift: normal snap returns. Undo reverses the whole gesture.
 
 Automated tests cover exact MIDI boundaries, note ordering, all four export modes, channel overrides, locked exclusions, shared session data, invalid cuts, modifier dispatch and undo/redo. No manual file comparison is needed.
 

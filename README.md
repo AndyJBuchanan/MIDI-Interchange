@@ -94,7 +94,7 @@ Click a track's colour box to choose a palette colour or **More colours…**, an
 
 The rest of the rules, in one place:
 
-- **Moving:** drag below the last track to make a new track. Hold Shift to keep the clip's time (a track change only). A track left empty is removed (Undo restores it). A plain move snaps the clip's visible start to the grid.
+- **Moving:** drag below the last track to make a new track. With Shift held, moving or copying on the source track bypasses snap; targeting another track (or a new one below the lanes) keeps the clip's original time. Returning to the source track resumes unsnapped movement. A track left empty is removed (Undo restores it). A plain move snaps the clip's visible start to the grid.
 - **Trimming:** the edge snaps like a move (Shift bypasses it) and can't go past where the clip's MIDI originally started or ended. An edge placed off the grid with Shift stays there until the clip is moved. A clip too narrow to hold both edges can only be moved: zoom in to trim it. A plain drag on a clip edge still makes or resizes a range.
 - **Splitting:** each half must retain at least one snap step (one source tick with snap off or bypassed); a cut at an edge or too close to it does nothing. Already trimmed clips can be split too. Both halves keep their name and can be moved, copied or trimmed independently. Either half can be extended back into the original MIDI; right-click ▸ **Restore Full Clip** restores its full original extent, which may overlap the other half. Notes crossing the split are released and restarted there on export.
 - **Cursors:** ⌥/Alt shows a move arrow (resize at a trimmable edge); ⌥⌘/Alt+Ctrl shows a move arrow with a plus and copies, including at edges.
@@ -172,7 +172,7 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Bring MIDI in | Drag MIDI or `.mid` files/folders onto the window; File ▸ Open (⌘O); Open with… from the Finder/Explorer; command-line paths |
 | Place a drop | Drop over a lane (joins a same-named track at that time), a header (bar 1), or empty space (new tracks) |
 | Place several files | Choose End to End or All at Cursor when asked |
-| Move a clip | ⌥-drag it. Shift keeps its time; drag below the last track for a new track |
+| Move a clip | ⌥-drag it. Shift bypasses snap on the source track and keeps its original time on another track; drag below the last track for a new track |
 | Trim a clip | ⌥-drag its left or right edge. Right-click ▸ Restore Full Clip to undo the trim |
 | Copy a clip | ⌥⌘-drag it, or right-click ▸ Duplicate Clip (placed straight after it) |
 | Butt a clip against the previous one | Right-click ▸ Butt Against Previous Clip |

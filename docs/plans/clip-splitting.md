@@ -68,3 +68,9 @@ On implementation, document the action and boundary behaviour in README and DESI
 - Automated coverage is in `tests/test_clip_splitting.py`, alongside the existing trim, export, session and timeline suites.
 
 Validation: full suite **368 passed, 3 Windows-only skips**; after the final pointer/zoom and independence checks, focused split/trim/timeline/autoscroll suites **90 passed**. Manual checks are in TEST_CHECKLIST section 8l.
+
+## Follow-up: Shift on clip move/copy
+
+Windows clip-splitting verification passed. By user request, Shift during move/copy bypasses snap while targeting the gesture's original track, and preserves the original visible start while targeting another track or creating a new one. The reference remains the original track/time throughout the gesture; returning to it resumes unsnapped movement, and releasing Shift restores ordinary snapped movement. Both move and copy use the same logic and retain one undo step.
+
+Follow-up validation: **97 passed** across split, trim and UI assembly tests, including move/copy to existing/new tracks, remaining on the destination, returning to the source, releasing Shift and undo. The user also manually verified the new Shift behaviour as working.

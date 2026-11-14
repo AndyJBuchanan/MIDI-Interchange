@@ -115,7 +115,7 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - The view scrolls automatically near the edges.
   - Double-click a range (or a lane inside it) to edit it in the bottom panel; Tab cycles through ranges; Escape deselects; Backspace or Delete deletes one.
   - Each range has an include checkbox per lane at its inner left edge (hidden when the range is under ~23 px wide; the range's right-click menu lists the same choices). A quick second click on it flips it again rather than opening the range editor.
-- Alt/Option-drag moves a clip in time and across tracks (below the last lane: a new track named after the clip's original track). Shift keeps its time. Alt+Ctrl / Option-⌘-drag copies. Empty tracks are removed when the gesture ends; one undo step per gesture.
+- Alt/Option-drag moves a clip in time and across tracks (below the last lane: a new track named after the clip's original track). Shift bypasses snap on the original track; on another or new track it preserves the original visible start. Returning to the original track resumes unsnapped movement. Alt+Ctrl / Option-⌘-drag copies with the same Shift rules. Empty tracks are removed when the gesture ends; one undo step per gesture.
 - Clips carry their own `source_id`, so a track can hold clips from several sources. Export chooses PPQ from every clip's source; Source Info and the track header list all of them.
 - Overlapping clips on a track are allowed: the overlap is tinted red and both clips' events are exported, merged.
 - File ▸ New empties the workspace as one undoable step, keeping export settings.
