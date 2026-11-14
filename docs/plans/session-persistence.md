@@ -1,6 +1,6 @@
 # Plan: low-effort session persistence
 
-Status: **implemented; awaiting studio verification** (2026-11-13). No application build or release made. Branch: `feature/session-persistence` from `main`.
+Status: **implemented; review follow-ups agreed, not built** (2026-11-14). Studio verification pending. No application build or release made. Branch: `feature/session-persistence` from `main`.
 
 Keep the one current workspace between app runs without introducing project files, workspace Save/Open commands, or session management UI.
 
@@ -81,6 +81,52 @@ Keep the one current workspace between app runs without introducing project file
 - The schema version, not the writing app version, gates loading. Rejected files are moved aside before a new save can replace them; a failed preservation blocks writes rather than losing the original.
 - Validation checks effective clip source relationships. A track's original source ID and a locked range's exclusions can legitimately retain IDs removed from the current model; these inert historical IDs are preserved, matching existing model behaviour.
 - Source/event/tempo data are immutable under existing snapshot semantics. Snapshot capture copies editable track/clip/range state on the UI thread; encoding and writing run on the worker.
-- Tests exercise exact MIDI/export round trips (including the Cubase lyric fixture), settings/view, fresh undo, bad data and unsupported schemas, failed/overlapping writes, idle gates, process handoff and crash recovery, and the real application entry point with isolated storage. Manual checks are in `test-results-delete-me.md`.
+- Tests exercise exact MIDI/export round trips (including the Cubase lyric fixture), settings/view, fresh undo, bad data and unsupported schemas, failed/overlapping writes, idle gates, process handoff and crash recovery, and the real application entry point with isolated storage. Manual checks move to `docs/TEST_CHECKLIST.md` (see follow-up 5).
 
 Automated verification: **307 tests passed**, including 48 new session/instance checks. Existing Qt deprecation warnings only. Native studio checks remain pending.
+
+## Review follow-ups (agreed 2026-11-14)
+
+Found when the first implementation was reviewed against this plan. Build only when asked, on this branch. Each change comes with its own tests.
+
+Two review checks found no rejections. Every repository MIDI file was saved and reloaded, both singly and all together (80 tracks), and 150 random sequences of 40 edits were saved and reloaded after every step. Load time isn't a concern: 320 tracks with 39k events make a 6.3 MB session that decodes in about 0.6 s.
+
+1. **Recalculate derived range state on load; don't reject it.**
+   - An unlocked range's track choices are derived from global mute/solo. Today a mismatch rejects the whole session.
+   - Instead, after the structural validation, recalculate unlocked ranges with the existing model sync (`Workspace.sync_ranges()`), the same path the app uses after a mute/solo edit.
+   - Locked ranges keep their stored choices. All other validation (MIDI, IDs, fractions, trims, references) stays strict.
+   - Test: a session whose unlocked range disagrees with mute/solo loads, and the range then matches the global result.
+2. **A close that can't happen yet is deferred, not dropped.**
+   - Today Close and Quit are silently ignored during startup restore, a drag/trim/range gesture, an internal or external drag, or a pending handed-off import. That includes Cmd-Q and a macOS logout or shutdown.
+   - Instead, remember the request and show "Closing when the current operation finishes…" in the status bar. When the app is no longer busy, run the normal close: final save, with the existing failure dialog.
+   - Repeated requests don't stack. Don't add a separate cancel.
+   - Tests: a close during each busy state completes once the state ends, with the final save after any pending import; a repeated close saves once.
+3. **Rejected sessions are kept for the current run only.**
+   - A rejected session is preserved while the app runs, so it can be inspected if needed. A clean shutdown deletes it.
+   - At startup, before loading, delete any `session-rejected-*.json` left by earlier runs, for example after a crash. Never delete the file rejected in the current run before shutdown.
+   - A failed deletion is ignored, since the app has no log, and is retried at the next startup. It must never block startup, saving or quitting.
+   - The rejection notice says the file is kept until the app quits.
+   - Tests: leftovers are removed at startup, and the current run's file survives until a clean shutdown and is gone after it.
+4. **One accurate startup notice.**
+   - Replace the separate notices with one message that matches what happened:
+     - unclean previous run, session restored: the last checkpoint was restored; more recent changes may be lost;
+     - session rejected: it couldn't be restored, the app started empty, and the file is kept until quit;
+     - both, combined.
+   - Never claim a restore that didn't happen.
+   - Tests: each case's wording.
+5. **Remove the transient checklist file.**
+   - Delete `test-results-delete-me.md` from the branch. Files named `*delete-me*` are the user's transient notes and are never committed.
+   - Add `*delete-me*` to `.gitignore`.
+   - Put the manual session checks, including follow-ups 1–4 and 6, in `docs/TEST_CHECKLIST.md` as section 8j (`feature/session-persistence`).
+6. **Windows coverage.**
+   - **Automated:** keep tests cross-platform wherever they can be, and mark Windows-only tests with `pytest.mark.skipif(sys.platform != "win32", ...)` so they run only there.
+     - Cross-platform: several second launches started at once while the owner starts up. Each request imports once, and no second owner appears.
+     - Windows-only: an atomic save while another process holds `session.json` open (sharing violation). The previous file stays intact, and the failure takes the normal periodic or close-time path.
+     - Windows-only: drive-letter, UNC and non-ASCII paths handed off.
+   - **Manual, packaged Windows build:**
+     - Explorer *Open with* on several selected files: one window, all files imported once.
+     - Opening more files while the app runs, and while it is still starting.
+     - Ending the task in Task Manager, then relaunching: the crash notice shows and the lock is recovered.
+     - The installer upgrading over a previous version keeps the session.
+   - The Windows checks are needed before release, not before merge.
+   - Uninstalling leaves the saved session in AppData (agreed 2026-11-14), so reinstalling restores it. No installer change.
