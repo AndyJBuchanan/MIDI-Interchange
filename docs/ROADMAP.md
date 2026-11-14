@@ -6,7 +6,6 @@ Updated 2026-11-14.
 
 ## Agreed, not started
 
-- **Clip splitting:** split a clip at a chosen position, reusing duplication and edge-trim operations with shared event data. Keep both pieces in place and make the split one undo step. Plan the interaction before implementation.
 - **Export/drag filename decoration:**
   - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
   - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
@@ -20,6 +19,7 @@ Updated 2026-11-14.
 
 ## Later, after more real-world use
 
+- **Intermittent cursor switching** (reported during clip-splitting verification, 2026-11-14): cursors occasionally stop switching. The user has observed this throughout the app's development, before clip splitting; the cause is unknown. Investigate later when a reproducible case is available. Clip-splitting manual checks otherwise passed.
 - **Reason Controller #254 automation lane** (known issue, deferred by agreement, 2026-11-13): channel-override export worked, but Reason added an unwanted automation lane. Zeroing release velocities did not remove it. Users can delete the lane; further investigation is deferred. See [the findings](INTEROP_FINDINGS.md#reason-unexpected-automation-lane-after-channel-override-2026-11-13).
 - **Esc cancellation of incoming macOS drags** (deferred by agreement, 2026-11-12):
   - Finder → Finder cancels, but Finder → MIDI Interchange doesn't. Cubase → Finder and Cubase → MIDI Interchange both fail to cancel.
@@ -30,8 +30,8 @@ Updated 2026-11-14.
   - On an unlocked range, this does nothing for now (agreed 2026-11-12).
   - A possible change: the click locks the range and applies the change in one step. See [the mute/solo plan](plans/mute-solo.md).
 - **Keys and modifiers:**
-  - Review the UI's keyboard shortcuts and drag modifiers as a whole, including Shift on clip drags.
-  - Shift currently keeps a clip's time and changes only its track. On range drags, Shift bypasses snap instead. This is kept for now.
+  - Review the UI's keyboard shortcuts and drag modifiers as a whole. Shift on clip move/copy now bypasses snap on the source track and preserves original time on another/new track.
+
 
 ## Future settings page
 

@@ -331,6 +331,27 @@ class Workspace:
         dest.sort_clips()
         return dup
 
+    def can_split_clip(self, clip_id: str, time: Fraction,
+                       min_length: Fraction | None = None) -> bool:
+        found = self.find_clip(clip_id)
+        if found is None:
+            return False
+        clip = found[1]
+        minimum = self._default_min_trim(clip) if min_length is None else min_length
+        return minimum > ZERO and clip.start + minimum <= time <= clip.end - minimum
+
+    def split_clip(self, clip_id: str, time: Fraction,
+                   min_length: Fraction | None = None) -> Clip | None:
+        """Split using shared events and reversible trims; invalid cuts are atomic no-ops."""
+        if not self.can_split_clip(clip_id, time, min_length):
+            return None
+        track, clip = self.find_clip(clip_id)
+        right = self.duplicate_clip(clip_id, offset=clip.start)
+        self.trim_clip(clip_id, "end", time, min_length)
+        self.trim_clip(right.id, "start", time, min_length)
+        track.sort_clips()
+        return right
+
     def snap_clip_to_previous(self, clip_id: str) -> bool:
         """Move a clip so it starts where the previous clip on its track ends.
         Returns False when there is no previous clip."""
