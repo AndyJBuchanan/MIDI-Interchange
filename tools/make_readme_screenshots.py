@@ -130,6 +130,31 @@ def lead(chorus):
     return _file("Lead", ev)
 
 
+# A mid-energy build between verse and chorus (quarter-note pulse, rising lead), used only by image 8
+# so its ranges are visibly carved out of a continuous song.
+def prechorus(fn):
+    ev = []
+    name = fn.__name__
+    if name == "drums":
+        for bar in range(4):
+            for beat in range(4):
+                t = bar * BAR + beat * PPQ
+                ev += _notes(9, [(36 if beat == 0 else 38, t, 100)])
+                ev += _notes(9, [(42, t + PPQ // 2, 60)], vel=70)         # eighth hats
+    elif name == "bass":
+        for bar, r in enumerate([40, 45, 47, 43]):
+            for beat in range(4):
+                ev += _notes(1, [(r, bar * BAR + beat * PPQ, PPQ - 40)])  # steady quarters
+    elif name == "keys":
+        for bar, ch in enumerate([(60, 64, 67), (65, 69, 72), (67, 71, 74), (67, 71, 74)]):
+            for half in range(2):
+                ev += _notes(2, [(p, bar * BAR + half * 2 * PPQ, 2 * PPQ - 40) for p in ch], vel=85)
+    else:
+        for i in range(16):
+            ev += _notes(3, [(64 + i, i * PPQ, PPQ - 40)], vel=100)       # rising quarter notes
+    return _file(name.capitalize(), ev)
+
+
 # ---------------------------------------------------------------- annotation
 class Shot:
     def __init__(self, w: MainWindow) -> None:
@@ -201,11 +226,16 @@ def drop(w: MainWindow, name: str, data: bytes, bar: int, track: str | None = No
     w.ctl.import_payloads([Payload(f"{name}.mid", data)], Placement(time=F(4 * (bar - 1)), target_track_id=tid))
 
 
-def build_song(w: MainWindow, chorus_bar: int = 9) -> None:
+def build_song(w: MainWindow, chorus_bar: int = 9, full_song: bool = False) -> None:
+    """full_song also fills the gap with a Pre-Chorus (bars 5-9) and adds an Outro after the chorus."""
     for fn in (drums, bass, keys, lead):
         name = fn.__name__.capitalize()
         drop(w, name + " - Verse", fn(False), 1)
+        if full_song:
+            drop(w, name + " - Pre-Chorus", prechorus(fn), 5, name)
         drop(w, name + " - Chorus", fn(True), chorus_bar, name)
+        if full_song:
+            drop(w, name + " - Outro", fn(False), chorus_bar + 4, name)
     w.timeline.zoom_to_fit()
     w.timeline.horizontalScrollBar().setValue(0)
     QApplication.processEvents()
@@ -443,7 +473,7 @@ def main() -> None:
     # ---- 8. what each export mode produces ------------------------------------------------------------------
     w = new_window(app)
     w.resize(1280, 420)
-    build_song(w)
+    build_song(w, full_song=True)
     ctl = w.ctl
     ctl.add_range(F(0), F(16))
     ctl.update_range(ctl.ws.ranges[0].id, name="Verse")
@@ -452,7 +482,7 @@ def main() -> None:
     w.resize(1280, 520)
     src = tracks_crop(w)
     parts = [("Your workspace: a Verse range and a Chorus range (bars 1–5 and 9–13)", src)]
-    for mode, caption in ((ExportMode.PRESERVE, "Ranges · keep positions: one file, the gap between the ranges is kept"),
+    for mode, caption in ((ExportMode.PRESERVE, "Ranges · keep positions: one file, the gap between the ranges is kept as silence"),
                           (ExportMode.REBASE, "Ranges · rebase & concatenate: one file, the ranges back to back from bar 1"),
                           (ExportMode.SEPARATE, "Ranges · separate files: one file per range (Verse.mid, Chorus.mid), each from bar 1")):
         ctl.set_export_mode(mode)
