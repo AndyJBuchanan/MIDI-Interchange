@@ -15,14 +15,14 @@ Users download the app; they don't build it. You can build everything on your ow
 From 0.3.0, each release is assembled on its own `release/X.Y.Z` branch. `main` only moves when a release has been published, so `main` and its README always describe the app people can download.
 
 - **`main` is the latest published release.** Code reaches it only by merging a published release branch.
-- **Feature branches** (`feature/…`, one feature each) start from `main`. If a feature needs another feature that isn't published yet, start it from the release branch instead.
+- **Feature branches** (`feature/…`, one feature each) start from the current release branch, not `main`. Pull it first. A branch started from `main` misses the docs the release branch has changed since (README, ROADMAP, TEST_CHECKLIST) and its PR conflicts. This was agreed 2026-11-14, after `feature/timeline-management` was started from `main` and had to be merged with `release/0.3.0` by hand.
 - **Features merge by pull request** into the release branch, not by a straight merge. The PR's base is `release/X.Y.Z`, not `main`.
-- **Create `release/X.Y.Z` early**, from `main`, when the first feature for that release is ready to merge. Merge further features into it as they're finished, so they're tested together as you go rather than all at the end. The first commit on the branch bumps `__version__` (see below).
+- **Create `release/X.Y.Z` early**, from `main`, before the first feature for that release is started, so features have a branch to start from. Merge further features into it as they're finished, so they're tested together as you go rather than all at the end. The first commit on the branch bumps `__version__` (see below).
 - **Merge a feature only once you mean to ship it in that release.** Taking a feature back out means reverting its merge.
 - **Release work happens on the release branch:** release notes, the build, the tag, then the checksums and the release history row (the checklist below).
 - **After publishing**, merge the release branch into `main` by pull request with a merge commit, not a squash or rebase, so the tagged commit is part of `main`'s history. Then delete the release branch.
 - **Fixes to a published release** go on a new `release/X.Y.Z+1` branch made from that release's tag, and follow the same steps.
-- **Docs that describe the published app** (README fixes, roadmap, interop findings) may go straight to `main`. Plans for a feature go on its feature branch.
+- **Docs go on the release branch too**, not straight to `main`: README fixes, roadmap, interop findings and test checklist changes. A plan for a feature goes on its feature branch. Changing docs on `main` while a release branch is open causes the same conflicts.
 
 `main` was ahead of the published release when this started: it already held the track export channel (PR #11) and a bump to 0.2.3, neither published. Both went into `release/0.3.0`.
 
