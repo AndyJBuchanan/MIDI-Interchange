@@ -27,7 +27,7 @@ from midi_interchange.core.export_smf import ExportMode  # noqa: E402
 from midi_interchange.interchange.payload import Payload  # noqa: E402
 from midi_interchange.ui import theme  # noqa: E402
 from midi_interchange.ui.main_window import MainWindow  # noqa: E402
-from midi_interchange.ui.timeline import HEADER_H, RANGE_TOP, RULER_H  # noqa: E402
+from midi_interchange.ui.timeline import RULER_H  # noqa: E402
 
 OUT = os.path.join(ROOT, "docs", "images")
 PPQ = 480
@@ -73,8 +73,8 @@ def _file(name, events, bars=4):
 
 # The verse is sparse, low and slow; the chorus is busy, high and fast, so the two ranges look
 # clearly different on the timeline.
-def drums(chorus):
-    ev = []
+def drums(chorus, marker: str | None = None):
+    ev = [(0, mido.MetaMessage("marker", text=marker, time=0))] if marker else []
     for bar in range(4):
         for beat in range(4):
             t = bar * BAR + beat * PPQ
@@ -212,7 +212,10 @@ class Shot:
 
 # ---------------------------------------------------------------- scenario plumbing
 def new_window(app) -> MainWindow:
-    w = MainWindow()
+    # Own settings file, so the pictures never depend on this machine's settings (Show Markers on).
+    import tempfile
+    from PySide6.QtCore import QSettings
+    w = MainWindow(QSettings(os.path.join(tempfile.mkdtemp(), "screenshots.ini"), QSettings.IniFormat))
     w.resize(1280, 760)
     w.show()
     app.processEvents()
@@ -226,10 +229,15 @@ def drop(w: MainWindow, name: str, data: bytes, bar: int, track: str | None = No
     w.ctl.import_payloads([Payload(f"{name}.mid", data)], Placement(time=F(4 * (bar - 1)), target_track_id=tid))
 
 
-def build_song(w: MainWindow, chorus_bar: int = 9, full_song: bool = False) -> None:
-    """full_song also fills the gap with a Pre-Chorus (bars 5-9) and adds an Outro after the chorus."""
+def build_song(w: MainWindow, chorus_bar: int = 9, full_song: bool = False, markers: bool = False) -> None:
+    """full_song also fills the gap with a Pre-Chorus (bars 5-9) and adds an Outro after the chorus.
+    markers puts "Verse" and "Chorus" markers on the Drums clips, so the header shows its marker row."""
     for fn in (drums, bass, keys, lead):
         name = fn.__name__.capitalize()
+        if markers and fn is drums:
+            drop(w, name + " - Verse", drums(False, "Verse"), 1)
+            drop(w, name + " - Chorus", drums(True, "Chorus"), chorus_bar, name)
+            continue
         drop(w, name + " - Verse", fn(False), 1)
         if full_song:
             drop(w, name + " - Pre-Chorus", prechorus(fn), 5, name)
@@ -294,7 +302,7 @@ def tracks_crop(w: MainWindow) -> QPixmap:
     QApplication.processEvents()
     y = pos_in(w, w.timeline.viewport(), QPoint(0, 0)).y()
     n = len(w.ctl.ws.tracks)
-    return w.grab().copy(QRect(0, y - 2, w.width(), HEADER_H + n * w.timeline.lane_h + 6))
+    return w.grab().copy(QRect(0, y - 2, w.width(), w.timeline.header_h() + n * w.timeline.lane_h + 6))
 
 
 def exported_window(app, results, height=520) -> QPixmap:
@@ -320,7 +328,7 @@ def main() -> None:
     # ---- 1. the window ------------------------------------------------------------
     w = new_window(app)
     w.resize(1280, 640)
-    build_song(w)
+    build_song(w, markers=True)
     ctl = w.ctl
     ctl.add_range(F(0), F(16))
     ctl.update_range(ctl.ws.ranges[0].id, name="Verse")
@@ -331,10 +339,10 @@ def main() -> None:
     tl, tp, ep = w.timeline, w.track_panel, w.export_panel
     vw = tl.viewport().width()
     s.note(QRectF(w.findChild(QToolBar).geometry()).adjusted(2, 2, -2, -2))
-    s.note(vp_rect(w, 0, 0, vw, RULER_H + 16))
-    s.note(vp_rect(w, 0, RANGE_TOP, vw, HEADER_H))
-    s.note(QRectF(wrect(w, tp)).adjusted(1, HEADER_H, -1, 0))
-    s.note(vp_rect(w, 0, HEADER_H, vw, tl.lane_top(4)), x=bar_x(w, 3) + 6, y=vp_rect(w, 0, HEADER_H, 0, 0).top() + 14)
+    s.note(vp_rect(w, 0, 0, vw, tl.range_top()))
+    s.note(vp_rect(w, 0, tl.range_top(), vw, tl.header_h()))
+    s.note(QRectF(wrect(w, tp)).adjusted(1, tl.header_h(), -1, 0))
+    s.note(vp_rect(w, 0, tl.header_h(), vw, tl.lane_top(4)), x=bar_x(w, 3) + 6, y=vp_rect(w, 0, tl.header_h(), 0, 0).top() + 14)
     s.note(wrect(w, ep).adjusted(2, 2, -2, -2))
     s.save("01-window.png")
     w.close()
@@ -363,9 +371,9 @@ def main() -> None:
     ctl.update_range(ctl.ws.ranges[1].id, name="Chorus")
     s = Shot(w)
     tl, ep = w.timeline, w.export_panel
-    s.arrow(bar_x(w, 5) + 150, vp_rect(w, 0, RANGE_TOP, 0, 0).top() + 12, bar_x(w, 5) + 20, vp_rect(w, 0, RANGE_TOP, 0, 0).top() + 12)
-    s.badge(bar_x(w, 5) + 168, vp_rect(w, 0, RANGE_TOP, 0, 0).top() + 12)
-    s.note(vp_rect(w, tl.x_of(32) - 3, RANGE_TOP, tl.x_of(48) + 3, HEADER_H))
+    s.arrow(bar_x(w, 5) + 150, vp_rect(w, 0, tl.range_top(), 0, 0).top() + 12, bar_x(w, 5) + 20, vp_rect(w, 0, tl.range_top(), 0, 0).top() + 12)
+    s.badge(bar_x(w, 5) + 168, vp_rect(w, 0, tl.range_top(), 0, 0).top() + 12)
+    s.note(vp_rect(w, tl.x_of(32) - 3, tl.range_top(), tl.x_of(48) + 3, tl.header_h()))
     s.note(QRectF(wrect(w, ep)).adjusted(2, 2, -2, -ep.height() // 2 - 6))
     s.save("03-ranges.png")
     w.close()
