@@ -56,7 +56,7 @@ def test_full_workflow(win, tmp_path):
     tl.set_zoom(20.0, 0)
     tl.horizontalScrollBar().setValue(0)
     vp = tl.viewport()
-    y_lane = 58 + tl.lane_h // 2
+    y_lane = tl.header_h() + tl.lane_h // 2
 
     # create a range by dragging across lanes: beats 4.2 -> 11.8 snaps to beats 4..12
     drag(vp, QPoint(x_for(tl, 4.2), y_lane), QPoint(x_for(tl, 11.8), y_lane))
@@ -70,7 +70,7 @@ def test_full_workflow(win, tmp_path):
     assert (r.start, r.end) == (F(4), F(16))
 
     # move the body in the range strip by +4 beats
-    y_strip = 38 + 10
+    y_strip = tl.range_top() + 10
     drag(vp, QPoint(x_for(tl, 8), y_strip), QPoint(x_for(tl, 12), y_strip))
     assert (r.start, r.end) == (F(8), F(20))
 
@@ -130,7 +130,7 @@ def test_shift_bypasses_snap_and_alt_moves_clip(win):
     tl.set_zoom(40.0, 0)
     tl.horizontalScrollBar().setValue(0)
     vp = tl.viewport()
-    y = 58 + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     drag(vp, QPoint(x_for(tl, 1.3), y), QPoint(x_for(tl, 2.7), y), Qt.ShiftModifier)
     r = ctl.ws.ranges[0]
     assert r.start != int(r.start) and abs(float(r.start) - 1.3) < 0.05
@@ -179,7 +179,6 @@ def test_drop_preview_knows_song_titles(win):
     matching row it said 'names differ' for a new Staccato generation."""
     from PySide6.QtCore import QMimeData, QUrl
     from PySide6.QtGui import QDragEnterEvent
-    from midi_interchange.ui.timeline import HEADER_H
     win.import_paths([str(SAMPLES / "non-synthetic" / "Industrial EBM Anthem_1793561268176.mid")])
     QApplication.processEvents()
     tl = win.timeline
@@ -190,7 +189,7 @@ def test_drop_preview_knows_song_titles(win):
     mime.setUrls([QUrl.fromLocalFile(str(SAMPLES / "non-synthetic" / "Staccato Generation_1794336609801.mid"))])
 
     def preview(lane):
-        y = HEADER_H + lane * tl.lane_h + tl.lane_h // 2
+        y = tl.header_h() + lane * tl.lane_h + tl.lane_h // 2
         pt = tl.viewport().mapTo(win, QPoint(int(tl.x_of(8.1)), y))
         win.dragEnterEvent(QDragEnterEvent(pt, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
         return tl._drop_ind[2]

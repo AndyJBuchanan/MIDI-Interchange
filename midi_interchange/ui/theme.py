@@ -31,7 +31,6 @@ DISABLED = QColor("#5a5d64")
 LYRIC = QColor("#e7e7a0")
 TEMPO_COL = QColor("#7fc7ff")
 TS_COL = QColor("#b9a6ff")
-MARKER_COL = QColor("#ff8f8f")
 HOVER_LINE = QColor(255, 255, 255, 90)
 PANEL_BG = QColor("#26282c")
 DROP_OVERLAY = QColor(242, 177, 52, 40)
@@ -40,6 +39,29 @@ DROP_NEW_FILL = QColor(242, 177, 52, 18)
 DROP_LABEL_BG = QColor(20, 21, 24, 225)
 OVERLAP_FILL = QColor(255, 96, 96, 38)
 OVERLAP_EDGE = QColor(255, 110, 110, 200)
+
+
+def _luminance(c: QColor) -> float:
+    def lin(v: float) -> float:
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * lin(c.redF()) + 0.7152 * lin(c.greenF()) + 0.0722 * lin(c.blueF())
+
+
+def _contrast(a: QColor, b: QColor) -> float:
+    la, lb = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def readable_on_info(color: QColor) -> QColor:
+    """A track colour as drawn on the header's info rows: unchanged if it reads well on
+    INFO_BG, otherwise lightened until it does (black and the darker presets)."""
+    c = QColor(color)
+    h, s, l, _a = c.getHslF()
+    h = max(h, 0.0)                      # greys have no hue
+    while _contrast(c, INFO_BG) < 4.5 and l < 1.0:
+        l = min(l + 0.04, 1.0)
+        c.setHslF(h, s, l)
+    return c
 
 
 def apply(app: QApplication) -> None:

@@ -20,7 +20,7 @@ from . import theme
 from .about_dialog import AboutDialog
 from .controller import SNAP_CHOICES, Controller
 from .export_panel import ExportPanel, start_file_drag
-from .timeline import HEADER_H, Timeline
+from .timeline import Timeline
 from .track_panel import TrackPanel
 
 APP_NAME = "MIDI Interchange"
@@ -41,12 +41,12 @@ class DropOverlay(QWidget):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, settings: QSettings | None = None) -> None:
         super().__init__()
         self.setWindowTitle(APP_NAME)
         self.resize(1360, 820)
         self.setAcceptDrops(True)
-        self.settings = QSettings("MIDI Interchange", "MIDI Interchange")
+        self.settings = settings or QSettings("MIDI Interchange", "MIDI Interchange")
 
         self.ctl = Controller()
         self.timeline = Timeline(self.ctl)
@@ -88,6 +88,7 @@ class MainWindow(QMainWindow):
         self.ctl.tracksChanged.connect(self._first_import_fit)
         self.timeline.hoverTextChanged.connect(self.hover_label.setText)
         self.timeline.trackContextMenuRequested.connect(self.track_menu)
+        self.timeline.headerMenuRequested.connect(lambda gp: self.header_menu().exec(gp))
         self.timeline.clipContextMenuRequested.connect(self.clip_menu)
         self.timeline.rangeEditRequested.connect(lambda _rid: self.export_panel.focus_range_name())
         self.timeline.externalDragMoved.connect(self._external_drag_moved)
@@ -129,6 +130,16 @@ class MainWindow(QMainWindow):
         self.a_clear_mutes = self._act("Clear All Mutes", self.ctl.clear_mutes)
         self.a_about = self._act("About", self.show_about, tip="About MIDI Interchange")
         self.a_clear_solos = self._act("Clear All Solos", self.ctl.clear_solos)
+        self.a_markers = self._act("Show Markers", self._markers_toggled,
+                                   tip="Show markers on their own row above the ranges (they still export either way)")
+        self.a_markers.setIconText("Markers")           # the toolbar button; menus say Show Markers
+        self.a_markers.setCheckable(True)
+        self.a_markers.setChecked(self.settings.value("show_markers", True, type=bool))
+        self.timeline.set_show_markers(self.a_markers.isChecked())
+
+    def _markers_toggled(self, on: bool) -> None:
+        self.settings.setValue("show_markers", on)
+        self.timeline.set_show_markers(on)
 
     def show_about(self) -> None:
         AboutDialog(self).exec()
@@ -156,6 +167,7 @@ class MainWindow(QMainWindow):
         self.snap_combo.setCurrentIndex(2)
         self.snap_combo.currentIndexChanged.connect(self._snap_changed)
         tb.addWidget(self.snap_combo)
+        tb.addAction(self.a_markers)
         tb.addSeparator()
         tb.addAction(self.a_clear_ranges)
         spacer = QWidget()
@@ -194,14 +206,15 @@ class MainWindow(QMainWindow):
             a.triggered.connect(lambda _c=False, i=i: self.snap_combo.setCurrentIndex(i))
         self._snap_actions = grp.actions()
         self.tempo_menu = m.addMenu("Tempo Map")
-        self.tempo_menu.aboutToShow.connect(self._fill_tempo_menu)
+        self.tempo_menu.aboutToShow.connect(lambda: self._fill_tempo_menu(self.tempo_menu))
+        m.addAction(self.a_markers)
 
     def _snap_changed(self, i: int) -> None:
         self.ctl.snap = self.snap_combo.itemData(i)
         self._snap_actions[i].setChecked(True)
 
-    def _fill_tempo_menu(self) -> None:
-        m = self.tempo_menu
+    def _fill_tempo_menu(self, m: QMenu) -> None:
+        """The one place the Tempo Map choices are built (Timing menu, timeline right-click)."""
         m.clear()
         ws = self.ctl.ws
         sources = [s for s in ws.sources if not s.tempo_map.is_empty]
@@ -308,7 +321,7 @@ class MainWindow(QMainWindow):
             return Placement(t), None
         tp = self.track_panel
         p_tp = tp.mapFrom(self, pt)
-        if tp.rect().contains(p_tp) and p_tp.y() >= HEADER_H:
+        if tp.rect().contains(p_tp) and p_tp.y() >= self.timeline.header_h():
             lane = self.timeline.lane_at(p_tp.y())
             if lane >= 0:
                 return Placement(ZERO, self.ctl.ws.tracks[lane].id), lane
@@ -440,6 +453,12 @@ class MainWindow(QMainWindow):
         if self._add_track_actions(m, track_id):
             m.exec(global_pos)
 
+    def header_menu(self) -> QMenu:
+        """Right-click on the ruler or the tempo/marker rows."""
+        m = QMenu(self)
+        self._fill_tempo_menu(m.addMenu("Tempo Map"))
+        return m
+
     def clip_menu(self, track_id: str, clip_id: str, global_pos: QPoint) -> None:
         ws = self.ctl.ws
         found = ws.find_clip(clip_id)
@@ -487,11 +506,25 @@ class MainWindow(QMainWindow):
                 mg.addAction(o.name, lambda oid=o.id: self.ctl.merge_tracks(track_id, oid))
         mg.setEnabled(len(ws.tracks) > 1)
         m.addSeparator()
+        ws_src = self._track_tempo_source(t)
+        if ws_src is not None:
+            a = m.addAction("Use This Track's Tempo Map", lambda: self.ctl.adopt_tempo(ws_src))
+            a.setCheckable(True)
+            a.setChecked(ws_src == ws.tempo_source_id)
         m.addAction("Save This Track…", lambda: self.save_midi([track_id]))
         m.addAction("Source Info…", lambda: self._source_info(track_id))
         m.addSeparator()
         m.addAction("Remove Track", lambda: self.ctl.remove_track(track_id))
         return True
+
+    def _track_tempo_source(self, track) -> str | None:
+        """The source id whose tempo map this track's file offers, or None when no file of the
+        track has one. When the workspace map already comes from one of its files, that one."""
+        ws = self.ctl.ws
+        ids = [sid for sid in track.source_ids() if (s := ws.source(sid)) and not s.tempo_map.is_empty]
+        if not ids:
+            return None
+        return ws.tempo_source_id if ws.tempo_source_id in ids else ids[0]
 
     def _source_info(self, track_id: str) -> None:
         t = self.ctl.ws.track(track_id)

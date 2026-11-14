@@ -219,6 +219,16 @@ The three Windows-only automated tests run in the full `pytest` run on Windows a
 
 Notes/failures:
 
+## 8k. Timeline management (`feature/timeline-management`)
+
+- [x] Right-click the ruler and the tempo row: **Tempo Map ▸** is there, lists each file that has a map with the current one ticked, and switching works. Undo puts the previous map back.
+- [x] Track right-click ▸ **Use This Track's Tempo Map** adopts that track's file's map (ticked when it already is the source; undoable). It isn't offered for a track whose file has no tempo map.
+- [x] Load two files that both have markers (for example two Staccato or Cubase exports with Transport tracks). Both sets show on the marker row, each in its track's colour, without overlapping the tempo text. Mute one file's marker track: only the other's markers remain; unmute brings them back. Solo another track: the markers follow.
+- [x] A track with a very dark colour (black, or a dark preset) still shows readable markers.
+- [x] With no markers loaded the header is just the ruler, tempo row and range strip. Importing a file with markers adds the marker row; the lanes and the track panel move down together. Undo removes it.
+- [x] Toggle **Markers** on the toolbar (and Timing ▸ Show Markers): the header shrinks and grows, markers still show in their lanes, and the exported file still contains them. Quit and reopen (the workspace starts empty on this branch, as the session isn't kept yet): the Markers button is still in the state you left it, and importing a file with markers shows or hides the row to match.
+- [x] Drag a file with markers into a workspace without any: the header grows after the drop, not during it. Create, resize and move ranges, drag clips and drop files with and without the marker row.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.

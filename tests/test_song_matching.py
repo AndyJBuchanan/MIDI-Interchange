@@ -202,7 +202,6 @@ def test_studio_sequence_through_window_drops(qapp=None):
     from PySide6.QtGui import QDragEnterEvent, QDropEvent
     from PySide6.QtWidgets import QApplication
     from midi_interchange.ui.main_window import MainWindow
-    from midi_interchange.ui.timeline import HEADER_H
     app = QApplication.instance() or QApplication([])
     ranges = SONG.parent.parent / "complex-matching"
     w = MainWindow()
@@ -216,7 +215,7 @@ def test_studio_sequence_through_window_drops(qapp=None):
         tl.verticalScrollBar().setValue(0)
         mime = QMimeData()
         mime.setUrls([QUrl.fromLocalFile(str(path))])
-        pt = tl.viewport().mapTo(w, QPoint(int(tl.x_of(beat)), HEADER_H + lane * tl.lane_h + tl.lane_h // 2))
+        pt = tl.viewport().mapTo(w, QPoint(int(tl.x_of(beat)), tl.header_h() + lane * tl.lane_h + tl.lane_h // 2))
         w.dragEnterEvent(QDragEnterEvent(pt, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
         preview = tl._drop_ind[2]
         w.dropEvent(QDropEvent(QPointF(pt), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
