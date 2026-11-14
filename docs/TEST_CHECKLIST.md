@@ -179,6 +179,46 @@ The original section 8g checks passed locally. These follow-up changes also pass
 - [x] Return to Original channels: original channel behaviour returns. Mute/solo, range locks, track choices, timing and filenames still work.
 - [x] Move/copy clips between tracks with different overrides: destination setting applies. A newly created/imported track starts at Original channels. Undo/redo restores channel settings and the header number, independently of colour.
 
+## 8j. Session persistence (`feature/session-persistence`)
+
+Run from source with `.venv/bin/python main.py`; no build is needed. Persistence is on by default. The Windows checks need a packaged Windows build and are needed before release, not before merge.
+
+- [x] Assemble several sources: move/copy clips, trim edges, rename/recolour tracks, set a channel override and a tempo source. Add named/unnamed ranges, including a locked range with an independent selection. Set mute/solo with a remembered mute under solo. Quit and reopen: everything returns correctly.
+- [x] Change export mode, trim-silence setting, snap, selected range, zoom, lane height and scroll. Quit/reopen: settings and view return (scroll clamps if the window is smaller), with Undo/Redo initially unavailable.
+- [x] Use the real Cubase lyric clip and a temporary DAW drag. After quitting, move/remove the original input files or temp file; reopen and verify the restored clips, lyrics and exports in the DAW.
+The following checks are automated in `tests/test_session.py` and `tests/test_single_instance.py`; no manual repetition is required: byte-for-byte export comparisons in all four modes (including channel overrides and locked ranges), checkpoint timing and activity deferral, save ordering on exit, New/undo, range recalculation, corrupt-session handling and notices, rejected-file cleanup, deferred close, concurrent file handoff and recovery of a dead owner's lock.
+
+Remaining macOS hands-on checks (use your normal workspace):
+
+- [x] Make an edit and quit immediately, then reopen. Confirm the latest edit is present. Repeat while a track or range name is still being edited.
+- [x] With the source app running, run `.venv/bin/python main.py "path/to/file.mid"` from another terminal in the repository. The file joins the existing window. Run `.venv/bin/python main.py` without files: the existing window comes forward.
+- [x] During an ordinary Cubase drag/drop, request Quit. Finish the operation: the app closes by itself, and the imported clip/latest edits return on reopening. Passed for drag/drop. All current dialogs are modal and Cmd-Q is ineffective while they are open; deferred Quit through those dialogs is not a manual test.
+- [x] During normal use with a large workspace, note any pauses or interference with dragging, scrolling or editing. No timed two-minute exercise is required.
+
+Optional native crash smoke check (automated recovery logic is already covered): force-quit once, then reopen. Confirm the app starts normally without manually deleting a lock file; with a checkpoint present, it reports recovery.
+
+macOS Finder integration (requires an app bundle built from this branch; pending packaged-app testing):
+
+Finder's Open With may select the older installed app in Applications. A source launch does not update that bundle. Use a bundle built from this branch and explicitly select that bundle for these checks.
+
+- [x] With the current branch's bundle running, use Finder's Open With to open a MIDI file in that same bundle. The file joins the existing window.
+- [x] Launch that same bundle again without files: the existing window comes forward.
+
+Windows (packaged build, release time):
+
+- [x] Explorer *Open with* on several selected files: one window, every file imported once.
+- [x] Open more files while the app runs, and while it is still starting: each import happens once.
+- [x] End the task in Task Manager, then relaunch: the crash notice shows and the lock is recovered with no manual deletion.
+- [x] The installer upgrading over a previous version keeps the session. Uninstalling leaves the session in AppData, so reinstalling restores it.
+
+The three Windows-only automated tests run in the full `pytest` run on Windows and are skipped elsewhere. To run just them on Windows (expect `3 passed, 66 deselected`; on macOS they report `3 skipped`):
+
+```powershell
+.venv\Scripts\python -m pytest -v -rs -k windows tests\test_session.py tests\test_single_instance.py
+```
+
+Notes/failures:
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.

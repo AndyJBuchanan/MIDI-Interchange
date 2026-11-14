@@ -9,3 +9,6 @@ dist/
 
 # Local code-signing / notarisation config (never commit)
 scripts/signing.local.env
+
+# User's transient test notes (never commit)
+*delete-me*

@@ -8,6 +8,7 @@
 #   PYTHON=python3.13      interpreter used to create .venv-build
 #   SIGNING_ENV=<path>     alternative signing config file
 #   SKIP_NOTARIZE=1        sign but don't submit to Apple (faster local test builds)
+#   APP_ONLY=1             stop after building/verifying the app; no DMG or notarisation
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -36,9 +37,12 @@ fi
 
 # --- build the .app ---------------------------------------------------------
 PY="${PYTHON:-python3.12}"
-"$PY" -m venv .venv-build
-.venv-build/bin/pip install -q -r requirements.txt -r requirements-dev.txt
-.venv-build/bin/pyinstaller --noconfirm --clean midi_interchange.spec
+# Build environments can be copied/moved with missing native modules while pip
+# still considers their packages installed. Start clean rather than reuse them.
+"$PY" -m venv --clear .venv-build
+.venv-build/bin/python -m pip install -q -r requirements.txt -r requirements-dev.txt
+.venv-build/bin/python -c 'import shiboken6.Shiboken; from PySide6 import QtCore, QtGui, QtWidgets, QtNetwork'
+.venv-build/bin/python -m PyInstaller --noconfirm --clean midi_interchange.spec
 echo "Built: $APP"
 
 if [ -n "$CODESIGN_IDENTITY" ]; then
@@ -48,6 +52,11 @@ if [ -n "$CODESIGN_IDENTITY" ]; then
     grep -qF "$want" <<<"$SIGINFO" || { echo "App signature is missing: $want" >&2; echo "$SIGINFO" >&2; exit 1; }
   done
   grep -E "^Authority=Developer ID Application|^TeamIdentifier|^Timestamp" <<<"$SIGINFO"
+fi
+
+if [ "${APP_ONLY:-0}" = 1 ]; then
+  echo "APP_ONLY=1: built $APP; skipping DMG and notarisation."
+  exit 0
 fi
 
 # --- package the DMG --------------------------------------------------------

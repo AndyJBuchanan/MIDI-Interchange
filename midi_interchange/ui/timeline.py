@@ -105,6 +105,7 @@ def note_rows(area_top: float, area_h: float, pmin: int, pmax: int) -> tuple[flo
 class Timeline(QAbstractScrollArea):
     verticalOffsetChanged = Signal(int)
     laneHeightChanged = Signal(int)
+    zoomChanged = Signal()
     hoverTextChanged = Signal(str)
     trackContextMenuRequested = Signal(str, QPoint)
     clipContextMenuRequested = Signal(str, str, QPoint)   # track id, clip id
@@ -243,6 +244,7 @@ class Timeline(QAbstractScrollArea):
         self._update_scrollbars()
         self.horizontalScrollBar().setValue(int(round(t_anchor * ppb - anchor_x)))
         self.viewport().update()
+        self.zoomChanged.emit()
 
     def zoom_by(self, factor: float, anchor_x: float | None = None) -> None:
         self.set_zoom(self.ppb * factor, anchor_x)
@@ -251,10 +253,12 @@ class Timeline(QAbstractScrollArea):
         ws = self.ctl.ws
         end = max(float(ws.end), *(float(r.end) for r in ws.ranges), 16.0) if ws.ranges else max(float(ws.end), 16.0)
         avail = max(self.viewport().width() - 40, 100)
-        self.ppb = min(max(avail / end, MIN_PPB), MAX_PPB)
-        self._update_scrollbars()
+        self.set_zoom(avail / end, anchor_x=0)
         self.horizontalScrollBar().setValue(0)
-        self.viewport().update()
+
+    @property
+    def gesture_active(self) -> bool:
+        return self._drag is not None or self._external_drag
 
     def set_lane_height(self, h: int) -> None:
         h = min(max(h, 28), 220)
