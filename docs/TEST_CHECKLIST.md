@@ -266,3 +266,11 @@ Automated tests cover exact MIDI boundaries, note ordering, all four export mode
 Windows is a secondary platform: it isn't tested during normal development, only before a release (RELEASING.md, step 3). Leave this section unticked until then.
 
 - [x] Use **Alt** in place of Option and **Ctrl** in place of ⌘ for the clip drags. Check the drop cursor and the multi-file dialog.
+
+## DAWproject import
+
+- [ ] Open and drag the three supplied Cubase project sets; inspect clip positions, source format/application/size, and warnings for skipped content.
+- [ ] Check Ditty's disabled clips remain visible and silent. Toggle Mute/Unmute Clip; duplicate, split, move and trim a muted clip; check undo/redo.
+- [ ] Export muted clips through every mode, with track solo and locked ranges; clip mute must still exclude them.
+- [ ] Save/relaunch after moving the original DAWproject elsewhere; verify events, trims, source metadata, mute and export survive.
+- [ ] Verify GA & Padshop's imported tempo changes in Cubase, and investigate the paired-export discrepancies recorded in the DAWproject plan.

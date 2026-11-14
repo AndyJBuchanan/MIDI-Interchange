@@ -131,7 +131,7 @@ def test_schema_v1_upgrade_preserves_workspace_and_reference_exports(tmp_path):
         assert [[label, data.hex()] for label, data in export_bytes(restored, mode)] == expected[mode.value]
     store.save(session)
     saved = json.loads(store.path.read_text())
-    assert saved['schema_version'] == SCHEMA_VERSION == 2
+    assert saved['schema_version'] == SCHEMA_VERSION == 3
     assert all(s['data']['raw']['data'] == '' for s in saved['workspace']['sources'])
     assert encode(store.load()) == encode(session)
 

@@ -1,6 +1,10 @@
 # Plan: direct DAW project import (investigation)
 
-Status: **initial research gathered; source-data consolidation implemented; target DAWs and first new reader agreed** (2026-11-14). DAWproject will validate the pluggable import model alongside MIDI. The shared reader interface and native-reader feasibility remain to be scoped. This document collects the web research, observations on the current code, and open questions, ready for fixtures.
+Status: **DAWproject and the shared reader registry provisionally implemented**
+(accepted 2026-11-14). All three supplied Cubase export pairs have been
+investigated; source-export differences are documented. Note-tail handling is
+deferred and does not block this milestone. Native-reader feasibility and order
+remain to be scoped. See [the implementation](dawproject-import.md).
 
 Branch: `feature/direct-daw-import`, created from `release/0.4.0`. Its PR will target `release/0.4.0`, following [the branching rules](../RELEASING.md#branches).
 
@@ -8,9 +12,15 @@ The scope and rules are in the [roadmap entry](../ROADMAP.md) ("Investigate dire
 
 Agreed target DAWs: **Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio**. FL Studio support is subject to native-format feasibility investigation. Studio One is deferred because it is not currently available for testing. Bitwig, Ableton and FL Studio native formats still need investigation; their absence from the initial research below is not a scope exclusion. DAWproject is the first new reader, primarily to validate the shared importer design, and also useful as a format in its own right.
 
+DAWproject implementation and current supported subset: [DAWproject importer](dawproject-import.md). Shared fixtures are committed in `samples/project-sets`.
+
 ## The point: native files, not exports
 
 The aim is to read the file the DAW saves anyway: `.cpr`, `.reason`, `.logicx`. **Any route that needs an export from the DAW is no gain.** Exporting a DAWproject from Cubase takes the same effort as exporting MIDI. I suggested otherwise once and was corrected (2026-11-14).
+
+For performance comparisons, the supplied Cubase MIDI export is ground truth.
+DAWproject fidelity is a separate diagnostic check, not a replacement reference.
+Do not repair Cubase's DAWproject export by inventing missing notes or processing.
 
 Exports still matter in two ways:
 
