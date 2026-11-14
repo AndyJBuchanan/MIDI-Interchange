@@ -33,6 +33,8 @@ Target DAWs are Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio. FL
 
 Sessions now write schema 2. The loader explicitly accepts schema 1 and derives each source's byte count from its previously retained MIDI bytes, then leaves `raw` empty. This upgrade occurs in memory without reparsing MIDI, reopening source files or rewriting the session on load; the next normal save writes schema 2. Other unsupported schemas still follow the existing rejection/recovery path. A captured schema-1 workspace and all four reference exports verify compatibility. New readers and the shared registry are still pending.
 
+**Source Info layout fix:** source details scroll independently, with selectable plain-text values that wrap even unbroken path segments and expand to fit every line. Field labels align to the top; Show in Folder sits below the path. A vertical splitter lets users redistribute space between Clips and Sources, while the source list and Close button remain outside the details scroll area. Selecting another source resets details to the top. Geometry checks cover long paths, track lists and warnings at narrow widths and larger fonts.
+
 ## Stack (as installed)
 
 Python 3.12 venv, PySide6 6.12, mido 1.3.3, pytest 8, PyInstaller 6.x. The UI uses the Fusion style with a custom dark palette (`ui/theme.py`), so it looks the same on macOS and Windows.

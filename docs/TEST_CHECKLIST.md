@@ -66,6 +66,8 @@ Reason and RapidComposer can't drag MIDI out (they only export files), so they h
 - [x] **Merge Into ▸** another track puts all the clips on the target track and removes the source track.
 - [x] The track header shows "N clips · M sources" for a mixed track.
 - [x] **Source Info** is a proper dialog: track summary, a table of clips (position, channels, notes, source), and the sources with their details. Clicking a clip selects its source; Show in Folder opens the file's folder.
+- [ ] **Source Info overflow:** use a source with a long path, many original tracks and warnings. Resize the dialog and move both dividers; check every value is readable by scrolling the details, and Show in Folder and Close remain accessible. Check larger system fonts too.
+- [ ] **Source Info selection/copy:** copy a wrapped path and confirm it has no added line breaks. Scroll down, then select another source (directly and through a clip); its details should start at the top.
 - [x] Rename, reorder, remove, solo and the export checkbox still work on assembled tracks.
 
 ## 8. Export of assembled tracks
