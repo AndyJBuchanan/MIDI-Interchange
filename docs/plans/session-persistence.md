@@ -83,7 +83,7 @@ Keep the one current workspace between app runs without introducing project file
 - Source/event/tempo data are immutable under existing snapshot semantics. Snapshot capture copies editable track/clip/range state on the UI thread; encoding and writing run on the worker.
 - Tests exercise exact MIDI/export round trips (including the Cubase lyric fixture), settings/view, fresh undo, bad data and unsupported schemas, failed/overlapping writes, idle gates, process handoff and crash recovery, and the real application entry point with isolated storage. Manual checks move to `docs/TEST_CHECKLIST.md` (see follow-up 5).
 
-Automated verification: **307 tests passed** for the first implementation, including 48 new session/instance checks. After the review follow-ups: **330 tests collected, 327 passed and 3 skipped** (the Windows-only tests, which run only on Windows). Existing Qt deprecation warnings only. Native studio checks remain pending.
+Automated verification: **307 tests passed** for the first implementation, including 48 new session/instance checks. After the review follow-ups (5d7eaef): **328 tests**. All 328 pass on Windows; on macOS 325 pass and the 3 Windows-only tests are skipped. `tests/test_roundtrip.py` adds one test per `.mid` file in `samples/`, so untracked sample files raise the local count. Existing Qt deprecation warnings only. Native studio checks remain pending.
 
 ## Review follow-ups (agreed 2026-11-14)
 
