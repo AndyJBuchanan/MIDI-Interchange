@@ -366,7 +366,6 @@ from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from midi_interchange.interchange.payload import Payload  # noqa: E402
-from midi_interchange.ui.timeline import HEADER_H  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -403,7 +402,7 @@ def gesture(tl, p0, p1, mods):
 def test_option_drag_trims_a_clip_edge(win):
     tl, ctl = win.timeline, win.ctl
     c = clip_of(ctl.ws)
-    y = HEADER_H + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     # right edge: 8 -> 6 (beat snap)
     gesture(tl, QPoint(int(tl.x_of(8)) - 2, y), QPoint(int(tl.x_of(6.2)), y), Qt.AltModifier)
     assert (c.start, c.end) == (0, 6) and not ctl.ws.ranges
@@ -421,7 +420,7 @@ def test_option_drag_trims_a_clip_edge(win):
 def test_shift_bypasses_snap_when_trimming(win):
     tl, ctl = win.timeline, win.ctl
     c = clip_of(ctl.ws)
-    y = HEADER_H + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     mods = Qt.AltModifier | Qt.ShiftModifier
     vp = tl.viewport()
     QTest.mousePress(vp, Qt.LeftButton, mods, QPoint(int(tl.x_of(8)) - 2, y))
@@ -432,14 +431,14 @@ def test_shift_bypasses_snap_when_trimming(win):
 
 def test_plain_drag_on_a_clip_edge_still_makes_a_range(win):
     tl, ctl = win.timeline, win.ctl
-    y = HEADER_H + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     gesture(tl, QPoint(int(tl.x_of(8)) - 2, y), QPoint(int(tl.x_of(4)), y), Qt.NoModifier)
     assert len(ctl.ws.ranges) == 1 and not clip_of(ctl.ws).is_trimmed
 
 
 def test_option_cursor_is_horizontal_resize_over_an_edge(win):
     tl = win.timeline
-    y = HEADER_H + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     tl._update_cursor(QPoint(int(tl.x_of(8)) - 2, y), Qt.AltModifier)
     assert tl.viewport().cursor().shape() == Qt.SizeHorCursor
     tl._update_cursor(QPoint(int(tl.x_of(4)), y), Qt.AltModifier)           # the middle: move
@@ -451,7 +450,7 @@ def test_option_cursor_is_horizontal_resize_over_an_edge(win):
 def test_range_edge_wins_for_plain_drag_and_clip_edge_for_option(win):
     tl, ctl = win.timeline, win.ctl
     r = ctl.add_range(F(2), F(8))                             # its end sits on the clip's end
-    y = HEADER_H + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     pos = QPoint(int(tl.x_of(8)) - 1, y)
     assert tl._hit(pos, Qt.NoModifier)[0] == "edge"
     assert tl._hit(pos, Qt.AltModifier)[0] == "clip_edge"
@@ -465,7 +464,7 @@ def test_narrow_clip_can_only_be_moved(win):
     ctl.trim_clip_live(c.id, "end", F(2), bypass_snap=True)   # 2 beats = 3 px
     tl.horizontalScrollBar().setValue(0)
     QApplication.processEvents()
-    y = HEADER_H + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     mid = QPoint(int(tl.x_of(1)), y)
     assert tl._hit(mid, Qt.AltModifier)[0] == "clip"
     before = c.end - c.start
@@ -475,7 +474,7 @@ def test_narrow_clip_can_only_be_moved(win):
 
 def test_trim_autoscroll_stops_when_the_edge_is_pinned(win):
     tl, ctl = win.timeline, win.ctl
-    y = HEADER_H + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     hbar, w = tl.horizontalScrollBar(), tl.viewport().width()
     p = QPoint(int(tl.x_of(8)) - 2, y)
     QTest.mousePress(tl.viewport(), Qt.LeftButton, Qt.AltModifier, p)
@@ -493,7 +492,7 @@ def test_trim_autoscroll_continues_while_the_limit_is_off_screen(win):
     tl.set_zoom(200.0, 0)
     tl.horizontalScrollBar().setValue(0)
     QApplication.processEvents()
-    y = HEADER_H + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     hbar, w = tl.horizontalScrollBar(), tl.viewport().width()
     p = QPoint(int(tl.x_of(2)) - 2, y)
     QTest.mousePress(tl.viewport(), Qt.LeftButton, Qt.AltModifier, p)

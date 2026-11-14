@@ -14,7 +14,7 @@ from helpers import conductor, note, smf, track  # noqa: E402
 
 from midi_interchange.core.placement import Placement  # noqa: E402
 from midi_interchange.interchange.payload import Payload  # noqa: E402
-from midi_interchange.ui.timeline import HEADER_H, note_rows  # noqa: E402
+from midi_interchange.ui.timeline import note_rows  # noqa: E402
 
 
 def part(name, pitch=60, ch=0):
@@ -52,15 +52,15 @@ def win_pos(w, widget, p: QPoint) -> QPointF:
 def test_drop_targets(win):
     tl, tp, ctl = win.timeline, win.track_panel, win.ctl
     vp = tl.viewport()
-    lane1_y = HEADER_H + tl.lane_h + tl.lane_h // 2
+    lane1_y = tl.header_h() + tl.lane_h + tl.lane_h // 2
     # over a lane at beat 8 -> that track, time 8 (beat snap)
     pl, lane = win.drop_placement(win_pos(win, vp, QPoint(int(tl.x_of(8.2)), lane1_y)))
     assert lane == 1 and pl.target_track_id == ctl.ws.tracks[1].id and pl.time == 8
     # below the last lane -> new tracks at the cursor time
-    pl, lane = win.drop_placement(win_pos(win, vp, QPoint(int(tl.x_of(12)), HEADER_H + 3 * tl.lane_h)))
+    pl, lane = win.drop_placement(win_pos(win, vp, QPoint(int(tl.x_of(12)), tl.header_h() + 3 * tl.lane_h)))
     assert lane is None and pl.target_track_id is None and pl.time == 12
     # over a track header -> that track at time zero
-    pl, lane = win.drop_placement(win_pos(win, tp, QPoint(40, HEADER_H + tl.lane_h // 2)))
+    pl, lane = win.drop_placement(win_pos(win, tp, QPoint(40, tl.header_h() + tl.lane_h // 2)))
     assert lane == 0 and pl.target_track_id == ctl.ws.tracks[0].id and pl.time == 0
     # elsewhere (export panel) -> new tracks at zero
     pl, lane = win.drop_placement(win_pos(win, win.export_panel, QPoint(20, 10)))
@@ -87,7 +87,7 @@ def _alt_drag(tl, p0, p1, mods):
 
 def test_alt_drag_moves_clip_to_other_track_and_removes_empty(win):
     tl, ctl = win.timeline, win.ctl
-    lane = lambda i: HEADER_H + i * tl.lane_h + tl.lane_h // 2  # noqa: E731
+    lane = lambda i: tl.header_h() + i * tl.lane_h + tl.lane_h // 2  # noqa: E731
     p0 = QPoint(int(tl.x_of(1.0)), lane(1))          # Keys clip
     p1 = QPoint(int(tl.x_of(9.0)), lane(0))          # onto Bass, 8 beats later
     _alt_drag(tl, p0, p1, Qt.AltModifier)
@@ -99,7 +99,7 @@ def test_alt_drag_moves_clip_to_other_track_and_removes_empty(win):
 
 def test_alt_ctrl_drag_copies_clip(win):
     tl, ctl = win.timeline, win.ctl
-    y = HEADER_H + tl.lane_h // 2
+    y = tl.header_h() + tl.lane_h // 2
     _alt_drag(tl, QPoint(int(tl.x_of(1.0)), y), QPoint(int(tl.x_of(9.0)), y),
               Qt.AltModifier | Qt.ControlModifier)
     assert [c.start for c in ctl.ws.tracks[0].clips] == [0, 8]
@@ -107,8 +107,8 @@ def test_alt_ctrl_drag_copies_clip(win):
 
 def test_alt_drag_below_last_lane_makes_new_track(win):
     tl, ctl = win.timeline, win.ctl
-    p0 = QPoint(int(tl.x_of(1.0)), HEADER_H + tl.lane_h // 2)
-    p1 = QPoint(int(tl.x_of(1.0)), HEADER_H + 2 * tl.lane_h + tl.lane_h // 2)
+    p0 = QPoint(int(tl.x_of(1.0)), tl.header_h() + tl.lane_h // 2)
+    p1 = QPoint(int(tl.x_of(1.0)), tl.header_h() + 2 * tl.lane_h + tl.lane_h // 2)
     _alt_drag(tl, p0, p1, Qt.AltModifier)
     assert [t.name for t in ctl.ws.tracks] == ["Keys", "Bass"]
 
@@ -124,8 +124,8 @@ def test_new_document_is_undoable(win):
 
 def _below_last(win, from_lane, mods):
     tl = win.timeline
-    p0 = QPoint(int(tl.x_of(1.0)), HEADER_H + from_lane * tl.lane_h + tl.lane_h // 2)
-    p1 = QPoint(int(tl.x_of(1.0)), HEADER_H + len(win.ctl.ws.tracks) * tl.lane_h + tl.lane_h // 2)
+    p0 = QPoint(int(tl.x_of(1.0)), tl.header_h() + from_lane * tl.lane_h + tl.lane_h // 2)
+    p1 = QPoint(int(tl.x_of(1.0)), tl.header_h() + len(win.ctl.ws.tracks) * tl.lane_h + tl.lane_h // 2)
     _alt_drag(tl, p0, p1, mods)
     return [(t.name, len(t.clips)) for t in win.ctl.ws.tracks]
 
@@ -185,7 +185,7 @@ def test_end_to_end_parts_render_inside_their_lane(win):
     tl.verticalScrollBar().setValue(0)
     QApplication.processEvents()
     img: QImage = tl.viewport().grab().toImage()
-    lane_bottom = HEADER_H + tl.lane_h
+    lane_bottom = tl.header_h() + tl.lane_h
     note_col = QColor(win.ctl.ws.tracks[0].color).lighter(135)
     stray = 0
     for y in range(lane_bottom + 1, img.height()):

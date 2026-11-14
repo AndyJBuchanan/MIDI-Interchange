@@ -36,7 +36,6 @@ from midi_interchange.core.placement import Placement  # noqa: E402
 from midi_interchange.core.ranges import Range  # noqa: E402
 from midi_interchange.interchange.payload import Payload  # noqa: E402
 from midi_interchange.ui.export_panel import start_file_drag  # noqa: E402
-from midi_interchange.ui.timeline import HEADER_H  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -206,7 +205,7 @@ def test_cubase_workflow_drop_parts_onto_matching_track(win, tmpdirs, monkeypatc
 
 def _lane_y(win, i):
     tl = win.timeline
-    return HEADER_H + i * tl.lane_h + tl.lane_h // 2
+    return tl.header_h() + i * tl.lane_h + tl.lane_h // 2
 
 
 def _option_drag(win, from_lane, from_beat, to_lane, to_beat, mods=Qt.AltModifier):

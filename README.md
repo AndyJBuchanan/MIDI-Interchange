@@ -41,7 +41,7 @@ Ranges are optional, but they're what make this a palette rather than a file shu
 ![The main window, annotated](docs/images/01-window.png)
 
 1. **Toolbar:** New, Open, Save MIDI, Undo/Redo, zoom, the Snap list, Clear All Ranges, and About at the far right.
-2. **Ruler and info rows:** bar numbers, then tempo, time signature and markers.
+2. **Ruler and info rows:** bar numbers, then tempo and time signature, then markers (a row of their own that appears only when there are markers to show; the **Markers** button turns it off).
 3. **Range strip:** your ranges, as amber bars. This is where you make and move them.
 4. **Track headers:** colour, **M**ute, **S**olo, name, and a ✕ to remove. Drag ⋮⋮ to reorder.
 5. **Lanes:** one per track, showing its clips with their notes, lyrics and text. The timeline is this whole area.
@@ -76,7 +76,7 @@ Dragging near either edge of the timeline scrolls it, and it grows as you drag r
 - A dropped clip with exactly the same start and end as one already on the track **replaces** it (a trimmed clip counts by its visible edges). Partial overlaps are kept and tinted.
 - **Song titles:** Staccato.ai names tracks "part - song" and changes the song between generations. If no name matches exactly, names are compared again without a known song title, so "Drums - Staccato Generation" joins "Drums - Industrial EBM Anthem"; the status bar says when it did. A song title is known only from the file itself (its tempo track's name, or an ending all its tracks share), so DAW clips such as "Lead - Verse" and "Lead - Chorus" never match.
 
-The first file with a tempo map sets the workspace tempo. Timing ▸ Tempo Map lets you adopt another file's map.
+The first file with a tempo map sets the workspace tempo. To adopt another file's map, right-click the ruler or the tempo row and choose Tempo Map (also in Timing ▸ Tempo Map), or right-click one of that file's tracks and choose Use This Track's Tempo Map.
 
 ### Step 2: Tidy what you hold
 
@@ -192,10 +192,10 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Export | **Save MIDI…** (⌘S), or drag the **Drag MIDI out** tile into another app or a folder |
 | Start again | File ▸ New (⌘N, also on the toolbar). Export settings are kept; Undo brings your work back |
 | Undo / redo | ⌘Z / ⇧⌘Z cover everything |
-| Tempo | The first file with a tempo map sets it. Timing ▸ Tempo Map adopts another file's |
+| Tempo | The first file with a tempo map sets it. Right-click the ruler or tempo row ▸ Tempo Map adopts another file's |
 | About | The About button at the right end of the toolbar shows the version and the project link |
 
-Each lane shows its clips' notes, lyrics and text; the rows above show tempo, time signature, markers and the ranges. The status bar shows the position under the pointer.
+Each lane shows its clips' notes, lyrics and text; the rows above show tempo, time signature, markers (only those of tracks that would be exported) and the ranges. The status bar shows the position under the pointer.
 
 ## Works with
 
@@ -229,6 +229,7 @@ For each app check: does the drop import at all (if not, note the formats listed
 - **Drag and drop depends on the other app.** File URLs and any data starting with `MThd` are handled. Qt can't receive **macOS file promises** or **Windows virtual files**; no app tested so far needed them. If a drop carries no usable MIDI, the app lists the formats it was offered, which helps a lot in a bug report. Drag-out offers temp files (in `$TMPDIR/MIDI Interchange Drag`, pruned after 24 h).
 - **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, use the track colour box’s export-channel override, or assemble clips that share a channel.
 - Clips can be trimmed at either edge but not split.
+- **Marker row and locked ranges:** the marker row follows the global mute and solo, not a locked range's own track choices. A locked range's export can include markers of a globally muted track that the row doesn't show.
 - The workspace isn't kept between sessions yet (planned); export what you need before quitting.
 - SMPTE-division files are rejected with a clear message.
 - On Windows, opening several files at once from Explorer opens several windows; drag them onto one window instead.

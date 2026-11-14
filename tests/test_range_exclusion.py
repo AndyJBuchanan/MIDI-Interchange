@@ -431,25 +431,23 @@ def test_off_track_is_drawn_normally_inside_ranges_that_include_it(song):
 
 
 def test_track_headers_are_clipped_below_the_title_band(song):
-    from midi_interchange.ui.timeline import HEADER_H
     tp = song.track_panel
     tp._set_offset(song.timeline.lane_h // 2)       # first header half scrolled under the band
     QApplication.processEvents()
     h = tp.header(song.ctl.ws.tracks[0].id)
     assert h.isVisible()
     top = h.mapTo(tp, h.visibleRegion().boundingRect().topLeft()).y()
-    assert top >= HEADER_H, f"header visible from y={top}, inside the title band"
+    assert top >= song.timeline.header_h(), f"header visible from y={top}, inside the title band"
 
 
 def _window_drop(win, path: str, lane: int | None) -> None:
     """Drop a file on the window the way Finder does (drag-enter, then drop)."""
     from PySide6.QtCore import QMimeData, QPointF, QUrl
     from PySide6.QtGui import QDragEnterEvent, QDropEvent
-    from midi_interchange.ui.timeline import HEADER_H
     tl = win.timeline
     mime = QMimeData()
     mime.setUrls([QUrl.fromLocalFile(path)])
-    y = HEADER_H + (lane if lane is not None else len(win.ctl.ws.tracks) + 1) * tl.lane_h + tl.lane_h // 2
+    y = tl.header_h() + (lane if lane is not None else len(win.ctl.ws.tracks) + 1) * tl.lane_h + tl.lane_h // 2
     pt = tl.viewport().mapTo(win, QPoint(int(tl.x_of(0.2)), y))
     win.dragEnterEvent(QDragEnterEvent(pt, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
     win.dropEvent(QDropEvent(QPointF(pt), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
