@@ -206,10 +206,16 @@ Finder's Open With may select the older installed app in Applications. A source 
 
 Windows (packaged build, release time):
 
-- [ ] Explorer *Open with* on several selected files: one window, every file imported once.
-- [ ] Open more files while the app runs, and while it is still starting: each import happens once.
-- [ ] End the task in Task Manager, then relaunch: the crash notice shows and the lock is recovered with no manual deletion.
-- [ ] The installer upgrading over a previous version keeps the session. Uninstalling leaves the session in AppData, so reinstalling restores it.
+- [x] Explorer *Open with* on several selected files: one window, every file imported once.
+- [x] Open more files while the app runs, and while it is still starting: each import happens once.
+- [x] End the task in Task Manager, then relaunch: the crash notice shows and the lock is recovered with no manual deletion.
+- [x] The installer upgrading over a previous version keeps the session. Uninstalling leaves the session in AppData, so reinstalling restores it.
+
+The three Windows-only automated tests run in the full `pytest` run on Windows and are skipped elsewhere. To run just them on Windows (expect `3 passed, 66 deselected`; on macOS they report `3 skipped`):
+
+```powershell
+.venv\Scripts\python -m pytest -v -rs -k windows tests\test_session.py tests\test_single_instance.py
+```
 
 Notes/failures:
 
