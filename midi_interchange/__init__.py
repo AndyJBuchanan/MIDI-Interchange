@@ -8,7 +8,7 @@ import re as _re
 # "MAJOR.MINOR.PATCH" literal).
 # Numbers only: macOS and Windows both reject suffixes such as "-pre". Pre-release labels go on the
 # git tag / GitHub release instead (e.g. __version__ "0.1.0" is released as tag v0.1.0-pre).
-__version__ = "0.2.3"
+__version__ = "0.3.0"
 
 if not _re.fullmatch(r"\d+\.\d+\.\d+", __version__):
     raise SystemExit(f'midi_interchange/__init__.py: __version__ must be MAJOR.MINOR.PATCH digits only, got "{__version__}". '
