@@ -36,8 +36,9 @@ these files.
   - `RIFF` uses 32-bit chunk sizes (Ditty, GA).
   - `RIF2` uses 64-bit chunk sizes (indy). Class and object tags inside the
     archives widen from 4 to 8 bytes as well.
-  - indy and GA both report version 15.0.30, but only indy is `RIF2`. File
-    size or a save setting may select the variant; to find out.
+  - indy and GA both report version 15.0.30, but only indy is `RIF2`. Every
+    tier 1 fixture is `RIF2`, even the 100 KB empty project, so size doesn't
+    select the variant. The reader must handle both.
 - **Top level.** A sequence of `ROOT` records, each naming an `ARCH` archive and
   its root class:
 
@@ -238,6 +239,7 @@ this fast.
 | c07 ✱ | Add a second note: E3, velocity 90, bar 2 beat 1, half a beat |
 | c08 | Rename the track to `Lead` and the part to `Riff` |
 | c09 | Save c08 again under a new name with no change (shows what changes between saves) |
+| c02-1 | c02 with a one-bar display offset (a blank bar before bar 1). Added by the user; real projects often use it |
 
 ### Tier 2: parts and the timeline (phase 2)
 
@@ -292,6 +294,14 @@ For each of Ditty, GA and indy: open the project in 16.0.5, save it as a new
 `.cpr`, then export MIDI (with the same options as above) and DAWproject in the
 same session without changing anything. This gives pairs known to match. Keep
 the existing files too.
+
+### Received
+
+- **Tier 1**, Cubase 15.0.30 and 16.0.5 (2026-11-14), in
+  `samples/project-cubase-phases/Tier 1`. Both MIDI exports match the spec, and
+  the 15 and 16 exports are byte-identical. Re-saving with no change (c08 → c09)
+  alters 53–66 bytes; single-field edits (c04 → c05, c05 → c06) alter 55–67,
+  starting near byte 3070. Diffs must filter per-save noise.
 
 ## Questions for you
 
