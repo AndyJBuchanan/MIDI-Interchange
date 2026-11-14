@@ -1,6 +1,6 @@
 # Plan: low-effort session persistence
 
-Status: **implemented; review follow-ups agreed, not built** (2026-11-14). Studio verification pending. No application build or release made. Branch: `feature/session-persistence` from `main`.
+Status: **implemented; review follow-ups 1–6 built** (2026-11-14, uncommitted). Studio verification pending. No application build or release made. Branch: `feature/session-persistence` from `main`.
 
 Keep the one current workspace between app runs without introducing project files, workspace Save/Open commands, or session management UI.
 
@@ -83,7 +83,7 @@ Keep the one current workspace between app runs without introducing project file
 - Source/event/tempo data are immutable under existing snapshot semantics. Snapshot capture copies editable track/clip/range state on the UI thread; encoding and writing run on the worker.
 - Tests exercise exact MIDI/export round trips (including the Cubase lyric fixture), settings/view, fresh undo, bad data and unsupported schemas, failed/overlapping writes, idle gates, process handoff and crash recovery, and the real application entry point with isolated storage. Manual checks move to `docs/TEST_CHECKLIST.md` (see follow-up 5).
 
-Automated verification: **307 tests passed**, including 48 new session/instance checks. Existing Qt deprecation warnings only. Native studio checks remain pending.
+Automated verification: **307 tests passed** for the first implementation, including 48 new session/instance checks. After the review follow-ups: **330 tests collected, 327 passed and 3 skipped** (the Windows-only tests, which run only on Windows). Existing Qt deprecation warnings only. Native studio checks remain pending.
 
 ## Review follow-ups (agreed 2026-11-14)
 
@@ -130,3 +130,11 @@ Two review checks found no rejections. Every repository MIDI file was saved and 
      - The installer upgrading over a previous version keeps the session.
    - The Windows checks are needed before release, not before merge.
    - Uninstalling leaves the saved session in AppData (agreed 2026-11-14), so reinstalling restores it. No installer change.
+
+### Follow-up implementation notes
+
+- `validate_workspace` recalculates unlocked ranges with `Workspace.sync_ranges()` and writes the result back to the decoded ranges; locked ranges are untouched.
+- A close during restore, a gesture, a file drag-out or a pending handoff sets `close_deferred`; the status bar shows the message and `tick()` runs the normal close once not blocked. The timer now runs even when persistence is disabled, so a deferred close is released in both states. The release also waits while a modal dialog or popup is open (`dialog_open()`), so a drop's "Place dropped files" dialog or a startup notice is never closed underneath; fresh close requests and the close-failure Retry/Exit dialog are unaffected.
+- `SessionStore.kept` lists this run's rejected files. `purge_rejected()` removes earlier runs' leftovers at startup (only when persistence is enabled) and this run's files after a clean shutdown; failures are ignored. Exiting without saving keeps them; the next startup removes them.
+- One `startup_message()` builds the single notice. An unclean run with no session file and nothing rejected shows no notice (agreed with the user: nothing was lost that matters, and nothing is claimed).
+- `*delete-me*` is ignored; `test-results-delete-me.md` is removed from the index; manual checks are in `docs/TEST_CHECKLIST.md` section 8j.

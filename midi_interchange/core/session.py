@@ -300,13 +300,16 @@ def validate_workspace(ws):
         # Existing locked ranges can retain IDs of removed tracks; these are inert.
         for tid in r.excluded:
             string(tid, True)
-    # Use the model's own inclusion rule to validate live range selections.
+    # An unlocked range's track choices are derived from global mute/solo. Recalculate
+    # them with the model's own sync rather than rejecting a session that disagrees;
+    # locked ranges keep their stored choices.
     model = Workspace()
     model.restore(ws)
-    included = {t.id for t in model.global_tracks()}
-    for r in model.ranges:
+    model.sync_ranges()
+    derived = {r.id: r.excluded for r in model.ranges}
+    for r in ws['ranges']:
         if not r.track_locked:
-            require(r.excluded & track_ids == track_ids - included, 'Inconsistent unlocked range')
+            r.excluded = set(derived[r.id])
 
 
 class SessionStore:
@@ -315,6 +318,7 @@ class SessionStore:
         self.path = self.directory / 'session.json'
         self.marker = self.directory / 'session.running'
         self.rejected = False
+        self.kept: list[Path] = []  # sessions rejected during this run
 
     def load(self) -> Session | None:
         try:
@@ -344,7 +348,28 @@ class SessionStore:
             return None
         destination = self.directory / f'session-rejected-{uuid.uuid4().hex}.json'
         self.path.rename(destination)
+        self.kept.append(destination)
         return destination
+
+    def purge_rejected(self, *, current_run_only=False) -> None:
+        """Delete rejected sessions: leftovers from earlier runs, or this run's on clean exit.
+
+        Failures are ignored (the app has no log); leftovers are retried at next startup.
+        """
+        try:
+            if current_run_only:
+                candidates = list(self.kept)
+            else:
+                candidates = [p for p in self.directory.glob('session-rejected-*.json') if p not in self.kept]
+        except OSError:
+            return
+        for path in candidates:
+            try:
+                path.unlink(missing_ok=True)
+                if path in self.kept:
+                    self.kept.remove(path)
+            except OSError:
+                pass
 
     def begin_run(self) -> bool:
         self.directory.mkdir(parents=True, exist_ok=True)

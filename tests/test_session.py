@@ -1,5 +1,6 @@
 """Persistent workspace fidelity, hostile-file recovery and application lifecycle."""
 import json
+import sys
 import threading
 import time
 from dataclasses import fields
@@ -20,6 +21,7 @@ from midi_interchange.core.ranges import Range
 from midi_interchange.core.import_smf import import_smf_bytes
 from midi_interchange.core.session import RECORDS, SCHEMA_VERSION, Session, SessionStore, decode, encode
 from midi_interchange.interchange.payload import Payload
+from midi_interchange.single_instance import SingleInstance
 from midi_interchange.ui.main_window import MainWindow
 from midi_interchange.ui.session import (PERSISTENCE_SETTING, SessionLifecycle, apply_session,
                                         capture)
@@ -112,7 +114,6 @@ def test_app_version_is_provenance_schema_is_compatibility_gate(tmp_path):
     lambda d: d['events'][0][0]['data'].__setitem__('seq', -1),
     lambda d: d['workspace']['tempo_map']['data']['timesigs'][0]['data'].__setitem__('numerator', 0),
     lambda d: d['workspace']['tempo_map']['data']['tempos'][0]['data'].__setitem__('us_per_beat', 0),
-    lambda d: d['workspace']['ranges'][0]['data'].__setitem__('excluded', []),
 ])
 def test_malformed_parseable_workspace_rejected(tmp_path, damage):
     data = encode(Session(rich_workspace(tmp_path).snapshot(), {}))
@@ -487,3 +488,292 @@ def test_snapshot_detached_from_later_edits(window, lifecycle, tmp_path):
     window.ctl.ws.ranges[1].excluded.clear()
     window.ctl.ws.tracks.reverse()
     assert encode(before) == encoded
+
+
+# -- Review follow-ups ---------------------------------------------------------
+
+def test_unlocked_range_disagreeing_with_mute_solo_is_recalculated(tmp_path):
+    ws = rich_workspace(tmp_path)
+    data = encode(Session(ws.snapshot(), {}))
+    unlocked = data['workspace']['ranges'][0]['data']
+    locked = data['workspace']['ranges'][1]['data']
+    stored_locked = list(locked['excluded'])
+    unlocked['excluded'] = []  # disagrees with the global mute/solo result
+    session = decode(data)
+    model = Workspace()
+    model.restore(session.workspace)
+    expected = {t.id for t in model.tracks if t.id not in {g.id for g in model.global_tracks()}}
+    assert expected  # the fixture really has globally excluded tracks
+    assert model.ranges[0].excluded == expected
+    assert list(model.ranges[1].excluded) == stored_locked  # locked ranges keep stored choices
+
+
+def test_other_validation_stays_strict_with_inconsistent_ranges(tmp_path):
+    data = encode(Session(rich_workspace(tmp_path).snapshot(), {}))
+    data['workspace']['ranges'][0]['data']['excluded'] = []
+    data['workspace']['tracks'][0]['data']['color'] = 'invalid'
+    with pytest.raises(ValueError):
+        decode(data)
+
+
+@pytest.fixture
+def pending_instance(tmp_path):
+    instance = SingleInstance(tmp_path / 'instance')
+    yield instance
+    instance.close()
+
+
+def busy_states(window, instance):
+    """(name, enter, leave) for each state in which a close can't happen yet."""
+    def gesture(on):
+        window.timeline._external_drag = on
+
+    def native(on):
+        window.ctl.file_drag_active = on
+
+    def handoff(on):
+        # Queue with no handler: pending until one is installed.
+        if on:
+            instance.enqueue([])
+        else:
+            instance.set_handler(lambda paths: window.ctl.import_payloads(
+                [Payload('handed.mid', smf([track(note(0, 60, 0, 960))]))]))
+    return [('gesture', gesture), ('native drag', native), ('handoff', handoff)]
+
+
+@pytest.mark.parametrize('state', ['restore', 'gesture', 'native drag', 'handoff'])
+def test_close_during_busy_state_is_deferred_then_completes_once(window, lifecycle, pending_instance, state):
+    manager = lifecycle(start=False)
+    manager.instance = pending_instance
+    if state == 'restore':
+        assert not window.close()
+        assert manager.restoring and manager.close_deferred
+        assert 'Closing when the current operation finishes' in window.statusBar().currentMessage()
+        manager.start()
+        pump_until(lambda: not manager.restoring)
+    else:
+        manager.start()
+        pump_until(lambda: not manager.restoring)
+        enter = dict(busy_states(window, pending_instance))[state]
+        enter(True)
+        assert not window.close()
+        assert manager.close_deferred and not manager.closing and window.isVisible()
+        assert 'Closing when the current operation finishes' in window.statusBar().currentMessage()
+        manager.tick()
+        assert not manager.closing  # still busy
+        enter(False)
+        pump_until(lambda: not pending_instance.has_pending)
+    manager.tick()
+    assert manager.closing
+    finish_write(manager)
+    assert manager.allow_close and not window.isVisible()
+    assert not manager.store.marker.exists()
+    assert manager.store.load() is not None
+
+
+def test_close_waits_for_handed_off_import_then_saves_it(window, lifecycle, pending_instance):
+    manager = lifecycle()
+    manager.instance = pending_instance
+    pending_instance.enqueue([])
+    assert not window.close()
+    assert manager.close_deferred
+    pending_instance.set_handler(lambda paths: window.ctl.import_payloads(
+        [Payload('handed.mid', smf([track(note(0, 60, 0, 960), 'Handed')]))]))
+    pump_until(lambda: not pending_instance.has_pending)
+    assert not manager.closing
+    manager.tick()
+    finish_write(manager)
+    assert [t.name for t in manager.store.load().workspace['tracks']] == ['Handed']
+
+
+def test_repeated_close_requests_do_not_stack(window, lifecycle):
+    manager = lifecycle()
+    saves = []
+    original = manager.store.save
+    manager.store.save = lambda snapshot: saves.append(1) or original(snapshot)
+    window.timeline._external_drag = True
+    for _ in range(3):
+        assert not window.close()
+    window.timeline._external_drag = False
+    manager.tick()
+    assert not window.close()  # repeated while closing
+    assert not window.close()
+    finish_write(manager)
+    assert manager.allow_close
+    assert saves == [1]
+
+
+def test_deferred_close_waits_for_modal_dialog(window, lifecycle):
+    manager = lifecycle()
+    saves = []
+    original = manager.store.save
+    manager.store.save = lambda snapshot: saves.append(1) or original(snapshot)
+    window.timeline._external_drag = True
+    assert not window.close()
+    window.timeline._external_drag = False
+    dialog = QDialog(window)
+    dialog.setModal(True)
+    dialog.show()
+    QApplication.processEvents()
+    manager.tick()
+    assert window.isVisible() and not manager.closing and manager.close_deferred
+    dialog.close()
+    QApplication.processEvents()
+    manager.tick()
+    assert manager.closing
+    finish_write(manager)
+    assert manager.allow_close and not window.isVisible()
+    assert saves == [1]
+
+
+def test_quit_event_during_gesture_is_deferred(window, lifecycle):
+    manager = lifecycle()
+    window.timeline._external_drag = True
+    assert manager.eventFilter(manager.app, QEvent(QEvent.Quit))
+    assert manager.close_deferred and window.isVisible()
+    window.timeline._external_drag = False
+    manager.tick()
+    finish_write(manager)
+    assert manager.allow_close
+
+
+def rejected_files(manager):
+    return sorted(manager.store.directory.glob('session-rejected-*.json'))
+
+
+def test_rejected_sessions_kept_for_this_run_only(window, lifecycle):
+    manager = lifecycle(start=False)
+    directory = manager.store.directory
+    directory.mkdir()
+    leftover = directory / 'session-rejected-0123abcd.json'
+    leftover.write_bytes(b'from an earlier run')
+    manager.store.path.write_bytes(b'bad session')
+    manager.start()
+    pump_until(lambda: not manager.restoring)
+    kept = rejected_files(manager)
+    assert len(kept) == 1 and kept[0] != leftover and kept[0].read_bytes() == b'bad session'
+    assert 'kept until the app quits' in manager.notes[0]
+    window.close()
+    finish_write(manager)
+    assert manager.allow_close
+    assert not rejected_files(manager)
+
+
+def test_rejected_cleanup_failures_never_block_startup_save_or_quit(window, lifecycle, monkeypatch):
+    manager = lifecycle(start=False)
+    directory = manager.store.directory
+    directory.mkdir()
+    leftover = directory / 'session-rejected-feed.json'
+    leftover.write_bytes(b'x')
+    manager.store.path.write_bytes(b'bad')
+    monkeypatch.setattr(Path, 'unlink', lambda self, *a, **k: (_ for _ in ()).throw(OSError('locked')))
+    manager.start()
+    pump_until(lambda: not manager.restoring)
+    assert leftover.exists()
+    manager._submit()
+    finish_write(manager)
+    monkeypatch.undo()
+    window.close()
+    finish_write(manager)
+    assert manager.allow_close  # quit completed despite the failed cleanup path
+
+
+def test_rejected_files_untouched_when_persistence_disabled(window, lifecycle):
+    manager = lifecycle(enabled=False, start=False)
+    manager.store.directory.mkdir()
+    leftover = manager.store.directory / 'session-rejected-aa.json'
+    leftover.write_bytes(b'x')
+    manager.start()
+    pump_until(lambda: not manager.restoring)
+    assert leftover.exists()
+
+
+def test_startup_notice_wording(window, lifecycle, tmp_path):
+    # Unclean run with a restorable session.
+    manager = lifecycle(start=False)
+    manager.store.save(Session(rich_workspace(tmp_path).snapshot(), capture(window).settings))
+    manager.store.begin_run()
+    manager.start()
+    pump_until(lambda: not manager.restoring)
+    assert len(manager.notes) == 1
+    assert 'last saved checkpoint was restored' in manager.notes[0]
+    assert 'more recent changes may have been lost' in manager.notes[0]
+    assert 'could not be restored' not in manager.notes[0]
+
+
+def test_startup_notice_rejected_only(window, lifecycle):
+    manager = lifecycle(start=False)
+    manager.store.directory.mkdir()
+    manager.store.path.write_bytes(b'not JSON')
+    manager.start()
+    pump_until(lambda: not manager.restoring)
+    assert len(manager.notes) == 1
+    assert 'could not be restored' in manager.notes[0]
+    assert 'empty workspace' in manager.notes[0]
+    assert 'kept until the app quits' in manager.notes[0]
+    assert 'did not close cleanly' not in manager.notes[0]
+    assert 'checkpoint was restored' not in manager.notes[0]
+
+
+def test_startup_notice_unclean_and_rejected_combined(window, lifecycle):
+    manager = lifecycle(start=False)
+    manager.store.directory.mkdir()
+    manager.store.path.write_bytes(b'{"schema_version": 888}')
+    manager.store.begin_run()
+    manager.start()
+    pump_until(lambda: not manager.restoring)
+    assert len(manager.notes) == 1
+    note_text = manager.notes[0]
+    assert 'did not close cleanly' in note_text and 'could not be restored' in note_text
+    assert 'kept until the app quits' in note_text
+    assert 'checkpoint was restored' not in note_text
+
+
+def test_startup_notice_unclean_without_session_says_nothing(window, lifecycle):
+    manager = lifecycle(start=False)
+    manager.store.begin_run()
+    manager.start()
+    pump_until(lambda: not manager.restoring)
+    assert manager.notes == []
+
+
+def test_clean_start_has_no_notice(window, lifecycle):
+    manager = lifecycle()
+    assert manager.notes == []
+
+
+# -- Windows-only: the file-sharing rules differ from POSIX -------------------------
+
+windows_only = pytest.mark.skipif(sys.platform != 'win32', reason='Windows file-sharing semantics')
+
+
+@windows_only
+def test_windows_sharing_violation_keeps_previous_session_and_cleans_temp(tmp_path):
+    store = SessionStore(tmp_path)
+    store.save(Session(Workspace().snapshot(), {}))
+    before = store.path.read_bytes()
+    with store.path.open('rb'):  # another process holding session.json open
+        with pytest.raises(OSError):
+            store.save(Session(rich_workspace(tmp_path).snapshot(), {}))
+    assert store.path.read_bytes() == before
+    assert not list(tmp_path.glob('.session-*.tmp'))
+
+
+@windows_only
+def test_windows_sharing_violation_uses_normal_periodic_and_close_failure_paths(window, lifecycle):
+    now = [0.0]
+    manager = lifecycle(clock=lambda: now[0])
+    manager.store.save(capture(window))
+    before = manager.store.path.read_bytes()
+    choices = []
+    manager.close_failure = lambda error: choices.append(error) or 'cancel'
+    with manager.store.path.open('rb'):
+        now[0] = 120
+        manager.tick()
+        finish_write(manager)
+        assert 'could not be saved' in window.statusBar().currentMessage()
+        assert manager.generation > manager.saved_generation
+        window.close()
+        finish_write(manager)
+        assert len(choices) == 1 and window.isVisible() and not manager.closing
+    assert manager.store.path.read_bytes() == before

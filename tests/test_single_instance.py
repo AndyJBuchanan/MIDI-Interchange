@@ -1,5 +1,6 @@
 """Real process lock/socket tests, isolated from normal per-user app storage."""
 import json
+import os
 import subprocess
 import sys
 import time
@@ -196,3 +197,37 @@ def test_real_entrypoint_restores_before_additive_import_and_closes_cleanly(tmp_
     assert json.loads((state / 'track-names.json').read_text()) == ['First', 'Second']
     assert len(SessionStore(state).load().workspace['tracks']) == 2
     assert not (state / 'session.running').exists()
+
+
+def test_concurrent_second_launches_during_owner_startup_import_once(owner, tmp_path):
+    owner(1500)  # owns the lock and is listening, but not yet ready to import
+    requests = {f'concurrent-{i}': [str(tmp_path / f'clip {i} \u6b4c.mid')] for i in range(6)}
+    processes = [subprocess.Popen([sys.executable, '-c', CLIENT, str(tmp_path), json.dumps(paths), rid],
+                                  cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                 for rid, paths in requests.items()]
+    # A repeat of an already-sent request id must not import twice either.
+    processes.append(subprocess.Popen([sys.executable, '-c', CLIENT, str(tmp_path),
+                                       json.dumps(requests['concurrent-0']), 'concurrent-0'],
+                                      cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE))
+    for p in processes:
+        _, error = p.communicate(timeout=15)
+        assert p.returncode == 0, error.decode()  # each client was acknowledged, none became an owner
+    wait_for(lambda: len(received(tmp_path)) >= 6)
+    time.sleep(0.3)
+    assert sorted(received(tmp_path)) == sorted(requests.values())
+
+
+windows_only = pytest.mark.skipif(sys.platform != 'win32', reason='Windows path forms')
+
+
+@windows_only
+def test_windows_drive_unc_and_non_ascii_paths_are_handed_off_unchanged(owner, tmp_path):
+    drive, rest = os.path.splitdrive(str(tmp_path))
+    paths = [str(tmp_path / 'drive letter.mid'),
+             '\\\\localhost\\' + drive[0] + '$' + rest + '\\unc share.mid',
+             '\\\\server\\share\\caf\u00e9 \u6b4c\u66f2.mid',
+             str(tmp_path / '\u6b4c\u66f2 caf\u00e9.mid')]
+    owner()
+    client(tmp_path, paths, 'windows-paths')
+    wait_for(lambda: bool(received(tmp_path)))
+    assert received(tmp_path) == [paths]

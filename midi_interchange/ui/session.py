@@ -81,6 +81,7 @@ class SessionLifecycle(QObject):
         self.retry_after = 0
         self.restoring = True
         self.closing = self.allow_close = False
+        self.close_deferred = False
         self._future = None
         self._saving_generation = 0
         self._saving_final = False
@@ -102,44 +103,64 @@ class SessionLifecycle(QObject):
 
     def start(self, ready=lambda: None):
         """Called after show/layout, before queued imports are released."""
-        notices = []
         restored = None
+        self._unclean = False
+        self._restored = False
+        self._rejection = None  # (error, detail) when a saved session was rejected
+        self._tracking_error = None
         if self.enabled:
+            self.store.purge_rejected()  # leftovers from earlier runs only
             try:
                 restored = self.store.load()
                 if restored:
                     apply_session(self.window, restored)
+                    self._restored = True
             except Exception as exc:  # session data/IO must never terminate startup
-                self._recover(exc, notices)
+                self._recover(exc)
                 restored = None
             try:
-                if self.store.begin_run():
-                    notices.append('The previous run did not close cleanly. The last saved checkpoint '
-                                   'was restored where possible; more recent changes may have been lost.')
+                self._unclean = self.store.begin_run()
             except OSError as exc:
-                notices.append(f'Session recovery tracking could not be started: {exc}')
+                self._tracking_error = exc
 
         def finish():
             # Layout/scrollbar ranges settle after refresh. Keep this inside the
             # same recovery boundary, before imports or the first checkpoint.
-            if restored:
+            if restored and self._restored:
                 try:
                     s, tl = restored.settings, self.window.timeline
                     tl.horizontalScrollBar().setValue(s['horizontal_scroll'])
                     tl.verticalScrollBar().setValue(s['vertical_scroll'])
                 except Exception as exc:
-                    self._recover(exc, notices)
+                    self._recover(exc)
             self.restoring = False
             self.last_input = self.last_saved = self.clock()
             if self.enabled:
                 self.mark_dirty()  # also save a first-run empty workspace on exit
-                self._timer.start()
+            self._timer.start()  # also releases a close deferred during restore
             ready()
-            for message in notices:
+            message = self.startup_message()
+            if message:
                 self.notice(message)
         QTimer.singleShot(0, finish)
 
-    def _recover(self, error, notices):
+    def startup_message(self):
+        """One notice matching what actually happened at startup; never claims a restore that didn't."""
+        parts = []
+        if self._rejection:
+            error, detail = self._rejection
+            lead = ('The previous run did not close cleanly, and the saved session could not be restored. '
+                    if self._unclean else 'The saved session could not be restored. ')
+            parts.append(f'{lead}The app started with an empty workspace. '
+                         f'The rejected file is kept until the app quits.\n{error}{detail}')
+        elif self._unclean and self._restored:
+            parts.append('The previous run did not close cleanly. The last saved checkpoint was restored; '
+                         'more recent changes may have been lost.')
+        if self._tracking_error:
+            parts.append(f'Session recovery tracking could not be started: {self._tracking_error}')
+        return '\n\n'.join(parts)
+
+    def _recover(self, error):
         # Set before moving: if preservation fails, later saves must retry it,
         # never overwrite the rejected file.
         self.store.rejected = True
@@ -150,7 +171,8 @@ class SessionLifecycle(QObject):
         except OSError as exc:
             detail = f'\nThe original file is untouched; saving must wait until it can be preserved: {exc}'
         apply_session(self.window, self._defaults)
-        notices.append(f'The saved session could not be restored. Starting with an empty workspace.\n{error}{detail}')
+        self._restored = False
+        self._rejection = (error, detail)
 
     def mark_dirty(self, *_):
         if self.enabled and not self.restoring:
@@ -167,16 +189,28 @@ class SessionLifecycle(QObject):
             self.window.close()
             return True
         if obj is self.window and kind == QEvent.Close and not self.allow_close:
-            if (self.restoring or self.window.timeline.gesture_active or self.window.ctl.file_drag_active
-                    or (self.instance and self.instance.has_pending)):
-                # Don't lose a request which has already been acknowledged.
+            if self.close_blocked():
+                # Remember the request; tick() runs the normal close once not busy.
                 event.ignore()
+                if not self.close_deferred:
+                    self.close_deferred = True
+                    self.window.statusBar().showMessage('Closing when the current operation finishes\u2026')
                 return True
             if self.enabled:
                 event.ignore()
                 self.request_close()
                 return True
         return False
+
+    def close_blocked(self):
+        return bool(self.restoring or self.window.timeline.gesture_active or self.window.ctl.file_drag_active
+                    or (self.instance and self.instance.has_pending))
+
+    @staticmethod
+    def dialog_open():
+        # Only the deferred release waits for dialogs; a fresh close request and the
+        # close-failure dialog (opened while closing) are unaffected.
+        return QApplication.activeModalWidget() is not None or QApplication.activePopupWidget() is not None
 
     def busy(self):
         return (self.window.timeline.gesture_active
@@ -188,6 +222,11 @@ class SessionLifecycle(QObject):
     def tick(self):
         if self._future and self._future.done():
             self._complete_save()
+        if (self.close_deferred and not self.closing and not self.close_blocked()
+                and not self.dialog_open()):
+            self.close_deferred = False
+            self.window.close()  # normal close path, including the final save
+            return
         if self.closing or self.restoring or not self.enabled or self._future:
             return
         now = self.clock()
@@ -266,6 +305,7 @@ class SessionLifecycle(QObject):
             except OSError as exc:
                 self._save_failed(exc)
                 return
+            self.store.purge_rejected(current_run_only=True)  # failures ignored
         self.allow_close = True
         self._timer.stop()
         self.window.setEnabled(True)
