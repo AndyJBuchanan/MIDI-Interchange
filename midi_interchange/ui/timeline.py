@@ -19,6 +19,7 @@ Interaction
   Alt/Option-drag a clip                   move the clip, in time and across tracks
                                            (below the last track: onto a new track)
   Alt+Ctrl / Option-Cmd-drag a clip        copy the clip
+  Cmd/Ctrl-click a clip                    split (Shift bypasses snap)
   Shift while dragging a clip              keep its time; change track only
   Shift while dragging a range             bypass snap
   (a plain drag on a range edge always moves the range edge; Option picks the clip edge)
@@ -41,8 +42,8 @@ from fractions import Fraction
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QBrush, QColor, QCursor, QFont, QFontMetrics, QKeyEvent, QMouseEvent,
-                           QNativeGestureEvent, QPainter, QPainterPath, QPen, QRegion, QWheelEvent)
-from PySide6.QtWidgets import QAbstractScrollArea, QMenu
+                           QNativeGestureEvent, QPainter, QPainterPath, QPen, QPixmap, QRegion, QWheelEvent)
+from PySide6.QtWidgets import QApplication, QAbstractScrollArea, QMenu
 
 from ..core.document import Clip, Track
 from ..core.events import TEXT_META, display_text, pair_notes
@@ -61,6 +62,31 @@ EDGE_PX = 5
 TOGGLE_PX = 13        # range track toggle: size, and gap from the range's left edge
 TOGGLE_GAP = 6
 MIN_PPB, MAX_PPB = 1.5, 1600.0
+
+
+def clip_cursor(copy: bool = False) -> QCursor:
+    """Outlined vector cursors, independent of platform font glyph coverage."""
+    pix = QPixmap(32, 32)
+    pix.fill(Qt.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.Antialiasing)
+    for color, width in ((Qt.white, 4), (Qt.black, 2)):
+        p.setPen(QPen(color, width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        if copy:
+            for x1, y1, x2, y2 in ((3, 13, 23, 13), (13, 3, 13, 23),
+                                   (3, 13, 7, 9), (3, 13, 7, 17),
+                                   (23, 13, 19, 9), (23, 13, 19, 17),
+                                   (13, 3, 9, 7), (13, 3, 17, 7),
+                                   (13, 23, 9, 19), (13, 23, 17, 19),
+                                   (23, 27, 31, 27), (27, 23, 27, 31)):
+                p.drawLine(x1, y1, x2, y2)
+        else:
+            p.drawEllipse(QRectF(2, 18, 8, 8))
+            p.drawEllipse(QRectF(18, 18, 8, 8))
+            p.drawLine(8, 20, 23, 3)
+            p.drawLine(20, 20, 5, 3)
+    p.end()
+    return QCursor(pix, 13, 13)
 
 
 @dataclass
@@ -125,6 +151,12 @@ class Timeline(QAbstractScrollArea):
         self._drag_reach: float | None = None
         self._drag_scroll_start: int | None = None
         self._hover_x: float | None = None
+        self._pointer: QPointF | None = None
+        self._pointer_mods = Qt.NoModifier
+        self._split_preview: tuple[str, Fraction] | None = None
+        self._scissors_cursor = clip_cursor()
+        self._copy_cursor = clip_cursor(copy=True)
+        QApplication.instance().installEventFilter(self)
         self._press_pos: QPointF | None = None
         self._drop_ind: tuple[int | None, Fraction, str] | None = None   # lane (None = new track), time, label
         self._show_markers = True      # Show Markers (the setting; the row also needs markers to show)
@@ -135,7 +167,7 @@ class Timeline(QAbstractScrollArea):
         self.viewport().setAttribute(Qt.WA_OpaquePaintEvent)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.horizontalScrollBar().valueChanged.connect(self.viewport().update)
+        self.horizontalScrollBar().valueChanged.connect(self._refresh_pointer)
         self.verticalScrollBar().valueChanged.connect(self._on_vscroll)
 
         self._autoscroll = QTimer(self)
@@ -225,6 +257,7 @@ class Timeline(QAbstractScrollArea):
         return max(end + 32.0, 128.0)
 
     def begin_drag(self, *, external: bool = False) -> None:
+        self._set_split_preview(None)
         self._external_drag = external
         self._drag_reach = None
         self._drag_scroll_start = self.horizontalScrollBar().value()
@@ -267,6 +300,7 @@ class Timeline(QAbstractScrollArea):
 
     def _on_vscroll(self, v: int) -> None:
         self.verticalOffsetChanged.emit(v)
+        self._refresh_pointer()
         self.viewport().update()
 
     def _content_changed(self) -> None:
@@ -276,6 +310,7 @@ class Timeline(QAbstractScrollArea):
                 del self._cache[cid]
         self._refresh_header()
         self._update_scrollbars()
+        self._refresh_pointer()
         self.viewport().update()
 
     def render_for(self, clip: Clip) -> ClipRender:
@@ -294,6 +329,7 @@ class Timeline(QAbstractScrollArea):
         self._update_scrollbars()
         self.horizontalScrollBar().setValue(int(round(t_anchor * ppb - anchor_x)))
         self.viewport().update()
+        self._refresh_pointer()
         self.zoomChanged.emit()
 
     def zoom_by(self, factor: float, anchor_x: float | None = None) -> None:
@@ -315,6 +351,7 @@ class Timeline(QAbstractScrollArea):
         if h != self.lane_h:
             self.lane_h = h
             self._update_scrollbars()
+            self._refresh_pointer()
             self.laneHeightChanged.emit(h)
             self.viewport().update()
 
@@ -340,6 +377,14 @@ class Timeline(QAbstractScrollArea):
                 continue
             self._paint_track_regions(p, track, top, t0, t1, w)
         self._paint_range_overlays(p, self.header_h(), h)
+        if self._split_preview is not None:
+            cid, time = self._split_preview
+            found = ws.find_clip(cid)
+            if found is not None:
+                top = self.lane_top(ws.tracks.index(found[0]))
+                x = self.x_of(float(time))
+                p.setPen(QPen(theme.ACCENT, 1, Qt.DashLine))
+                p.drawLine(QPointF(x, top + 2), QPointF(x, top + self.lane_h - 3))
         if self._drop_ind is not None:
             self._paint_drop_indicator(p, w, h)
         p.setClipping(False)
@@ -742,13 +787,28 @@ class Timeline(QAbstractScrollArea):
                     best = (d, track.id, clip.id, edge)
         return None if best is None else ("clip_edge", *best[1:])
 
+    def _lane_hit(self, pos: QPointF) -> tuple:
+        i = self.lane_at(pos.y())
+        if i < 0:
+            return ("empty",)
+        track = self.ctl.ws.tracks[i]
+        time = self.t_of(pos.x())
+        for clip in track.clips:
+            if float(clip.start) <= time < float(clip.end):
+                return ("clip", track.id, clip.id)
+        return ("lane", track.id)
+
     def _hit(self, pos: QPointF, mods=Qt.NoModifier) -> tuple:
         """What is under `pos`. Option/Alt held prefers a clip's edge (trim) over a range edge."""
         x, y = pos.x(), pos.y()
-        if y >= self.header_h() and mods & Qt.AltModifier:
-            ce = self._clip_edge_hit(pos)
+        action = self._clip_action(mods)
+        if y >= self.header_h() and action is not None:
+            ce = self._clip_edge_hit(pos) if action in ("move", "copy") else None
             if ce is not None:
-                return ce
+                return ("clip", ce[1], ce[2]) if action == "copy" else ce
+            hit = self._lane_hit(pos)
+            if hit[0] == "clip":
+                return hit
         ranges = sorted(self.ctl.ws.ranges, key=lambda r: r.id != self.ctl.selected_range_id)
         for r in ranges:
             lock = self.lock_rect(r)
@@ -775,14 +835,7 @@ class Timeline(QAbstractScrollArea):
                     return ("body", r.id)
             return ("strip",)
         if y >= self.header_h():
-            i = self.lane_at(y)
-            if i >= 0:
-                track = self.ctl.ws.tracks[i]
-                t = self.t_of(x)
-                for clip in track.clips:
-                    if float(clip.start) <= t < float(clip.end):
-                        return ("clip", track.id, clip.id)
-                return ("lane", track.id)
+            return self._lane_hit(pos)
         return ("empty",)
 
     def _range_at_x(self, x: float) -> str | None:
@@ -803,6 +856,12 @@ class Timeline(QAbstractScrollArea):
         if e.button() != Qt.LeftButton:
             return
         bypass = bool(e.modifiers() & Qt.ShiftModifier)
+        self._pointer = pos
+        self._pointer_mods = e.modifiers()
+        self._set_split_preview(None)
+        if hit[0] == "clip" and self._clip_action(e.modifiers()) == "split":
+            self.ctl.split_clip(hit[2], quantize(self.t_of(pos.x())), bypass)
+            return
         self._press_pos = pos
         if hit[0] == "lock":
             r = self.ctl.ws.range(hit[1])
@@ -822,13 +881,13 @@ class Timeline(QAbstractScrollArea):
         elif hit[0] == "clip_edge":
             self.ctl.checkpoint()
             self._drag = {"kind": "trim", "cid": hit[2], "edge": hit[3]}
-        elif hit[0] == "clip" and e.modifiers() & Qt.AltModifier:
+        elif hit[0] == "clip" and self._clip_action(e.modifiers()) in ("move", "copy"):
             track = self.ctl.ws.track(hit[1])
             clip = next(c for c in track.clips if c.id == hit[2])
             self._drag = {"kind": "clip", "cid": hit[2], "orig_off": clip.start, "origin": track.copy(),
-                          "copy": bool(e.modifiers() & Qt.ControlModifier),
+                          "copy": self._clip_action(e.modifiers()) == "copy",
                           "grab": quantize(self.t_of(pos.x())) - clip.start, "checkpointed": False}
-            self.viewport().setCursor(Qt.DragCopyCursor if self._drag["copy"] else Qt.ClosedHandCursor)
+            self.viewport().setCursor(self._copy_cursor if self._drag["copy"] else Qt.SizeAllCursor)
         else:
             self._drag = {"kind": "create", "anchor": self.time_at(pos.x(), bypass), "rid": None}
         if self._drag is not None:
@@ -837,6 +896,8 @@ class Timeline(QAbstractScrollArea):
     def mouseMoveEvent(self, e: QMouseEvent) -> None:
         pos = e.position()
         bypass = bool(e.modifiers() & Qt.ShiftModifier)
+        self._pointer = pos
+        self._pointer_mods = e.modifiers()
         self._hover_x = pos.x()
         t_hover = self.time_at(pos.x(), True)
         tm = self.ctl.ws.tempo_map
@@ -967,6 +1028,9 @@ class Timeline(QAbstractScrollArea):
         self.viewport().update()
 
     def mouseDoubleClickEvent(self, e: QMouseEvent) -> None:
+        if self._clip_action(e.modifiers()) is not None:
+            self.mousePressEvent(e)
+            return
         hit = self._hit(e.position())
         if hit[0] == "lock":
             r = self.ctl.ws.range(hit[1])
@@ -983,14 +1047,59 @@ class Timeline(QAbstractScrollArea):
                 self.rangeEditRequested.emit(rid)
 
     def leaveEvent(self, _e) -> None:
+        self._pointer = None
+        self._set_split_preview(None)
         self._hover_x = None
         self.viewport().update(0, 0, self.viewport().width(), self.header_h())
+
+    @staticmethod
+    def _clip_action(mods) -> str | None:
+        if mods & Qt.AltModifier:
+            return "copy" if mods & Qt.ControlModifier else "move"
+        return "split" if mods & Qt.ControlModifier else None
+
+    def _set_split_preview(self, preview) -> None:
+        if preview != self._split_preview:
+            self._split_preview = preview
+            self.viewport().update()
+
+    def _refresh_pointer(self, *_args) -> None:
+        if self._pointer is not None and self._drag is None and not self._external_drag:
+            self._update_cursor(self._pointer, self._pointer_mods)
+        self.viewport().update()
+
+    def eventFilter(self, obj, e) -> bool:
+        if e.type() in (QEvent.KeyPress, QEvent.KeyRelease) and self._pointer is not None:
+            mods = e.modifiers()
+            # Modifier-key events can report the pre-transition state. Qt normalizes
+            # both Key_Control and ControlModifier to Command on macOS.
+            modifier = {Qt.Key_Control: Qt.ControlModifier, Qt.Key_Alt: Qt.AltModifier,
+                        Qt.Key_Shift: Qt.ShiftModifier, Qt.Key_Meta: Qt.MetaModifier}.get(e.key())
+            if modifier is not None:
+                mods = mods | modifier if e.type() == QEvent.KeyPress else mods & ~modifier
+            self._pointer_mods = mods
+            self._refresh_pointer()
+        elif e.type() == QEvent.WindowDeactivate and obj is self.window():
+            self._pointer = None
+            self._set_split_preview(None)
+            self.viewport().unsetCursor()
+        return super().eventFilter(obj, e)
 
     def _update_cursor(self, pos: QPointF, mods) -> None:
         hit = self._hit(pos, mods)
         vp = self.viewport()
         tip = ""
-        if hit[0] == "lock":
+        preview = None
+        action = self._clip_action(mods)
+        if hit[0] == "clip" and action == "split":
+            vp.setCursor(self._scissors_cursor)
+            time = self.ctl.split_position(hit[2], quantize(self.t_of(pos.x())),
+                                           bool(mods & Qt.ShiftModifier))
+            if time is not None:
+                preview = (hit[2], time)
+        elif hit[0] == "clip" and action == "copy":
+            vp.setCursor(self._copy_cursor)
+        elif hit[0] == "lock":
             vp.setCursor(Qt.PointingHandCursor)
             r = self.ctl.ws.range(hit[1])
             tip = "Unlock: follow global mute/solo" if r.track_locked else "Lock: edit range tracks independently"
@@ -1006,10 +1115,11 @@ class Timeline(QAbstractScrollArea):
             vp.setCursor(Qt.SizeHorCursor)
         elif hit[0] == "body":
             vp.setCursor(Qt.OpenHandCursor)
-        elif hit[0] == "clip" and mods & Qt.AltModifier:
+        elif hit[0] == "clip" and action == "move":
             vp.setCursor(Qt.SizeAllCursor)
         else:
             vp.setCursor(Qt.IBeamCursor)
+        self._set_split_preview(preview)
         if vp.toolTip() != tip:
             vp.setToolTip(tip)
 

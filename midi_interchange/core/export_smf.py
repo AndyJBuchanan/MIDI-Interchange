@@ -374,7 +374,9 @@ def _extract_clips(clips: list[Clip], seg: _Segment, si: int, partial_notes: boo
                 items.append(_Item(out_time(ne), (si, 1, n.off.seq), n.off.msg))
             else:
                 end_t = ne if hi is None else min(ne, hi)
-                items.append(_Item(out_time(end_t), (si, 2, n.on.seq),
+                # A cut release must precede a neighbouring clip's retrigger at
+                # the same time, even when both share the original on-event.
+                items.append(_Item(out_time(end_t), (si, -1, n.on.seq),
                                    mido.Message("note_off", channel=n.channel, note=n.pitch, velocity=0)))
         for ev in clip.events:
             m = ev.msg

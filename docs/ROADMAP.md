@@ -6,7 +6,6 @@ Updated 2026-11-14.
 
 ## Agreed, not started
 
-- **Clip splitting:** [agreed plan](plans/clip-splitting.md) on `feature/clip-splitting`, based on `release/0.3.0`. Reuse duplication and edge trims with shared event data; keep both pieces in place and make the split one undo step. Cmd/Ctrl-click splits with scissors feedback; the pieces retain the existing non-destructive trim behaviour. Includes move/copy cursor feedback.
 - **Export/drag filename decoration:**
   - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
   - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
@@ -20,6 +19,7 @@ Updated 2026-11-14.
 
 ## Later, after more real-world use
 
+- **Intermittent cursor switching** (reported during clip-splitting verification, 2026-11-14): cursors occasionally stop switching. The user has observed this throughout the app's development, before clip splitting; the cause is unknown. Investigate later when a reproducible case is available. Clip-splitting manual checks otherwise passed.
 - **Reason Controller #254 automation lane** (known issue, deferred by agreement, 2026-11-13): channel-override export worked, but Reason added an unwanted automation lane. Zeroing release velocities did not remove it. Users can delete the lane; further investigation is deferred. See [the findings](INTEROP_FINDINGS.md#reason-unexpected-automation-lane-after-channel-override-2026-11-13).
 - **Esc cancellation of incoming macOS drags** (deferred by agreement, 2026-11-12):
   - Finder → Finder cancels, but Finder → MIDI Interchange doesn't. Cubase → Finder and Cubase → MIDI Interchange both fail to cancel.

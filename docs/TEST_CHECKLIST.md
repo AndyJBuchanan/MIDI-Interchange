@@ -229,6 +229,18 @@ Notes/failures:
 - [x] Toggle **Markers** on the toolbar (and Timing ▸ Show Markers): the header shrinks and grows, markers still show in their lanes, and the exported file still contains them. Quit and reopen (the workspace starts empty on this branch, as the session isn't kept yet): the Markers button is still in the state you left it, and importing a file with markers shows or hides the row to match.
 - [x] Drag a file with markers into a workspace without any: the header grows after the drop, not during it. Create, resize and move ranges, drag clips and drop files with and without the marker row.
 
+## 8l. Clip splitting (`feature/clip-splitting`)
+
+Use Cmd/Option on macOS; Ctrl/Alt on Windows. Windows checks are done before release under the usual platform policy.
+
+- [x] Hold Cmd/Ctrl over a clip: scissors and a snapped vertical preview appear. Change modifiers without moving the pointer; releasing Cmd/Ctrl or leaving the clip clears the preview. Click to split; both pieces stay adjacent. Undo/Redo reverses/restores the split in one step.
+- [x] Add Shift to split off-grid. A cut at an edge or too close to it does nothing and adds no undo step. Try splitting an already trimmed clip.
+- [x] Opt/Alt shows a move arrow and moves; at a trimmable edge it shows resize and trims. Opt/Alt + Cmd/Ctrl shows a move arrow with a plus and copies, including from an edge. Plain range gestures still work.
+- [x] Move one half and use Restore Full Clip on it: it can recover the original full extent independently of its neighbour.
+- [x] Drag a split clip pair into a DAW and listen to a sustained note crossing the split: it releases and restarts at the split.
+
+Automated tests cover exact MIDI boundaries, note ordering, all four export modes, channel overrides, locked exclusions, shared session data, invalid cuts, modifier dispatch and undo/redo. No manual file comparison is needed.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.

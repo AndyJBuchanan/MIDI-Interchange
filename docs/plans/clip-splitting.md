@@ -1,6 +1,6 @@
 # Plan: clip splitting
 
-Status: **agreed** (2026-11-14). Not built.
+Status: **implemented; manual verification passed** (2026-11-14). The intermittent cursor-switching issue predates this feature and is recorded in ROADMAP for later investigation.
 
 Branch: `feature/clip-splitting`, created from the updated `release/0.3.0`. The eventual PR targets `release/0.3.0`, following [the branching rules](../RELEASING.md#branches).
 
@@ -58,3 +58,13 @@ This is a non-destructive split using the existing trim model:
 ## Documentation and scope
 
 On implementation, document the action and boundary behaviour in README and DESIGN_NOTES, add the short manual checks to TEST_CHECKLIST, and remove the completed roadmap entry. No separate tool mode, multi-clip splitting, joining/gluing, destructive event edits, new colours, version bump or build is included.
+
+## Implementation notes
+
+- The controller shares snapped-position validation between preview and execution; the workspace reuses duplication and trims. No new session fields or schema change.
+- Modifier feedback uses an application event filter so a stationary pointer updates even when another control has focus. Qt maps Command to Control on macOS. Modifier-key transitions are normalized explicitly because their reported modifier state can include the released key.
+- Scissors and move-with-plus cursors are small outlined vector drawings with explicit hotspots. The preview uses the existing accent colour.
+- Export regression tests exposed synthetic cut releases sorting after same-time retriggers. Their ordering in the shared extraction path now puts the cut release first; source MIDI and untrimmed whole-export event ordering remain unchanged.
+- Automated coverage is in `tests/test_clip_splitting.py`, alongside the existing trim, export, session and timeline suites.
+
+Validation: full suite **368 passed, 3 Windows-only skips**; after the final pointer/zoom and independence checks, focused split/trim/timeline/autoscroll suites **90 passed**. Manual checks are in TEST_CHECKLIST section 8l.

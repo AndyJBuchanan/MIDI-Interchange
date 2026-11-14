@@ -90,10 +90,14 @@ Click a track's colour box to choose a palette colour or **More colours…**, an
 2. **Duplicate** a clip: right-click ▸ Duplicate Clip, or ⌥⌘-drag it. The copy goes straight after the original; here the Keys verse was copied into bars 5–9.
 3. **Move** a clip: ⌥-drag it in time and onto another track. Here the Lead chorus slid back over the end of its verse. **Overlaps** are allowed and tinted red; both clips' notes are exported, merged.
 
+4. **Split** a clip: hold **⌘ on Mac or Ctrl on Windows** over it. The cursor becomes scissors, and a vertical line previews the snapped cut position. **Click** to split into two adjacent pieces on the same track. Hold **Shift** as well to cut off-grid. One Undo rejoins the pieces.
+
 The rest of the rules, in one place:
 
 - **Moving:** drag below the last track to make a new track. Hold Shift to keep the clip's time (a track change only). A track left empty is removed (Undo restores it). A plain move snaps the clip's visible start to the grid.
 - **Trimming:** the edge snaps like a move (Shift bypasses it) and can't go past where the clip's MIDI originally started or ended. An edge placed off the grid with Shift stays there until the clip is moved. A clip too narrow to hold both edges can only be moved: zoom in to trim it. A plain drag on a clip edge still makes or resizes a range.
+- **Splitting:** each half must retain at least one snap step (one source tick with snap off or bypassed); a cut at an edge or too close to it does nothing. Already trimmed clips can be split too. Both halves keep their name and can be moved, copied or trimmed independently. Either half can be extended back into the original MIDI; right-click ▸ **Restore Full Clip** restores its full original extent, which may overlap the other half. Notes crossing the split are released and restarted there on export.
+- **Cursors:** ⌥/Alt shows a move arrow (resize at a trimmable edge); ⌥⌘/Alt+Ctrl shows a move arrow with a plus and copies, including at edges.
 - **Butt Against Previous Clip** (right-click) closes the gap before a clip, using its trimmed start.
 
 ![The clip and track right-click menus](docs/images/07-menus.png)
@@ -241,7 +245,6 @@ For each app check: does the drop import at all (if not, note the formats listed
 
 - **Drag and drop depends on the other app.** File URLs and any data starting with `MThd` are handled. Qt can't receive **macOS file promises** or **Windows virtual files**; no app tested so far needed them. If a drop carries no usable MIDI, the app lists the formats it was offered, which helps a lot in a bug report. Drag-out offers temp files (in `$TMPDIR/MIDI Interchange Drag`, pruned after 24 h).
 - **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, use the track colour box’s export-channel override, or assemble clips that share a channel.
-- Clips can be trimmed at either edge but not split.
 - **Marker row and locked ranges:** the marker row follows the global mute and solo, not a locked range's own track choices. A locked range's export can include markers of a globally muted track that the row doesn't show.
 - SMPTE-division files are rejected with a clear message.
 
