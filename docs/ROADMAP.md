@@ -6,7 +6,7 @@ Updated 2026-11-14.
 
 ## Agreed, not started
 
-- **Clip splitting:** split a clip at a chosen position, reusing duplication and edge-trim operations with shared event data. Keep both pieces in place and make the split one undo step. Plan the interaction before implementation.
+- **Clip splitting:** [agreed plan](plans/clip-splitting.md) on `feature/clip-splitting`, based on `release/0.3.0`. Reuse duplication and edge trims with shared event data; keep both pieces in place and make the split one undo step. Cmd/Ctrl-click splits with scissors feedback; the pieces retain the existing non-destructive trim behaviour. Includes move/copy cursor feedback.
 - **Export/drag filename decoration:**
   - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
   - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
