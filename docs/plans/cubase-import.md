@@ -358,7 +358,7 @@ this fast.
 | c14 ✱ | Unmute the part, mute the track |
 | c15 | Unmute the track. Copy the part so the copy starts at bar 9 (Option/Alt-drag, or copy and paste at 9.1; not Ctrl/⌘-D, which places it straight after) |
 | c16 ✱ | From c14 + unmute, make the bar 9 copy a shared copy instead (Option/Alt-Shift-drag) |
-| c17 ✱ | Add a second MIDI track on channel 2 with one part and one note |
+| c17 ✱ | Add a **MIDI track** (not an instrument track; Add Track ▸ MIDI), output to any instrument or Not Connected, MIDI channel 2 in the Inspector, with one part and one note. All realistic fixtures use instrument tracks only, so this is the only MIDI-track example |
 | c18 ✱ | Put both tracks in a folder track |
 
 ### Tier 3: tempo, meter, markers, controllers (phase 2)
