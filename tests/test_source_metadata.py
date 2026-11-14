@@ -87,6 +87,9 @@ def test_source_details_wrap_and_scroll_without_clipping(app, width, font_size):
         assert path.document().size().height() > path.fontMetrics().height() * 2
         path.selectAll()
         assert path.textCursor().selectedText() == source.path
+        # Selection can queue a focus/ensure-visible request to the outer scroll
+        # area. Deliver that request before testing an explicit scroll to bottom.
+        QTest.qWait(20)
         for value in values:
             assert value.viewport().height() + 1 >= value.document().size().height()
             assert value.document().idealWidth() <= value.viewport().width() + 1

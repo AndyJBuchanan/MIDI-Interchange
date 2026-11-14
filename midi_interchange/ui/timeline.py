@@ -490,7 +490,7 @@ class Timeline(QAbstractScrollArea):
             if x1 < -2 or x0 > w + 2:
                 continue
             cr = QRectF(x0, top + 2, max(x1 - x0, 3), lane_h - 5)
-            fill = QColor(base)
+            fill = QColor(theme.DISABLED if clip.muted else base)
             fill.setAlpha(46 if enabled else 28)
             border = QColor(base)
             border.setAlpha(150 if enabled else 70)
@@ -502,7 +502,7 @@ class Timeline(QAbstractScrollArea):
                 p.setPen(theme.TEXT if enabled else theme.TEXT_DIM)
                 lx = max(cr.left(), 0) + 5
                 fm = QFontMetrics(self.font_small)
-                label = fm.elidedText(clip.name or track.name, Qt.ElideRight, int(cr.right() - lx - 4))
+                label = fm.elidedText(((clip.name or track.name) + (" [muted]" if clip.muted else "")), Qt.ElideRight, int(cr.right() - lx - 4))
                 p.drawText(QPointF(lx, top + 2 + fm.ascent() + 1), label)
 
             render = self.render_for(clip)

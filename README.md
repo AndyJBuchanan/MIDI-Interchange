@@ -51,7 +51,15 @@ Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 
 
 ### Step 1: Bring MIDI in
 
-Drag MIDI from another app, or `.mid` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
+Drag MIDI from another app, or `.mid` / `.dawproject` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
+
+DAWproject 1.0 imports arrangement MIDI, clip positions and mute states, stepped
+tempo changes, time signatures and markers. Audio, plug-ins and automation
+(including MIDI CC/expression automation) are reported as skipped. Tempo ramps
+are currently unsupported. Right-click a clip to **Mute Clip** or **Unmute Clip**;
+muted clips remain visible and are excluded from exports. Cubase 15/16 fixtures
+are covered by automated tests; studio verification is pending. See the
+[supported scope and comparison results](docs/plans/dawproject-import.md).
 
 ![Dragging a clip in, with the landing preview](docs/images/02-drag-in.png)
 

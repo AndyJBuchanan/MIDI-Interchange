@@ -27,15 +27,15 @@ from .timing import TempoChange, TempoMap, TimeSigChange
 
 # BUMP for incompatible model/field-meaning/invariant changes, not every release.
 # Update the explicit records, validators and round-trip tests together. See
-# docs/DEVELOPMENT.md. Version 1 has one explicit source-metadata upgrade below;
+# docs/DEVELOPMENT.md. Versions 1 and 2 have explicit upgrades below;
 # all other unsupported versions are preserved and skipped.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Explicit persisted fields: adding a model field requires a compatibility review.
 RECORDS = {
-    Source: 'id name ppq smf_format imported_at raw tempo_map path app track_names warnings song byte_size',
+    Source: 'id name ppq smf_format imported_at raw tempo_map path app track_names warnings song byte_size input_format format_version',
     Track: 'id name source_id clips original_name muted soloed color auxiliary channels auto_trim export_channel',
-    Clip: 'id events length offset source_track_index name source_id trim_start trim_end',
+    Clip: 'id events length offset source_track_index name source_id trim_start trim_end muted',
     Range: 'start end name id excluded track_locked',
     TempoMap: 'tempos timesigs',
     TempoChange: 'time us_per_beat',
@@ -133,7 +133,7 @@ def encode(session: Session) -> dict:
 def decode(data: dict) -> Session:
     require(type(data) is dict, 'Invalid session document')
     version = data.get('schema_version')
-    require(type(version) is int and version in (1, SCHEMA_VERSION),
+    require(type(version) is int and version in (1, 2, SCHEMA_VERSION),
             'This session uses an unsupported schema version')
     string(data['app_version'], True)  # provenance only; schema decides compatibility
     classes = {cls.__name__: cls for cls in RECORDS}
@@ -175,13 +175,19 @@ def decode(data: dict) -> Session:
         require(kind in classes, 'Unknown session record')
         cls = classes[kind]
         fields = set(RECORDS[cls].split())
-        if cls is Source and version == 1:
-            fields.remove('byte_size')
+        if cls is Source and version < 3:
+            fields -= {'input_format', 'format_version'}
+            if version == 1:
+                fields.remove('byte_size')
+        if cls is Clip and version < 3:
+            fields.remove('muted')
         require(type(value) is dict and set(value) == fields, 'Invalid record fields')
         args = {k: unpack(v) for k, v in value.items()}
         if 'id' in args:
             string(args['id'], True)  # reject before Range can generate a replacement ID
         if cls is Clip:
+            if version < 3:
+                args['muted'] = False
             idx = integer(args['events'], 0, len(event_lists) - 1)
             args['events'] = event_lists[idx]
             require(args['trim_end'] is not None)
@@ -189,6 +195,8 @@ def decode(data: dict) -> Session:
             args['excluded'] = set(sequence(args['excluded']))
             require(fraction(args['end']) >= fraction(args['start']), 'Reversed range')
         if cls is Source:
+            if version < 3:
+                args.update(input_format='smf', format_version=None)
             if version == 1:
                 # Old sessions retain the complete MIDI input. Preserve its size,
                 # then release the unused bytes; never reparse or reopen the file.
@@ -268,6 +276,8 @@ def validate_workspace(ws):
             string(value)
         integer(src.ppq, 1, 32767)
         integer(src.smf_format, 0, 2)
+        require(src.input_format in ('smf', 'dawproject'), 'Invalid input format')
+        require(src.format_version is None or type(src.format_version) is str)
         if src.byte_size is not None:
             integer(src.byte_size)
         require(type(src.raw) is bytes and type(src.imported_at) is datetime)
@@ -291,6 +301,7 @@ def validate_workspace(ws):
             integer(track.export_channel, 1, 16)
         for clip in sequence(track.clips):
             identify(clip, Clip)
+            boolean(clip.muted)
             string(clip.name)
             string(clip.source_id)
             require((clip.source_id or track.source_id) in source_ids, 'Missing clip source')

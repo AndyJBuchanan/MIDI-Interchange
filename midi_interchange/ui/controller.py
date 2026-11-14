@@ -8,7 +8,8 @@ from PySide6.QtCore import QObject, Signal
 from ..core.document import Track, Workspace
 from ..core.export_smf import (ExportMode, ExportOptions, ExportResult, build_exports, export_name,
                                export_tracks)
-from ..core.import_smf import ImportError_, import_smf_bytes
+from ..core.import_smf import ImportError_
+from ..interchange.readers import read_payload
 from ..core.names import quoted
 from ..core.placement import Placement, place_imports
 from ..core.ranges import Range
@@ -90,8 +91,7 @@ class Controller(QObject):
         parsed, errors = [], []
         for p in payloads:
             try:
-                parsed.append(import_smf_bytes(p.data, p.name, path=p.path, app=p.app,
-                                              byte_size=p.byte_size))
+                parsed.append(read_payload(p))
             except ImportError_ as exc:
                 errors.append(f"{p.name}: {exc}")
         return parsed, errors
@@ -202,6 +202,14 @@ class Controller(QObject):
         right = self.ws.split_clip(clip_id, time, self._min_trim(clip, bypass_snap))
         self.tracksChanged.emit()
         return right.id
+
+    def toggle_clip_mute(self, clip_id: str) -> None:
+        found = self.ws.find_clip(clip_id)
+        if found is None:
+            return
+        self.checkpoint()
+        found[1].muted = not found[1].muted
+        self.tracksChanged.emit()
 
     def restore_clip(self, clip_id: str) -> None:
         """Menu command: put a trimmed clip's edges back to its full extent."""

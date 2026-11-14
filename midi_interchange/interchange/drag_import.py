@@ -1,4 +1,4 @@
-"""Import boundary: turn whatever a drop/paste offers into MIDI byte payloads.
+"""Import boundary: turn whatever a drop/paste offers into registered file or MIDI byte payloads.
 
 Handled here (via Qt, both platforms):
 * File URLs (Finder/Explorer, and DAWs that drag a rendered temp .mid, which
@@ -20,28 +20,14 @@ from PySide6.QtCore import QMimeData
 
 from .payload import Payload
 
-MIDI_EXTENSIONS = {".mid", ".midi", ".smf", ".kar", ".rmi"}
-MAX_FILE_BYTES = 64 * 1024 * 1024
+from .readers import EXTENSIONS, payload_from_path
+from ..core.import_smf import ImportError_
 
-
-def _read_midi_payload(path: str) -> Payload | None:
+def _read_file_payload(path: str) -> Payload | None:
     try:
-        if os.path.getsize(path) > MAX_FILE_BYTES:
-            return None
-        with open(path, "rb") as fh:
-            data = fh.read()
-    except OSError:
+        return payload_from_path(path)
+    except (OSError, ImportError_):
         return None
-    byte_size = len(data)
-    if data.startswith(b"RIFF") and data[8:12] == b"RMID":
-        # RIFF-wrapped MIDI (.rmi): payload lives in the 'data' chunk.
-        idx = data.find(b"MThd")
-        if idx < 0:
-            return None
-        data = data[idx:]
-    if not data.startswith(b"MThd"):
-        return None
-    return Payload(os.path.basename(path), data, path=path, byte_size=byte_size)
 
 
 def mime_may_contain_midi(mime: QMimeData) -> bool:
@@ -67,17 +53,17 @@ def extract_payloads(mime: QMimeData) -> tuple[list[Payload], list[str]]:
             seen_paths.add(path)
             if os.path.isdir(path):
                 for name in sorted(os.listdir(path)):
-                    if os.path.splitext(name)[1].lower() in MIDI_EXTENSIONS:
+                    if os.path.splitext(name)[1].lower() in EXTENSIONS:
                         full = os.path.join(path, name)
-                        payload = _read_midi_payload(full)
+                        payload = _read_file_payload(full)
                         if payload:
                             payloads.append(payload)
                 continue
-            payload = _read_midi_payload(path)
+            payload = _read_file_payload(path)
             if payload:
                 payloads.append(payload)
             else:
-                diagnostics.append(f"{os.path.basename(path)}: not a MIDI file")
+                diagnostics.append(f"{os.path.basename(path)}: not a supported MIDI or project file")
 
     if not payloads:
         for fmt in mime.formats():
@@ -89,7 +75,7 @@ def extract_payloads(mime: QMimeData) -> tuple[list[Payload], list[str]]:
                 break
 
     if not payloads and not diagnostics:
-        diagnostics.append("The drop contained no usable MIDI data. Formats offered: "
+        diagnostics.append("The drop contained no usable MIDI or project data. Formats offered: "
                            + (", ".join(mime.formats()) or "none"))
     return payloads, diagnostics
 

@@ -41,10 +41,15 @@ class Source:
     song: str = ""              # song title, when known (see names.song_title)
     byte_size: int | None = None  # original input size, independent of retained bytes
 
+    input_format: str = 'smf'
+    format_version: str | None = None
+
     @property
     def file_summary(self) -> str:
         size = f"{self.byte_size:,} bytes" if self.byte_size is not None else "size unknown"
-        return f"SMF format {self.smf_format} · {self.ppq} PPQ · {size}"
+        format_ = (f"SMF format {self.smf_format}" if self.input_format == "smf"
+                   else f"DAWproject {self.format_version or '—'}")
+        return f"{format_} · {self.ppq} PPQ · {size}"
 
     def describe(self) -> str:
         lines = [
@@ -80,6 +85,8 @@ class Clip:
     # the trims only choose what shows and exports (cutting rules: export_smf).
     trim_start: Fraction = ZERO
     trim_end: Fraction | None = None     # None = not trimmed: the full length
+
+    muted: bool = False         # disabled project clips remain editable but do not export
 
     def __post_init__(self) -> None:
         if self.trim_end is None:
@@ -225,7 +232,8 @@ class Workspace:
             r.set_included(track.id, True)
         self.sync_ranges()
 
-    def add_import(self, source: Source, tracks: list[Track]) -> list[str]:
+    def add_import(self, source: Source, tracks: list[Track], *,
+                   preserve_track_state: bool = False) -> list[str]:
         """Add an imported source and its tracks. Returns informational notes.
 
         Tempo policy: the first source carrying a tempo map becomes the
@@ -235,7 +243,11 @@ class Workspace:
         notes: list[str] = []
         self.sources.append(source)
         for t in tracks:
+            muted, soloed = t.muted, t.soloed
             self._add_track(t)
+            if preserve_track_state:
+                t.muted, t.soloed = muted, soloed
+        self.sync_ranges()
         if not source.tempo_map.is_empty:
             if self.tempo_source_id is None:
                 self.adopt_tempo_map(source.id)

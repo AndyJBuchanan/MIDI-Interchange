@@ -28,7 +28,7 @@ from .timing import TempoChange, TempoMap, TimeSigChange
 
 
 class ImportError_(Exception):
-    """Raised when a payload cannot be interpreted as a Standard MIDI File."""
+    """Raised when an input cannot be interpreted by a supported reader."""
 
 
 def _parse(data: bytes) -> tuple[mido.MidiFile, list[str]]:

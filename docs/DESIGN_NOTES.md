@@ -2,6 +2,18 @@
 
 Companion to [DESIGN_BRIEF.md](DESIGN_BRIEF.md), the original spec, kept verbatim. This file records how the brief was interpreted: decisions, deviations, known gaps and risks. Update it whenever direction changes.
 
+## DAWproject importer (2026-11-14)
+
+The first project reader shares a registry and `(Source, tracks)` contract with
+MIDI, used by Open and drag/drop. Projects are path-backed to avoid reading
+embedded media. DAWproject 1.0 arrangement notes, stepped tempo/meter, markers,
+trims, content references and loops map into the existing model. Explicit source
+format/version fields and clip mute are persisted in session schema 3, with
+schema-1/2 upgrades. Clip mute is a separate export gate, independent of track
+solo and range inclusion, with an undoable context-menu toggle. Unsupported media
+and automation are diagnosed; tempo ramps fail explicitly. Supported scope,
+fixture comparisons and manual checks: [DAWproject importer](plans/dawproject-import.md).
+
 ## Why MIDI Interchange
 
 The brief's aim is to remove the friction of moving MIDI between applications. Hand testing on macOS keeps confirming that the friction is real: each app supports a different, often one-way, subset of MIDI drag-and-drop, and there is no shared MIDI clipboard. Detail is in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md).

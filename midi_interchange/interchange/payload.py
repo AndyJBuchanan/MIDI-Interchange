@@ -1,4 +1,7 @@
-"""Transport-neutral MIDI payload produced by every import adapter."""
+"""Transport-neutral input produced by every import adapter.
+
+Project payloads may carry a path and empty data so readers can open only the
+parts they need; byte payloads remain available for MIDI clipboard transports."""
 from __future__ import annotations
 
 from dataclasses import dataclass

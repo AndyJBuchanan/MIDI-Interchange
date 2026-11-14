@@ -10,12 +10,13 @@ from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPainter
 from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox,
                                QSizePolicy, QSplitter, QToolBar, QVBoxLayout, QWidget)
 
-from ..core.import_smf import ImportError_, import_smf_bytes
+from ..core.import_smf import ImportError_
 from ..core.names import quoted
 from ..core.placement import Placement, plan_drop
 from ..core.timing import ZERO
 from ..interchange.drag_import import extract_payloads
 from ..interchange.payload import Payload
+from ..interchange.readers import FILE_FILTER, payload_from_path
 from . import theme
 from .about_dialog import AboutDialog
 from .controller import SNAP_CHOICES, Controller
@@ -114,7 +115,7 @@ class MainWindow(QMainWindow):
     def _build_actions(self) -> None:
         self.a_new = self._act("New", self.ctl.new_document, QKeySequence.New,
                                "Clear the workspace and start again (undoable)")
-        self.a_open = self._act("Open…", self.open_files, QKeySequence.Open, "Import MIDI files (accumulative)")
+        self.a_open = self._act("Open…", self.open_files, QKeySequence.Open, "Import MIDI or DAWproject files (accumulative)")
         self.a_save = self._act("Save MIDI…", self.save_midi, QKeySequence.Save, "Export with current settings")
         self.a_undo = self._act("Undo", self.ctl.undo, QKeySequence.Undo)
         self.a_redo = self._act("Redo", self.ctl.redo, QKeySequence.Redo)
@@ -256,8 +257,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ import
     def open_files(self) -> None:
         start = self.settings.value("last_open_dir", os.path.expanduser("~"))
-        paths, _ = QFileDialog.getOpenFileNames(self, "Import MIDI", start,
-                                                "MIDI files (*.mid *.midi *.smf *.kar);;All files (*)")
+        paths, _ = QFileDialog.getOpenFileNames(self, "Import MIDI or project", start, FILE_FILTER)
         if paths:
             self.settings.setValue("last_open_dir", os.path.dirname(paths[0]))
             self.import_paths(paths)
@@ -267,10 +267,9 @@ class MainWindow(QMainWindow):
         errors = []
         for p in paths:
             try:
-                with open(p, "rb") as fh:
-                    payloads.append(Payload(os.path.basename(p), fh.read(), path=p))
-            except OSError as exc:
-                errors.append(f"{os.path.basename(p)}: {exc.strerror}")
+                payloads.append(payload_from_path(p))
+            except (OSError, ImportError_) as exc:
+                errors.append(f"{os.path.basename(p)}: {exc}")
         errors += self.ctl.import_payloads(payloads)
         self._report_errors(errors)
 
@@ -468,6 +467,7 @@ class MainWindow(QMainWindow):
         m = QMenu(self)
         title = m.addAction(f"Clip: {clip.name or track.name}")
         title.setEnabled(False)
+        m.addAction("Unmute Clip" if clip.muted else "Mute Clip", lambda: self.ctl.toggle_clip_mute(clip_id))
         m.addAction("Duplicate Clip (after it)", lambda: self.ctl.duplicate_clip(clip_id))
         a = m.addAction("Butt Against Previous Clip", lambda: self.ctl.snap_clip_to_previous(clip_id))
         a.setEnabled(any(c is not clip and c.start < clip.start for c in track.clips))
