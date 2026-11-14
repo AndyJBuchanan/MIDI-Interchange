@@ -20,3 +20,12 @@ instrument track.
 All files are `RIF2` (64-bit chunk sizes). `c09` is `c08` saved again without
 changes; the 53–66 bytes that differ are per-save noise to filter out of
 other diffs.
+
+## Tier 2 (2026-11-14)
+
+Cubase 16.0.5 only (tier 1 showed the musical encoding matches 15).
+`c10`–`c18.cpr`, with MIDI exports for the ✱ steps (`c10`, `c12`, `c13`,
+`c14`, `c16`, `c17`, `c18`). The c12 end trim is one sixteenth, so the part is
+1.2.3 long (bars.beats.sixteenths) from 5.2. c15 is an independent copy at bar
+9; c16 a shared copy there. c17 adds a MIDI track (not an instrument track) on
+channel 2; c18 puts both tracks in a folder.

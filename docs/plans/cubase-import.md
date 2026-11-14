@@ -408,6 +408,12 @@ the existing files too.
   the 15 and 16 exports are byte-identical. Re-saving with no change (c08 → c09)
   alters 53–66 bytes; single-field edits (c04 → c05, c05 → c06) alter 55–67,
   starting near byte 3070. Diffs must filter per-save noise.
+- **Tier 2**, Cubase 16.0.5 only (2026-11-14), in
+  `samples/project-cubase-phases/Tier 2`. The phase 1 decoder reads every part;
+  positions and lengths agree with the MIDI exports. The c12 end trim is one
+  sixteenth (length 3240 ticks). Still to decode: the start-trim offset (notes
+  stay relative to the untrimmed origin), part and track mute, and the shared
+  copy in c16 (its part event refers back to the first part's contents).
 
 ## Questions for you
 
