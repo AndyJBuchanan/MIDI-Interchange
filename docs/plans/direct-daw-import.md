@@ -1,10 +1,12 @@
 # Plan: direct DAW project import (investigation)
 
-Status: **research gathered, investigation not started** (2026-11-14). Nothing is agreed beyond the roadmap entry. This document collects the web research, my observations on the current code, and the open questions, ready for fixtures.
+Status: **initial research gathered; target DAWs and first new reader agreed** (2026-11-14). DAWproject will validate the pluggable import model alongside MIDI. Detailed implementation and native-reader feasibility remain to be scoped. This document collects the web research, observations on the current code, and open questions, ready for fixtures.
 
 Branch: `feature/direct-daw-import`, created from `release/0.4.0`. Its PR will target `release/0.4.0`, following [the branching rules](../RELEASING.md#branches).
 
 The scope and rules are in the [roadmap entry](../ROADMAP.md) ("Investigate direct DAW project import"). They aren't repeated here. In short: drop a saved project in, get the current arrangement as MIDI through the normal import, preserve track and clip mute, and never modify the project.
+
+Agreed target DAWs: **Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio**. FL Studio support is subject to native-format feasibility investigation. Studio One is deferred because it is not currently available for testing. Bitwig, Ableton and FL Studio native formats still need investigation; their absence from the initial research below is not a scope exclusion. DAWproject is the first new reader, primarily to validate the shared importer design, and also useful as a format in its own right.
 
 ## The point: native files, not exports
 
@@ -23,7 +25,10 @@ Exports still matter in two ways:
 | Cubase `.cpr` | Undocumented binary. | **Little.** One young MIT project maps Cubase 12 files for audio only. No public work on MIDI. | Hard. MIDI would be new reverse-engineering. |
 | Reason `.reason` | Undocumented binary. **Encrypted from Reason 6 to 12.5**, unencrypted from 12.6. | **None found.** | Hard. Starts from zero, but 12.6+ files are at least readable. |
 | DAWproject `.dawproject` | Zip of XML, open spec (MIT), XSD schemas. | **Complete.** | Easy. Useful for received files, and to prove the shared reader design. |
-| Reaper `.rpp` | Plain text. | Python parsers exist. | Easy. Secondary, and Reaper hasn't been tested with this app. |
+| Reaper `.rpp` | Plain text. | Python parsers exist. | Easy. Reaper hasn't been tested with this app. |
+| Bitwig native project | Not investigated yet. | Not assessed. | Target DAW; native-reader feasibility open. |
+| Ableton native project | Not investigated yet. | Not assessed. | Target DAW; native-reader feasibility open. |
+| FL Studio native project | Not investigated yet. | Not assessed. | Target DAW if feasible; native-reader feasibility open. |
 
 Everything below is from web sources and unverified until your fixtures confirm it. I mark the shakier claims.
 
@@ -159,7 +164,7 @@ Everything below is from web sources and unverified until your fixtures confirm 
 
 - **Plain text.** The Python parser [`rpp`](https://pypi.org/project/rpp/) (Perlence) exists, and so does [`rppxml`](https://pypi.org/project/rppxml/) (C++ core, Python 3.10+). I didn't check their licences.
 - **MIDI storage:** from general knowledge, MIDI items are stored inline as `E` lines (delta ticks, status, data bytes) under a `HASDATA` header, or as references to `.mid` files. Items have `MUTE` and tracks have `MUTESOLO`. **Unverified;** one fixture settles it.
-- Secondary per the roadmap, and Reaper hasn't been tested with this app (DESIGN_NOTES risk 3).
+- Included in the agreed target DAWs; Reaper hasn't been tested with this app (DESIGN_NOTES risk 3).
 
 ## Converters and other references
 
@@ -186,12 +191,11 @@ I read the import path to see where formats are assumed. These are observations,
   - `smf_format` (validated 0–2 by the session loader), `ppq`, and `raw` (the original bytes).
   - The source info panel prints "SMF format N · PPQ · bytes".
   - Ticks per quarter differ by format: Logic 960, the others to find out.
-- **Sessions store `raw`.** Session persistence keeps each clip's events, and separately each source's original bytes (`core/session.py`). The events are what restore uses, so `raw` is provenance. Storing a whole project there would bloat the session, and a `.dawproject` with audio could be hundreds of MB. Options:
-  - Store nothing.
-  - Store only `project.xml`.
-  - Store a small summary.
-
-  Making `raw` optional or format-dependent is a session-format change, with a version bump and migration.
+- **Sessions store `raw`, but no musical operation consumes it.** Checked 2026-11-14: `import_smf.py` retains the original bytes; `session.py` saves/restores them as base64 and validates their type. `Source.describe()` and Source Info use only their length for the file-size display. Editing, undo, restoring full clip extent, session reconstruction and export all use the parsed events and model metadata. There is no current reparse, original-file recovery or byte-for-byte source download feature.
+  - Retaining originals could support a future reparse with an improved reader, recovery of data the model omitted, or saving an exact source copy. Those are possible benefits, not implemented behaviour.
+  - **Agreed storage policy (2026-11-14), to implement with the shared importer:** persist the complete imported model, provenance fields, and any other metadata derived from the input that is not represented directly in the musical model. Keep the `raw` bytes field, but leave it empty (`b''`) for new imports, including MIDI. Populate it only if a concrete future feature needs the original bytes; retaining the field does not require retaining source files.
+  - Store original source byte size independently of `raw`; source descriptions and Source Info must not report the empty field's length as the input's size. Keep derived metadata on the source record, with explicit fields and session persistence as needed by readers. This policy does not mean retaining arbitrary original content, embedded media or plug-in states. Research fixtures remain separate from normal user sessions.
+  - Changing persisted `Source` fields requires an explicit schema/compatibility decision. The current loader preserves and skips unsupported schemas; it does not implicitly migrate them.
 - **Drag preview parses on drag-enter**, to show matching track names while the drag is still over the window. A slow project reader would make the drag stutter. Readers need to be fast, or the preview needs a cheaper path.
 - **The event model is already right.** Events are mido messages at Fraction beat times, so readers produce the same `Event` list the MIDI importer does. Markers and lyrics are meta events (`TEXT_META` in `core/events.py`), so they flow through the existing marker row and export.
 - **Clip mute doesn't exist.** `Track` has `muted` and `soloed`; `Clip` has no mute. Its own plan is needed (roadmap: UI, export, ranges, undo, sessions).
@@ -199,13 +203,13 @@ I read the import path to see where formats are assumed. These are observations,
 
 ## Shared reader design (draft)
 
-This is a sketch to test against the first two readers, not a decision.
+This interface is a sketch to test against the first two readers. The source storage policy above is agreed; the remaining interface details are provisional.
 
 - **A reader** has two parts:
   - `detect(path, head)`: does this file or package look like mine? Cheap: extension, magic bytes, package layout.
   - `read(path)`: returns an **import result**.
 - **The import result** holds:
-  - a `Source` (provenance: format, version found, path, app, tempo map, song title);
+  - a `Source` (provenance: format, version found, path, app, original byte size, tempo map, song title; plus other derived input metadata not represented in the musical model). Its `raw` bytes field is retained but left empty under the agreed policy;
   - a list of `Track`s with `Clip`s and events;
   - per-clip and per-track mute;
   - **diagnostics**: what was skipped and why, such as an encrypted Reason song, pattern devices, an unsupported version, a missing referenced file, or ignored inactive takes.
@@ -251,16 +255,16 @@ Alongside the series, one or two **real-sized projects** per DAW, each with its 
 - The shared reader interface and registry, validated by the first two readers.
 - A separate plan for clip mute.
 
-## Suggested order
+## First feature and suggested follow-on order
 
 1. **The shared reader interface, with MIDI as the first reader.** No behaviour change; it proves the seams.
-2. **DAWproject.** Cheap and fully documented, so it tests the import result, clip `enable`, loops and seconds-to-beats conversion on a format with no unknowns. It's also useful for received files.
+2. **DAWproject (agreed first new reader).** Its main purpose in this milestone is validating the pluggable import model: the shared result, clip `enable`, loops and seconds-to-beats conversion. It's also useful for received files. The native-reader order below remains a suggestion pending fixtures and investigation of Bitwig, Ableton and FL Studio.
 3. **Logic.** The most prior work. Start from LogicProFormatWriter's spec and your differential series.
 4. **Cubase.** Start from cpr2rpp's `FORMAT.md` and the marker gist, plus the differential series. Expect the most work on MIDI.
 5. **Reason.** Timeboxed: decide whether it's feasible from the differential series before committing to a reader.
 6. **Clip mute plan**, when the first reader that can see clip mute is ready.
 
-Reaper fits anywhere it's wanted. It's cheap, but untested with the app.
+Reaper, Bitwig, Ableton and FL Studio are all in scope, with FL Studio support subject to feasibility. Their place in the native-reader order remains open; Bitwig, Ableton and FL Studio need initial investigation.
 
 ## Legal and licensing
 
@@ -271,11 +275,11 @@ Reaper fits anywhere it's wanted. It's cheap, but untested with the app.
 
 ## Questions for you
 
-1. **DAWproject's place.** First reader, to prove the design cheaply? Or lead with a native format, with DAWproject later?
-2. **DAW versions.** Which versions of Cubase, Reason and Logic do you have? Cubase's format changes between versions. Reason must be 12.6+. Logic may vary between 10 and 11.
+1. **DAWproject's place — resolved 2026-11-14.** First new reader, primarily to validate the pluggable import model alongside MIDI.
+2. **DAW versions.** Which versions of Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio do you have? Cubase's format changes between versions. Reason must be 12.6+. Logic may vary between 10 and 11.
 3. **Differential series.** Can you save a series like the one above for each DAW? It's tedious but small, and it's the biggest time saver for Cubase and Reason.
 4. **Fixtures in the repo.** The repo is public. Commit the project files under a fixtures folder, or keep them local and untracked (like the Range samples)? If local, tests skip when they're missing.
 5. **Version support.** How far back should a reader support? Probably only what you have, with a clean "unsupported version" for others.
 6. **Generated material.** Agree that pattern devices, players, arpeggiators, chord tracks and MIDI inserts are **reported as skipped, not rendered**?
-7. **Sessions.** Restoring a session never needs the original file, because the clips' events are saved. For a project source, should the session keep none of the original file (my suggestion), or a copy, with the size cost?
+7. **Sessions — resolved 2026-11-14.** Persist provenance and derived input metadata alongside the complete imported model. Retain `raw` as a bytes field but leave it empty for new imports, including MIDI, unless a future feature gives it a concrete purpose. Store original byte size separately. Implement the field/UI/session changes together with an explicit compatibility decision; current application behaviour has not changed yet.
 8. **Legal comfort.** Are you comfortable with format reverse-engineering from your own saved files, for Logic in particular?

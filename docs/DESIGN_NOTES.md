@@ -25,6 +25,12 @@ Plain MIDI files via file URLs are the one route that works almost everywhere. M
 
 User priority, given with the brief: the timeline is the primary UI element and must work early and well. It was built in M1, not deferred.
 
+## Direct DAW import direction (2026-11-14)
+
+Target DAWs are Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio. FL Studio support is subject to native-format feasibility investigation. Studio One is deferred because it is not currently available for testing. DAWproject is the first new reader, primarily to validate a pluggable importer model alongside the existing MIDI reader, while also supporting received DAWproject files. Native-reader order and implementation details remain open. See [the investigation plan](plans/direct-daw-import.md).
+
+**Agreed source storage policy:** persist provenance fields and any other metadata derived from an input that is not represented directly in the musical model. Retain the `raw` bytes field for future use, but leave it empty for new imports, including MIDI, until a concrete feature needs it. Store original byte size separately so source information does not depend on retained bytes. The musical model remains self-contained. Implement this with the shared importer and review session compatibility when changing persisted fields. Currently the MIDI importer still retains original bytes; this is a recorded design decision, not an implemented behaviour change.
+
 ## Stack (as installed)
 
 Python 3.12 venv, PySide6 6.12, mido 1.3.3, pytest 8, PyInstaller 6.x. The UI uses the Fusion style with a custom dark palette (`ui/theme.py`), so it looks the same on macOS and Windows.
