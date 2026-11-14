@@ -327,6 +327,8 @@ this fast.
   **Export Inserts off**. Take one screenshot of the options dialog so we know
   them.
 - Optional for the same ✱ steps: File ▸ Export ▸ DAWproject.
+- For trim and move steps, note the part's Start, End and Length from the Info
+  Line. Exact values needn't be tidy; they are a reference for decoding.
 - Notes below are C3 = MIDI 60 (Cubase's default naming). If your display
   differs, say which octave convention you used.
 
@@ -354,8 +356,8 @@ this fast.
 | c12 ✱ | Trim the part's end by one beat |
 | c13 ✱ | Mute the part (track unmuted) |
 | c14 ✱ | Unmute the part, mute the track |
-| c15 | Unmute the track. Duplicate the part to bar 9 (Ctrl/⌘-D) |
-| c16 ✱ | Make the copy a shared copy instead (Edit ▸ Functions ▸ Repeat with Shared Copies, or Alt/Shift-drag) |
+| c15 | Unmute the track. Copy the part so the copy starts at bar 9 (Option/Alt-drag, or copy and paste at 9.1; not Ctrl/⌘-D, which places it straight after) |
+| c16 ✱ | From c14 + unmute, make the bar 9 copy a shared copy instead (Option/Alt-Shift-drag) |
 | c17 ✱ | Add a second MIDI track on channel 2 with one part and one note |
 | c18 ✱ | Put both tracks in a folder track |
 
