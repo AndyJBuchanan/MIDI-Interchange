@@ -75,11 +75,13 @@ def test_end_of_track_sets_clip_length():
 def test_provenance_retained():
     data = smf([conductor(480), track(note(0, 60, 0, 480), "P")])
     src, tracks = import_smf_bytes(data, "p.mid", path="/x/p.mid", app="Cubase")
-    assert src.raw == data and src.ppq == 480 and src.smf_format == 1
+    assert src.raw == b"" and src.byte_size == len(data)
+    assert src.ppq == 480 and src.smf_format == 1
     assert src.app == "Cubase" and src.path == "/x/p.mid"
     assert src.track_names == ("", "P")
     assert tracks[0].original_name == "P"
     assert "Cubase" in src.describe()
+    assert f"{len(data):,} bytes" in src.describe()
 
 
 def test_rejects_non_midi():

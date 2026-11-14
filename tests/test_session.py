@@ -1,9 +1,10 @@
 """Persistent workspace fidelity, hostile-file recovery and application lifecycle."""
+import base64
 import json
 import sys
 import threading
 import time
-from dataclasses import fields
+from dataclasses import fields, replace
 from fractions import Fraction as F
 from pathlib import Path
 
@@ -91,6 +92,63 @@ def test_real_cubase_lyric_fixture(tmp_path):
     assert export_bytes(ws, ExportMode.WHOLE) == export_bytes(restored, ExportMode.WHOLE)
 
 
+def test_source_metadata_roundtrip_without_original_bytes(tmp_path):
+    ws = rich_workspace(tmp_path)  # deletes its original input file
+    assert all(s.raw == b'' and s.byte_size > 0 for s in ws.sources)
+    session = roundtrip(Session(ws.snapshot(), {}))
+    assert session.workspace['sources'] == ws.sources
+    assert all(s.raw == b'' for s in session.workspace['sources'])
+    assert all(s['data']['raw'] == {'kind': 'bytes', 'data': ''}
+               for s in encode(session)['workspace']['sources'])
+
+
+def test_reserved_source_bytes_and_unknown_size_roundtrip(tmp_path):
+    ws = rich_workspace(tmp_path)
+    ws.sources[0] = replace(ws.sources[0], raw=b'future source snapshot', byte_size=None)
+    source = roundtrip(Session(ws.snapshot(), {})).workspace['sources'][0]
+    assert source == ws.sources[0]
+    assert 'size unknown' in source.file_summary
+
+
+def test_schema_v1_upgrade_preserves_workspace_and_reference_exports(tmp_path):
+    # Both fixtures were captured with the unchanged codec at b47b167.
+    fixtures = Path(__file__).parent / 'fixtures'
+    original = (fixtures / 'session-v1.json').read_bytes()
+    legacy = json.loads(original)
+    expected = json.loads((fixtures / 'session-v1-exports.json').read_text())
+    store = SessionStore(tmp_path)
+    store.path.write_bytes(original)
+    session = store.load()
+    assert store.path.read_bytes() == original  # upgrading in memory does not write
+    assert session.settings == legacy['settings']
+    for source, record in zip(session.workspace['sources'], legacy['workspace']['sources'], strict=True):
+        assert source.raw == b''
+        assert source.byte_size == len(base64.b64decode(record['data']['raw']['data']))
+    restored = Workspace()
+    restored.restore(session.workspace)
+    assert restored.tracks[0].clips[0].events is restored.tracks[0].clips[1].events
+    for mode in ExportMode:
+        assert [[label, data.hex()] for label, data in export_bytes(restored, mode)] == expected[mode.value]
+    store.save(session)
+    saved = json.loads(store.path.read_text())
+    assert saved['schema_version'] == SCHEMA_VERSION == 2
+    assert all(s['data']['raw']['data'] == '' for s in saved['workspace']['sources'])
+    assert encode(store.load()) == encode(session)
+
+
+@pytest.mark.parametrize('damage', [
+    lambda s: s.__setitem__('raw', None),
+    lambda s: s.__setitem__('raw', 'not bytes'),
+    lambda s: s.__setitem__('byte_size', 123),  # unexpected schema-2 field
+    lambda s: s.pop('raw'),
+])
+def test_schema_v1_upgrade_rejects_malformed_source_records(damage):
+    data = json.loads((Path(__file__).parent / 'fixtures/session-v1.json').read_text())
+    damage(data['workspace']['sources'][0]['data'])
+    with pytest.raises(ValueError):
+        decode(data)
+
+
 def test_app_version_is_provenance_schema_is_compatibility_gate(tmp_path):
     data = encode(Session(rich_workspace(tmp_path).snapshot(), {}))
     data['app_version'] = '999.0.0'
@@ -102,6 +160,11 @@ def test_app_version_is_provenance_schema_is_compatibility_gate(tmp_path):
 
 
 @pytest.mark.parametrize('damage', [
+    lambda d: d['workspace']['sources'][0]['data'].__setitem__('byte_size', -1),
+    lambda d: d['workspace']['sources'][0]['data'].__setitem__('byte_size', True),
+    lambda d: d['workspace']['sources'][0]['data'].__setitem__('byte_size', 1.5),
+    lambda d: d['workspace']['sources'][0]['data'].__setitem__('byte_size', '123'),
+    lambda d: d['workspace']['sources'][0]['data'].pop('byte_size'),
     lambda d: d['workspace']['tracks'][0]['data'].__setitem__('muted', 'false'),
     lambda d: d['workspace']['tracks'][0]['data'].__setitem__('export_channel', 17),
     lambda d: d['workspace']['tracks'][0]['data'].__setitem__('color', 'invalid'),

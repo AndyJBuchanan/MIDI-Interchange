@@ -52,7 +52,12 @@ def _parse(data: bytes) -> tuple[mido.MidiFile, list[str]]:
 
 
 def import_smf_bytes(data: bytes, name: str, path: str | None = None,
-                     app: str | None = None) -> tuple[Source, list[Track]]:
+                     app: str | None = None, *, byte_size: int | None = None) -> tuple[Source, list[Track]]:
+    """Keep derived source metadata and musical data, without retaining the input.
+
+    Transports can supply the original size when they unwrap a MIDI payload.
+    Otherwise the bytes supplied here are the original input.
+    """
     mf, warnings = _parse(data)
     ppq = mf.ticks_per_beat
     if mf.type == 2:
@@ -135,10 +140,11 @@ def import_smf_bytes(data: bytes, name: str, path: str | None = None,
         conductor = display_names[0]
     source = Source(
         id=source_id, name=name, ppq=ppq, smf_format=mf.type,
-        imported_at=datetime.now(), raw=data, tempo_map=TempoMap(tempos, sigs),
+        imported_at=datetime.now(), tempo_map=TempoMap(tempos, sigs),
         path=path, app=app, track_names=tuple(display_names),
         warnings=tuple(warnings),
         song=song_title(conductor, [t.name for t in tracks]),
+        byte_size=len(data) if byte_size is None else byte_size,
     )
     return source, tracks
 

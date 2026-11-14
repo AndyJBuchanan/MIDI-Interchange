@@ -32,20 +32,26 @@ class Source:
     ppq: int
     smf_format: int
     imported_at: datetime
-    raw: bytes = field(repr=False)
+    raw: bytes = field(default=b"", repr=False)  # reserved; imports do not retain originals
     tempo_map: TempoMap = field(default_factory=TempoMap)
     path: str | None = None
     app: str | None = None       # source application, when known
     track_names: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     song: str = ""              # song title, when known (see names.song_title)
+    byte_size: int | None = None  # original input size, independent of retained bytes
+
+    @property
+    def file_summary(self) -> str:
+        size = f"{self.byte_size:,} bytes" if self.byte_size is not None else "size unknown"
+        return f"SMF format {self.smf_format} · {self.ppq} PPQ · {size}"
 
     def describe(self) -> str:
         lines = [
             f"Source: {self.name}",
             f"Path: {self.path or '—'}",
             f"Application: {self.app or 'unknown'}",
-            f"SMF format {self.smf_format}, {self.ppq} PPQ, {len(self.raw)} bytes",
+            self.file_summary,
             f"Imported: {self.imported_at:%Y-%m-%d %H:%M:%S}",
         ]
         if self.song:

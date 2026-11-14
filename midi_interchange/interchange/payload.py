@@ -10,3 +10,4 @@ class Payload:
     data: bytes
     path: str | None = None
     app: str | None = None
+    byte_size: int | None = None  # original size if transport data was unwrapped

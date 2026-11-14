@@ -24,7 +24,7 @@ MIDI_EXTENSIONS = {".mid", ".midi", ".smf", ".kar", ".rmi"}
 MAX_FILE_BYTES = 64 * 1024 * 1024
 
 
-def _read_midi_file(path: str) -> bytes | None:
+def _read_midi_payload(path: str) -> Payload | None:
     try:
         if os.path.getsize(path) > MAX_FILE_BYTES:
             return None
@@ -32,13 +32,16 @@ def _read_midi_file(path: str) -> bytes | None:
             data = fh.read()
     except OSError:
         return None
-    if data.startswith(b"MThd"):
-        return data
+    byte_size = len(data)
     if data.startswith(b"RIFF") and data[8:12] == b"RMID":
         # RIFF-wrapped MIDI (.rmi): payload lives in the 'data' chunk.
         idx = data.find(b"MThd")
-        return data[idx:] if idx >= 0 else None
-    return None
+        if idx < 0:
+            return None
+        data = data[idx:]
+    if not data.startswith(b"MThd"):
+        return None
+    return Payload(os.path.basename(path), data, path=path, byte_size=byte_size)
 
 
 def mime_may_contain_midi(mime: QMimeData) -> bool:
@@ -66,13 +69,13 @@ def extract_payloads(mime: QMimeData) -> tuple[list[Payload], list[str]]:
                 for name in sorted(os.listdir(path)):
                     if os.path.splitext(name)[1].lower() in MIDI_EXTENSIONS:
                         full = os.path.join(path, name)
-                        data = _read_midi_file(full)
-                        if data:
-                            payloads.append(Payload(name, data, path=full))
+                        payload = _read_midi_payload(full)
+                        if payload:
+                            payloads.append(payload)
                 continue
-            data = _read_midi_file(path)
-            if data:
-                payloads.append(Payload(os.path.basename(path), data, path=path))
+            payload = _read_midi_payload(path)
+            if payload:
+                payloads.append(payload)
             else:
                 diagnostics.append(f"{os.path.basename(path)}: not a MIDI file")
 
@@ -81,7 +84,8 @@ def extract_payloads(mime: QMimeData) -> tuple[list[Payload], list[str]]:
             raw = bytes(mime.data(fmt).data())
             idx = raw.find(b"MThd", 0, 64)
             if idx >= 0:
-                payloads.append(Payload(f"Dropped clip ({_short_format(fmt)})", raw[idx:]))
+                payloads.append(Payload(f"Dropped clip ({_short_format(fmt)})", raw[idx:],
+                                        byte_size=len(raw)))
                 break
 
     if not payloads and not diagnostics:

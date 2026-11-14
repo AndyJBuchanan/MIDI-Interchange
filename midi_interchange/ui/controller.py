@@ -90,7 +90,8 @@ class Controller(QObject):
         parsed, errors = [], []
         for p in payloads:
             try:
-                parsed.append(import_smf_bytes(p.data, p.name, path=p.path, app=p.app))
+                parsed.append(import_smf_bytes(p.data, p.name, path=p.path, app=p.app,
+                                              byte_size=p.byte_size))
             except ImportError_ as exc:
                 errors.append(f"{p.name}: {exc}")
         return parsed, errors

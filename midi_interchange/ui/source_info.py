@@ -134,7 +134,7 @@ class SourceInfoDialog(QDialog):
         else:
             self.detail.addRow("Path:", _value("— (dropped data, no file)"))
         self.detail.addRow("Application:", _value(s.app or "unknown"))
-        self.detail.addRow("File:", _value(f"SMF format {s.smf_format} · {s.ppq} PPQ · {len(s.raw):,} bytes"))
+        self.detail.addRow("File:", _value(s.file_summary))
         self.detail.addRow("Imported:", _value(f"{s.imported_at:%Y-%m-%d %H:%M:%S}"))
         if s.track_names:
             self.detail.addRow("Original tracks:", _value("\n".join(
