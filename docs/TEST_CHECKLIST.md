@@ -247,6 +247,16 @@ Use Cmd/Option on macOS; Ctrl/Alt on Windows. Windows checks are done before rel
 
 Automated tests cover exact MIDI boundaries, note ordering, all four export modes, channel overrides, locked exclusions, shared session data, invalid cuts, modifier dispatch and undo/redo. No manual file comparison is needed.
 
+## 8m. DAWproject import (`feature/direct-daw-import-dawproject`)
+
+Partially done; the rest is deferred by agreement (2026-11-14). Steps that were only partly checked stay unticked. Implementation and known limitations: [the DAWproject plan](plans/dawproject-import.md).
+
+- [ ] Open and drag each of the three supplied Cubase project sets (`samples/project-sets`) into an empty workspace. Inspect clip positions, Source Info (format, application, size, tempo changes) and the warnings for skipped content.
+- [ ] Ditty's disabled clips stay visible and silent. Toggle Mute/Unmute Clip; duplicate, split, move and trim a muted clip; check undo/redo.
+- [ ] Unmute one of Ditty's clips and export, then undo and repeat with a locked range and with track solo. Export muted clips through every mode, with track solo and locked ranges: clip mute must still exclude them.
+- [ ] Save and relaunch after moving the original DAWproject elsewhere. Events, trims, source details, mute and export all survive.
+- [ ] Verify GA & Padshop's imported tempo changes in Cubase. Listen to and compare the paired exports in Cubase, and explain the discrepancies recorded in the plan.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.
@@ -266,11 +276,3 @@ Automated tests cover exact MIDI boundaries, note ordering, all four export mode
 Windows is a secondary platform: it isn't tested during normal development, only before a release (RELEASING.md, step 3). Leave this section unticked until then.
 
 - [x] Use **Alt** in place of Option and **Ctrl** in place of ⌘ for the clip drags. Check the drop cursor and the multi-file dialog.
-
-## DAWproject import
-
-- [ ] Open and drag the three supplied Cubase project sets; inspect clip positions, source format/application/size, and warnings for skipped content.
-- [ ] Check Ditty's disabled clips remain visible and silent. Toggle Mute/Unmute Clip; duplicate, split, move and trim a muted clip; check undo/redo.
-- [ ] Export muted clips through every mode, with track solo and locked ranges; clip mute must still exclude them.
-- [ ] Save/relaunch after moving the original DAWproject elsewhere; verify events, trims, source metadata, mute and export survive.
-- [ ] Verify GA & Padshop's imported tempo changes in Cubase, and investigate the paired-export discrepancies recorded in the DAWproject plan.

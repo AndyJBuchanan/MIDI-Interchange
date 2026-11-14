@@ -334,6 +334,7 @@ docs/                          brief, design notes, this guide, RELEASING.md, re
 - Add a regression test for any change to import or export behaviour. Round-trip and boundary tests are in `tests/test_roundtrip.py` and `tests/test_export.py`.
 - Record decisions or changes of direction in `docs/DESIGN_NOTES.md`. Don't edit `docs/DESIGN_BRIEF.md`.
 - Record DAW interop results in the README checklist. Only tick a box once that drag has actually been tested.
+- Manual (hand) checks for a feature go in [TEST_CHECKLIST.md](TEST_CHECKLIST.md), as a new numbered section (8a, 8b, …) placed before section 9 and headed with the feature's branch. The feature's plan links to that section and doesn't keep its own copy of the checklist.
 
 ## Session persistence and compatibility
 

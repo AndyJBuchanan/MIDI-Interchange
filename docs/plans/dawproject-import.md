@@ -122,13 +122,7 @@ note events under the current clip-window policy.
 
 ## Manual verification
 
-- Open and drag each DAWproject into an empty workspace; inspect positions and
-  Source Info, including warnings and tempo changes.
-- Check disabled Ditty clips stay visible and silent; unmute one, export, then
-  undo and repeat with a locked range and track solo.
-- Save/relaunch with an imported project after moving its original file; verify
-  source details, trims, mute and export remain intact.
-- Listen/compare the paired exports in Cubase and explain the discrepancies above.
+The hand checks are in [TEST_CHECKLIST section 8m](../TEST_CHECKLIST.md#8m-dawproject-import-feature-direct-daw-import-dawproject). They are partially done; the rest is deferred by agreement (2026-11-14).
 
 ## Automated verification
 
@@ -141,5 +135,5 @@ note events under the current clip-window policy.
   notes, nested aliases, inherited group mute/solo, malformed archives/XML,
   seconds and mixed units, stepped tempo/meter, marker mapping, all export modes
   with locked ranges and solo, and all three supplied Cubase project sets.
-- `git diff --check` passes. No build or release produced; manual checks above
-  remain pending.
+- `git diff --check` passes. No build or release produced; manual checks in
+  TEST_CHECKLIST section 8m are partially done and the rest is deferred.
