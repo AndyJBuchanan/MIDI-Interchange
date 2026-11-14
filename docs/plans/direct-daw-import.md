@@ -4,7 +4,8 @@ Status: **DAWproject and the shared reader registry provisionally implemented**
 (accepted 2026-11-14). All three supplied Cubase export pairs have been
 investigated; source-export differences are documented. Note-tail handling is
 deferred and does not block this milestone. Native-reader feasibility and order
-remain to be scoped. See [the implementation](dawproject-import.md).
+remain to be scoped for the other DAWs. See [the implementation](dawproject-import.md).
+**Cubase is the next native reader** (agreed 2026-11-14); see [the Cubase plan](cubase-import.md). Reason follows after a short feasibility probe.
 
 Branch: `feature/direct-daw-import`, created from `release/0.4.0`. Its PR will target `release/0.4.0`, following [the branching rules](../RELEASING.md#branches).
 
