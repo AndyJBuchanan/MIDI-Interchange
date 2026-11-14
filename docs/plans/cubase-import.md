@@ -3,8 +3,10 @@
 Branch: `feature/direct-daw-import-cubase`, based on and targeting
 `feature/direct-daw-import`.
 
-Status: **draft, not started** (2026-11-14). Cubase was chosen as the first
-native reader after DAWproject. Reason follows, after a short feasibility probe.
+Status: **phase 1 complete, go** (2026-11-14). The object framing and MIDI
+part events are decoded for Cubase 15 and 16, `RIFF` and `RIF2`. Phase 2
+(musical mapping) is next. Cubase was chosen as the first native reader after
+DAWproject. Reason follows, after a short feasibility probe.
 
 The scope and rules come from the [roadmap entry](../ROADMAP.md) and the
 [direct DAW import plan](direct-daw-import.md). They aren't repeated here. In
@@ -83,6 +85,108 @@ these files.
   author's machine (home folder, volume names), and the repo is public. New
   fixtures should be saved in a neutral folder. Whether to keep the existing
   three is an open question below.
+
+## Phase 1 findings (2026-11-14)
+
+Research tool: `tools/cpr_inspect.py` (read-only; `roots`, `tree`, `classes`,
+`notes`, `diff`, `hex`). Regression evidence: `tests/test_cpr_inspect.py`
+(24 tests). Everything below is from our own saved files.
+
+### Object framing
+
+All integers big-endian. Tag width W is 4 bytes in `RIFF` files and 8 in
+`RIF2`; object lengths are W bytes too. Name lengths stay u32, versions u16.
+
+- **BASE** `FF..FE` · u32 nameLen · name\0 · u16 version. Declares one parent
+  class of the NEW class that follows; a run lists parents nearest first.
+  Each BASE tag is itself a class declaration that later objects can refer
+  to (GA declares `MMidiNote` as a base of `MScaleEvent`, then refers to it).
+- **NEW** `FF..FF` · u32 nameLen · name\0 · u16 version · uW length · body.
+- **REF** `0x80..` OR'd with the **archive byte offset of the class's
+  declaration tag** · uW length · body. This is why cpr2rpp found ids that
+  "vary between files". Target 0 never occurs as a real reference.
+- Lengths nest exactly: `PArrangement` fills the `Arrangement1` archive.
+  Bodies hold class-specific fields with child objects among them; the
+  inspector finds children by validated tags. A few named records
+  (`Name`, `Max`, `Title`, `SummingMode`) inside attribute blobs can look like
+  NEW tags; the reader must descend by structure, not by scanning.
+- Strings: u32 length (including terminator) · UTF-8 · `\0` · `EF BB BF`.
+- Class versions change between releases: `PArrangement` v4 (15) / v5 (16),
+  `MInstrumentTrack` v10 / v11. The reader should check versions it relies on.
+
+### Arrangement structure
+
+`PArrangement` → `MRoot` → `MTrackList` → track events (`MFolderTrack`,
+`MInstrumentTrackEvent`, `MMidiTrackEvent`, tempo, signature, device) →
+the track's `MListNode` (track name at its start) → `MMidiPartEvent` →
+`MMidiPart`. `MMarkerTrackEvent`, `PArrangeSetup` and
+`ProjectLyricsSettings` also hang off the arrangement; to examine in phase 2.
+
+### MIDI parts
+
+- **`MMidiPartEvent`** (the part on the timeline): u16 · f64 start · f64
+  length, in **ticks at 480 PPQ from the project's absolute zero**. The
+  one-bar display offset in c02-1 moves the start to 1920: the blank bar is
+  real time before "bar 1".
+- **`MMidiPart`** (the contents): string name · uW · u32 · uW (unknown) · u32
+  event count · u8 event-class count (absent when the count is 0) · that many
+  zero-length class entries (NEW or REF; the first part in a file declares
+  the seven MIDI event classes) · the events.
+- **Each event** is one byte, then a body:
+  - a MIDI status byte (`90` note, `B0` controller, `E0` pitch bend, …)
+    means a compact body whose class the status implies;
+  - `00` means a full NEW/REF object header precedes the same body. Notes
+    just drawn or edited use this form, probably because the selection refers
+    to them. Harmless for reading; its length gives a free consistency check.
+- **Event body:** f64 position (ticks, relative to the part's content) · u8
+  channel · two MIDI data bytes (note pitch and velocity; controller number
+  and value; pitch bend LSB and MSB, to confirm with tier 3) · u32 (zero so
+  far) · u16 property count · properties · type-specific fields.
+- **Properties:** reversed FourCC · u16 type · value. Type 1 is i64, type 4
+  f64, type 2 an embedded NEW/REF object. Seen: `OffV` release velocity as
+  (v − 1) / 126 (64 → 0.5); `HRDT` velocity in the same form; `GLFX`,
+  `relP`, `ncda`, `VOCE`, `cuTy` (unknown); `cuOb` on controllers holds a
+  `MParamEventCurveRationalBezier`. **Cubase stores controller curve shapes
+  between points**, so its MIDI export renders more CC messages than are
+  stored; phase 2 must compare against the export with that in mind.
+- **Note-specific:** f64 length in ticks, then 17 bytes ending in `40`
+  (release velocity 64 again, probably).
+
+### Evidence
+
+| Project | Format | Parts | Notes | Controllers | Pitch bends | Problems |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Tier 1, c01–c09 and c02-1, both versions | `RIF2` | 0–1 | as saved | 0 | 0 | 0 |
+| Ditty (15.0.21) | `RIFF` | 176 | 1,501 | 1,161 | 16 | 0 |
+| GA (15.0.30) | `RIFF` | 182 | 6,435 | 0 | 0 | 0 |
+| indy (15.0.30) | `RIF2` | 104 | 819 | 0 | 0 | 0 |
+
+Every part's declared event count is consumed exactly to the part's end.
+The note counts equal the DAWproject exports' stored notes (1,501, 6,435
+and 819), and GA's and indy's part counts equal their clip counts. Ditty's
+extra part is an empty Rare Flutes (D) part at tick 58,560, probably left
+out of the DAWproject clip count; confirm in phase 2. indy's 644 missing
+drum notes are not in any `MMidiPart`, consistent with them being
+`MPatternEvent` data.
+
+### Go decision
+
+The phase 1 criterion is met: tier 1 notes come from structured fields, and
+the same code walks all three realistic projects without errors. Object
+framing is decoded; bodies outside MIDI parts are walked by tag, not yet
+field by field.
+
+### Phase 2 priorities from these findings
+
+1. Track records: name, type, channel, mute, folder nesting; which part list
+   belongs to which track. Ditty's disabled clips (52) give the part-mute
+   flag to find, with c13/c14 in tier 2.
+2. Part trims: the unknown `MMidiPart` header fields and `MMidiPartEvent`'s
+   leading u16 are candidates (tier 2, c11/c12).
+3. Tempo, signature and marker tracks (tier 3), and the display offset
+   setting (likely `PArrangeSetup`), so imports can decide whether bar 1
+   lands at zero.
+4. Then the indy go/no-go comparison against `indy-001x.mid`.
 
 ## Prior work to read first
 
@@ -297,7 +401,7 @@ the existing files too.
 
 ### Received
 
-- **Tier 1**, Cubase 15.0.30 and 16.0.5 (2026-11-14), in
+- **Tier 1** (used for phase 1), Cubase 15.0.30 and 16.0.5 (2026-11-14), in
   `samples/project-cubase-phases/Tier 1`. Both MIDI exports match the spec, and
   the 15 and 16 exports are byte-identical. Re-saving with no change (c08 → c09)
   alters 53–66 bytes; single-field edits (c04 → c05, c05 → c06) alter 55–67,
