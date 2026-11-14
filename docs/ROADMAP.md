@@ -2,7 +2,7 @@
 
 All outstanding features and fixes, agreed or not, are listed here and only here. Each feature gets its own plan in [plans/](plans/) and its own branch when it is picked up. When something is finished, remove it from this list; its plan records how it was done.
 
-Updated 2026-11-13.
+Updated 2026-11-14.
 
 ## Agreed, not started
 
@@ -15,9 +15,13 @@ Updated 2026-11-13.
 - **Export/drag filename decoration:**
   - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
   - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
+- **Timeline management** (`feature/timeline-management`, agreed as a fix 2026-11-14): Tempo Map on the timeline's right-click menu; markers on their own header row, in their track's colour, only from tracks that would be exported; a Show Markers toggle. See [the plan](plans/timeline-management.md).
 
 ## Suggested, not agreed
 
+- **More sophisticated tempo mapping** (2026-11-14):
+  - Today the workspace uses one whole file's tempo map. Possible: take different files' maps for different sections, for example when files are laid End to End or verse and chorus come from different apps.
+  - Related gaps in the current switch: adopting a file's map doesn't shift it to where the file was placed, and a file's map is lost when its last clip is removed, unless it's the current tempo source.
 - **Scroll bar zoom:** drag the ends of the horizontal scroll bar to zoom, as other apps do (studio, 2026-11-10).
 
 ## Later, after more real-world use
@@ -39,6 +43,7 @@ Updated 2026-11-13.
 
 Not planned yet. These options exist, or are planned, in code but have no UI. They're collected here so a settings page can expose them later.
 
+- **Show Markers** (planned, QSettings `show_markers`, default on): the marker row in the timeline header. It also has a toolbar button. See [the timeline management plan](plans/timeline-management.md).
 - **Notes that started before an edge** (`ExportOptions.partial_notes`, default on): they sound from a range or clip-trim edge, or are dropped.
 - **What a drop replaces** (`Placement.compare_full_extent`, default visible edges): a dropped clip replaces one whose trimmed start and end match, or one whose full extent matches.
 
