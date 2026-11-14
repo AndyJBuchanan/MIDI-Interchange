@@ -409,6 +409,13 @@ def test_periodic_failure_throttled_and_exit_requires_choice(window, lifecycle, 
 def test_large_checkpoint_leaves_event_loop_running(window, lifecycle):
     # A substantial event list is encoded only by the worker. GUI timers continue
     # while it runs, and a source edit is kept dirty for the next checkpoint.
+    #
+    # The worker spends its time in a tight pure-Python encode loop. With the default
+    # GIL switch interval (5ms), a loaded machine can go hundreds of ms without handing
+    # the GIL back to the main thread even though app code never blocks it, which starves
+    # the timer below of any chance to fire (reproduced directly: ~1 in 15 runs on a
+    # busy Windows box, 0 in 150 with this fix). Shorten the switch interval only for
+    # this check, so the main thread is scheduled often enough to observe it on any OS.
     raw = smf([track([ev for i in range(15000) for ev in note(0, 60, i * 20, 10)])])
     window.ctl.import_payloads([Payload('large.mid', raw)])
     manager = lifecycle()
@@ -417,9 +424,14 @@ def test_large_checkpoint_leaves_event_loop_running(window, lifecycle):
     timer.setInterval(1)
     timer.timeout.connect(lambda: pulses.append(time.monotonic()))
     timer.start()
-    manager._submit()
-    manager.mark_dirty()
-    finish_write(manager)
+    original_interval = sys.getswitchinterval()
+    sys.setswitchinterval(0.0005)
+    try:
+        manager._submit()
+        manager.mark_dirty()
+        finish_write(manager)
+    finally:
+        sys.setswitchinterval(original_interval)
     timer.stop()
     assert len(pulses) >= 2
     assert manager.generation > manager.saved_generation
