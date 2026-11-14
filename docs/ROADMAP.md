@@ -2,10 +2,11 @@
 
 All outstanding features and fixes, agreed or not, are listed here and only here. Each feature gets its own plan in [plans/](plans/) and its own branch when it is picked up. When something is finished, remove it from this list; its plan records how it was done.
 
-Updated 2026-11-13.
+Updated 2026-11-14.
 
 ## Agreed, not started
 
+- **Clip splitting:** split a clip at a chosen position, reusing duplication and edge-trim operations with shared event data. Keep both pieces in place and make the split one undo step. Plan the interaction before implementation.
 - **Export/drag filename decoration:**
   - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
   - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
@@ -53,4 +54,3 @@ The details of each are in [DESIGN_NOTES, Risks and known gaps](DESIGN_NOTES.md#
   - Stapling the app inside the DMG.
   - Trimming the app size (about 100 MB).
   - Windows code signing.
-- **Splitting clips** (risk 8): clip moves apply to whole clips only.

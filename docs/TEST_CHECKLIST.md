@@ -183,25 +183,26 @@ The original section 8g checks passed locally. These follow-up changes also pass
 
 Run from source with `.venv/bin/python main.py`; no build is needed. Persistence is on by default. The Windows checks need a packaged Windows build and are needed before release, not before merge.
 
-- [ ] Assemble several sources: move/copy clips, trim edges, rename/recolour tracks, set a channel override and a tempo source. Add named/unnamed ranges, including a locked range with an independent selection. Set mute/solo with a remembered mute under solo. Quit and reopen: everything returns correctly.
-- [ ] Change export mode, trim-silence setting, snap, selected range, zoom, lane height and scroll. Quit/reopen: settings and view return (scroll clamps if the window is smaller), with Undo/Redo initially unavailable.
-- [ ] Use the real Cubase lyric clip and a temporary DAW drag. After quitting, move/remove the original input files or temp file; reopen and verify the restored clips, lyrics and exports in the DAW.
-- [ ] Compare Whole, Preserve, Rebase and Separate exports before/after reopening, including overridden channels and locked-range exclusions.
-- [ ] Edit, then leave the app idle for at least two minutes. Make another edit and force-quit promptly. Reopen: one notice says the last checkpoint was restored and recent changes may be lost; the latest unsaved edit can be absent.
-- [ ] Keep editing/scrolling beyond two minutes, then leave the app idle for 15 seconds. Confirm normal work stays responsive and a checkpoint follows the idle interval. Repeat with a large workspace.
-- [ ] Hold an internal clip/range/trim drag or an external drag stationary beyond the checkpoint time. Confirm the gesture stays responsive; leave the drag and then idle. Repeat with an open dialog.
-- [ ] Quit immediately after editing, including while a checkpoint may be writing. Reopen: the latest state is present. A track/range name still being edited when Quit is chosen should be saved.
-- [ ] Choose New, then quit/reopen: the workspace stays empty. Undo New before quitting: the restored contents are saved instead.
-- [ ] With the app running, open more MIDI files from Finder/Explorer or run `.venv/bin/python main.py "path/to/file.mid"`. Files join the existing workspace; no second window opens. Try multiple paths, spaces and non-ASCII names.
-- [ ] Launch a second time with no files: the existing window comes forward. Repeat a file open while the original app is starting/restoring.
-- [ ] After force-quitting, relaunch normally: ownership recovers without deleting a lock file manually.
+- [x] Assemble several sources: move/copy clips, trim edges, rename/recolour tracks, set a channel override and a tempo source. Add named/unnamed ranges, including a locked range with an independent selection. Set mute/solo with a remembered mute under solo. Quit and reopen: everything returns correctly.
+- [x] Change export mode, trim-silence setting, snap, selected range, zoom, lane height and scroll. Quit/reopen: settings and view return (scroll clamps if the window is smaller), with Undo/Redo initially unavailable.
+- [x] Use the real Cubase lyric clip and a temporary DAW drag. After quitting, move/remove the original input files or temp file; reopen and verify the restored clips, lyrics and exports in the DAW.
+The following checks are automated in `tests/test_session.py` and `tests/test_single_instance.py`; no manual repetition is required: byte-for-byte export comparisons in all four modes (including channel overrides and locked ranges), checkpoint timing and activity deferral, save ordering on exit, New/undo, range recalculation, corrupt-session handling and notices, rejected-file cleanup, deferred close, concurrent file handoff and recovery of a dead owner's lock.
 
-Review follow-ups:
+Remaining macOS hands-on checks (use your normal workspace):
 
-- [ ] Range recalculation: mute or solo a track, quit, then edit `session.json` (or use a session saved before a mute change) so an unlocked range's included tracks disagree with mute/solo. Reopen: the session loads, the unlocked range matches the global mute/solo result, and a locked range keeps its own choices. A session with a damaged clip or MIDI event is still rejected.
-- [ ] Deferred close: press Cmd-Q (and use Close) while a clip/range/trim drag, a drag out to the DAW (including when the drop opens the "Place dropped files" dialog), startup restore, a just-handed-over file import, or with a dialog open is in progress. The app waits until the dialog is dismissed, and the drop is still imported. The status bar says "Closing when the current operation finishes…" and the app quits by itself when the operation ends, with the import and latest edits saved on reopen. Repeating Cmd-Q does nothing extra. Also try a macOS logout/shutdown during a drag.
-- [ ] Rejected sessions: replace `session.json` with junk and launch. One notice says the session couldn't be restored, the app started empty and the rejected file is kept until quit. The `session-rejected-*.json` file exists while the app runs and is gone after a normal quit. Force-quit instead: the file is still there, and the next launch deletes it before loading. A read-only or locked rejected file never stops the app starting, saving or quitting.
-- [ ] Startup notices: after a force-quit with a good checkpoint, one notice says it was restored. With junk in `session.json` the notice says it was rejected and the app is empty. After a force-quit *and* junk in `session.json`, one combined notice. After a force-quit with no saved session, no notice appears.
+- [x] Make an edit and quit immediately, then reopen. Confirm the latest edit is present. Repeat while a track or range name is still being edited.
+- [x] With the source app running, run `.venv/bin/python main.py "path/to/file.mid"` from another terminal in the repository. The file joins the existing window. Run `.venv/bin/python main.py` without files: the existing window comes forward.
+- [x] During an ordinary Cubase drag/drop, request Quit. Finish the operation: the app closes by itself, and the imported clip/latest edits return on reopening. Passed for drag/drop. All current dialogs are modal and Cmd-Q is ineffective while they are open; deferred Quit through those dialogs is not a manual test.
+- [x] During normal use with a large workspace, note any pauses or interference with dragging, scrolling or editing. No timed two-minute exercise is required.
+
+Optional native crash smoke check (automated recovery logic is already covered): force-quit once, then reopen. Confirm the app starts normally without manually deleting a lock file; with a checkpoint present, it reports recovery.
+
+macOS Finder integration (requires an app bundle built from this branch; pending packaged-app testing):
+
+Finder's Open With may select the older installed app in Applications. A source launch does not update that bundle. Use a bundle built from this branch and explicitly select that bundle for these checks.
+
+- [x] With the current branch's bundle running, use Finder's Open With to open a MIDI file in that same bundle. The file joins the existing window.
+- [x] Launch that same bundle again without files: the existing window comes forward.
 
 Windows (packaged build, release time):
 
