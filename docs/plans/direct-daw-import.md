@@ -1,6 +1,10 @@
 # Plan: direct DAW project import (investigation)
 
-Status: **initial DAWproject reader and shared registry implemented on the DAWproject subfeature branch; studio verification pending** (2026-11-14). DAWproject will validate the pluggable import model alongside MIDI. The shared reader interface and native-reader feasibility remain to be scoped. This document collects the web research, observations on the current code, and open questions, ready for fixtures.
+Status: **DAWproject and the shared reader registry provisionally implemented**
+(accepted 2026-11-14). All three supplied Cubase export pairs have been
+investigated; source-export differences are documented. Note-tail handling is
+deferred and does not block this milestone. Native-reader feasibility and order
+remain to be scoped. See [the implementation](dawproject-import.md).
 
 Branch: `feature/direct-daw-import`, created from `release/0.4.0`. Its PR will target `release/0.4.0`, following [the branching rules](../RELEASING.md#branches).
 
@@ -13,6 +17,10 @@ DAWproject implementation and current supported subset: [DAWproject importer](da
 ## The point: native files, not exports
 
 The aim is to read the file the DAW saves anyway: `.cpr`, `.reason`, `.logicx`. **Any route that needs an export from the DAW is no gain.** Exporting a DAWproject from Cubase takes the same effort as exporting MIDI. I suggested otherwise once and was corrected (2026-11-14).
+
+For performance comparisons, the supplied Cubase MIDI export is ground truth.
+DAWproject fidelity is a separate diagnostic check, not a replacement reference.
+Do not repair Cubase's DAWproject export by inventing missing notes or processing.
 
 Exports still matter in two ways:
 

@@ -1,7 +1,17 @@
 # DAWproject importer
 
 Branch: `feature/direct-daw-import-dawproject`, based on and targeting
-`feature/direct-daw-import`. Implemented for review; studio verification pending.
+`feature/direct-daw-import`.
+
+Status: **provisionally implemented**, accepted 2026-11-14 after investigation of
+all three supplied Cubase DAWproject/MIDI pairs. The supported subset and known
+source-export discrepancies below are recorded limitations, not blockers for
+this milestone. Broader studio/exporter verification remains ongoing.
+
+**Note tails are deferred by agreement.** Keep the existing clip-edge cutting
+behaviour. Preserving tails beyond imported part ends may be considered later;
+no policy change or automatic Cubase-export repair is required for provisional
+completion. Cubase MIDI remains the performed-MIDI reference.
 
 ## Reader contract
 
@@ -74,9 +84,18 @@ DAWproject is not a native Cubase reader. Other DAW exporters remain unverified.
 
 ## Paired-export evidence
 
+Cubase-exported MIDI is the performed-MIDI ground truth. XML fidelity checks
+diagnose the reader and do not supersede that reference. We do not repair
+Cubase's DAWproject export or silently infer missing processing.
+
+The [other-pair investigation](../DAWPROJECT_OTHER_PAIRS_FINDINGS.md) checks indy
+and GA against serialized MIDI, including explicit diagnostic reference windows.
+It explains the earlier apparent offsets/tempo mismatch and records the remaining
+missing drums, extra kit notes, pitch transpose and note-tail discrepancy.
+
 Run `.venv/bin/python scripts/compare_project_exports.py` for a per-track JSON
-comparison of audible notes: start, end, pitch, attack velocity and channel,
-rounded to 480 PPQ. Track mute and clip mute are respected; repeated track names
+comparison of actual serialized MIDI: start, end, pitch, attack velocity and channel,
+normalized to reference PPQ with exact and one-tick-tolerance matches reported separately. Track mute and clip mute are respected; repeated track names
 are paired in order. Release velocity is excluded from this comparison because
 Cubase's DAWprojects use zero where MIDI often uses 64.
 
@@ -94,6 +113,12 @@ when release velocity is excluded; that comparison is an automated regression.
 Other differences include extra material, timing, note lengths and mute state;
 the report preserves these discrepancies rather than normalising them away.
 They need studio investigation before claiming full paired-export equivalence.
+
+The [Ditty investigation](../DAWPROJECT_DITTY_FINDINGS.md) now traces differences
+through serialized app output and raw XML: missing rendered processing and
+controllers, duplicate/extra source notes, clip-tail policy, and small timing
+rounding differences. Its independent XML regression matches all 1,292 output
+note events under the current clip-window policy.
 
 ## Manual verification
 
