@@ -41,6 +41,7 @@ class Controller(QObject):
         self.snap: SnapSetting = "beat"
         self.export_mode = ExportMode.REBASE   # default (2026-11-10); with no ranges, export is whole
         self.trim = False
+        self.file_drag_active = False  # transient native drag-out; never checkpoint mid-drag
         self._undo: list[tuple[dict, str | None]] = []
         self._redo: list[tuple[dict, str | None]] = []
 
@@ -77,6 +78,12 @@ class Controller(QObject):
         self.rangesChanged.emit()
         self.selectionChanged.emit()
         self.undoStateChanged.emit()
+
+    def restore_session(self, snap: dict, selection: str | None) -> None:
+        """Apply validated persistent state using the same refresh path as undo."""
+        self._undo.clear()
+        self._redo.clear()
+        self._apply(snap, selection)
 
     # -- import ---------------------------------------------------------------
     def parse_payloads(self, payloads: list[Payload]) -> tuple[list, list[str]]:

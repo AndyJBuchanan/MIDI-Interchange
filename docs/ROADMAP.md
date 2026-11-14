@@ -6,16 +6,10 @@ Updated 2026-11-14.
 
 ## Agreed, not started
 
-- **Session persistence (not save/load):**
-  - Keep the one current workspace between runs.
-  - Write it to disk on exit and restore it at startup. Say so if it couldn't be restored cleanly, for example after a crash, or a crash on exit.
-  - No project files, and no Save/Open of workspaces.
-  - It must keep clip trims (`trim_start`, `trim_end`) the mute, solo and range-lock state, and track export-channel overrides.
-  - **Open question:** should it also save periodically, so a crash loses little?
+- **Clip splitting:** split a clip at a chosen position, reusing duplication and edge-trim operations with shared event data. Keep both pieces in place and make the split one undo step. Plan the interaction before implementation.
 - **Export/drag filename decoration:**
   - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
   - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
-- **Timeline management** (`feature/timeline-management`, agreed as a fix 2026-11-14): Tempo Map on the timeline's right-click menu; markers on their own header row, in their track's colour, only from tracks that would be exported; a Show Markers toggle. See [the plan](plans/timeline-management.md).
 
 ## Suggested, not agreed
 
@@ -43,7 +37,8 @@ Updated 2026-11-14.
 
 Not planned yet. These options exist, or are planned, in code but have no UI. They're collected here so a settings page can expose them later.
 
-- **Show Markers** (planned, QSettings `show_markers`, default on): the marker row in the timeline header. It also has a toolbar button. See [the timeline management plan](plans/timeline-management.md).
+- **Show Markers** (QSettings `show_markers`, default on): the marker row in the timeline header. It also has a toolbar button. See [the timeline management plan](plans/timeline-management.md).
+- **Session persistence:** internal enable/disable setting, default on. Gate session restoration and saving; expose a switch here later if needed. See [the plan](plans/session-persistence.md).
 - **Notes that started before an edge** (`ExportOptions.partial_notes`, default on): they sound from a range or clip-trim edge, or are dropped.
 - **What a drop replaces** (`Placement.compare_full_extent`, default visible edges): a dropped clip replaces one whose trimmed start and end match, or one whose full extent matches.
 
@@ -63,5 +58,3 @@ The details of each are in [DESIGN_NOTES, Risks and known gaps](DESIGN_NOTES.md#
   - Stapling the app inside the DMG.
   - Trimming the app size (about 100 MB).
   - Windows code signing.
-  - A Windows single-instance handoff, so opening several files doesn't start several windows.
-- **Splitting clips** (risk 8): clip moves apply to whole clips only.
