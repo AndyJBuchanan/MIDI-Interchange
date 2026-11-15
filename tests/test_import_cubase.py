@@ -235,3 +235,78 @@ def test_session_roundtrip_keeps_cubase_source_and_exports():
         b = [(r.label, r.midi.tracks) for r in build_exports(restored, ExportOptions(mode=mode))]
         assert [(label, [list(map(str, t)) for t in trks]) for label, trks in a] == \
                [(label, [list(map(str, t)) for t in trks]) for label, trks in b]
+
+
+# ------------------------------------------- verify files (user spot test)
+
+VERIFY = PHASES / 'Verify'
+
+
+def verify(name):
+    path = VERIFY / name
+    if not path.exists():
+        pytest.skip(f'{name} is not in the repository (local verify file)')
+    return path
+
+
+def test_verify_bbcso_score_symbols_and_named_flags_tail():
+    """15.0.10: parts start with MScoreEvent objects (Score Editor symbols),
+    which are stepped over; the mixer tail after the flags has a u32 count
+    and the track's own name."""
+    source, tracks, _ = read(verify('BBCSO_Woodwinds101-App01-MacBook.cpr'))
+    music = [t for t in tracks if not t.auxiliary]
+    assert len(music) == 34 and not any(t.muted or t.soloed for t in music)
+    assert sum(1 for t in music for c in t.clips for e in c.events if e.msg.type == 'note_on') == 2365
+    assert any('Score Editor symbols' in w for w in source.warnings)
+
+
+def test_verify_beat003_object_properties_and_flags_sentinel():
+    """15.0.30: note properties of type 0x22 and 0x0408 hold objects
+    (Omnivocal lyric attributes); a mixer tail ends FF FF FF FF 00 00 00 00."""
+    source, tracks, _ = read(verify('Beat003vs.cpr'))
+    t = by_name(tracks)
+    counts = {n: sum(1 for c in t[n].clips for e in c.events if e.msg.type == 'note_on')
+              for n in ('Melody', 'Omnivocal Chorus', 'Chord Bed', 'DUNE 3 01')}
+    assert counts == {'Melody': 104, 'Omnivocal Chorus': 20, 'Chord Bed': 256, 'DUNE 3 01': 56}
+    assert t['Omnivocal Chorus'].muted and source.display_bar_offset == -2
+    assert not any('later events' in w for w in source.warnings)
+
+
+def test_verify_out_of_range_value_skipped_not_fatal():
+    """15.0.5, 173 MB (above GitHub's file limit, so usually absent): one
+    aftertouch value of 201 is skipped with a warning; the mixer bodies'
+    plug-in states are not walked, keeping the import fast."""
+    import time
+    path = verify('orchestral-import-test-01.cpr')
+    t0 = time.time()
+    source, tracks, _ = read(path)
+    assert time.time() - t0 < 2
+    assert sum(1 for t in tracks for c in t.clips for e in c.events if e.msg.type == 'note_on') == 605
+    assert any('out-of-range' in w for w in source.warnings)
+
+
+def test_verify_cubase14_rejected_until_validated():
+    with pytest.raises(ImportError_, match='Cubase 14.0.20 projects are not supported'):
+        read(verify('Scaler3Test-001(14).cpr'))
+
+
+def test_skipping_mixer_bodies_does_not_change_imports():
+    """The reader skips mixer-object bodies after registering every class
+    declaration; the result must equal a full walk."""
+    from midi_interchange.core import cpr_format as cf, import_cubase as ic
+    paths = [TIER2 / 'c17m.cpr', TIER3 / 'c25.cpr', SETS / 'indy-001x.cpr', SETS / 'Ditty-04-Macbook.cpr']
+    paths += [p for p in (VERIFY / 'Beat003vs.cpr', VERIFY / 'BBCSO_Woodwinds101-App01-MacBook.cpr') if p.exists()]
+
+    def signature(path):
+        s, tracks = ic.import_cubase(str(path), path.name)
+        return ([(t.name, t.muted, t.soloed, [(c.offset, c.trim_start, c.trim_end, c.muted,
+                 [(e.time, str(e.msg)) for e in c.events]) for c in t.clips]) for t in tracks], s.warnings)
+    for path in paths:
+        skipped = signature(path)
+        original = cf.READER_SKIP
+        try:
+            cf.READER_SKIP = frozenset()
+            full = signature(path)
+        finally:
+            cf.READER_SKIP = original
+        assert skipped == full, path.name

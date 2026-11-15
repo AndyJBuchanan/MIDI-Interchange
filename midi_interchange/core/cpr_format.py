@@ -217,7 +217,20 @@ class Walker:
             return Obj(i, 'REF', cdef, i + 2 * w, n)
         return None
 
-    def walk(self, start: int, end: int, depth: int = 0, max_depth: int = 64) -> list[Obj]:
+    def declare_all(self) -> None:
+        """Register every class declaration in the archive (a fast regex
+        pre-pass), so a walk that skips some objects' bodies still resolves
+        later references to classes declared inside them."""
+        d, w = self.d, self.w
+        for m in re.finditer(re.escape(self.base_tag[:-1]) + rb'[\xfe\xff]', d):
+            i = m.start()
+            got = self._name_at(i + w)
+            if got and i not in self.classes:
+                name, ver, _ = got
+                self.classes[i] = ClassDef(i, name, ver, [])
+
+    def walk(self, start: int, end: int, depth: int = 0, max_depth: int = 64,
+             skip: frozenset[str] = frozenset()) -> list[Obj]:
         out: list[Obj] = []
         i = start
         d = self.d
@@ -230,8 +243,8 @@ class Walker:
             if o is None:
                 i += 1
                 continue
-            if depth < max_depth:
-                o.children = self.walk(o.body_at, o.end, depth + 1, max_depth)
+            if depth < max_depth and o.cls.name not in skip:
+                o.children = self.walk(o.body_at, o.end, depth + 1, max_depth, skip)
             self.objects[o.tag_at] = o
             self.by_identity[o.body_at - self.w] = o
             out.append(o)
@@ -239,10 +252,20 @@ class Walker:
         return out
 
 
-def walk_archive(c: Container, name: str) -> tuple[Walker, list[Obj]]:
+# Mixer channel objects hold plug-in states (172 MB in one verify project) and
+# are read as raw bytes (track_state_flags), never through child objects.
+READER_SKIP = frozenset({'MInstrumentTrack', 'MMidiTrack', 'MAudioTrack'})
+
+
+def walk_archive(c: Container, name: str, skip: frozenset[str] = frozenset()) -> tuple[Walker, list[Obj]]:
+    """Walk an archive. With ``skip``, bodies of those classes are not
+    searched for children; every class declaration is registered first so
+    references into them still resolve."""
     a = c.archive(name)
     wk = Walker(a.data, c.width)
-    return wk, wk.walk(0, len(a.data))
+    if skip:
+        wk.declare_all()
+    return wk, wk.walk(0, len(a.data), skip=skip)
 
 
 # --------------------------------------------------------------- MIDI parts
@@ -277,9 +300,15 @@ class CprEvent:
 
 
 def _props(wk: Walker, q: int, limit: int) -> tuple[dict[str, object], int]:
-    """u16 count | count x (FourCC reversed | u16 type | value).
-    Types: 1 = i64, 4 = f64, 2 = embedded object (NEW or REF, e.g. a
-    controller curve shape MParamEventCurveRationalBezier)."""
+    """u16 count | count x (key | u16 type | value).
+
+    Keys are FourCCs stored reversed (some are hashes, not text). The type's
+    low byte is the kind, higher bits look like flags: 1 = i64, 4 = f64;
+    other kinds hold an embedded NEW/REF object (2: e.g. a controller curve
+    shape MParamEventCurveRationalBezier; 0x22: tempo-track 'TVCi', note
+    'ScAr' holding Omnivocal lyric attributes; 0x0408: a string object), or for
+    kind 8 possibly a plain string.
+    """
     d = wk.d
     n = int.from_bytes(d[q:q + 2], 'big')
     q += 2
@@ -287,18 +316,21 @@ def _props(wk: Walker, q: int, limit: int) -> tuple[dict[str, object], int]:
     for _ in range(n):
         key = d[q:q + 4][::-1].decode('latin-1')
         typ = int.from_bytes(d[q + 4:q + 6], 'big')
+        kind = typ & 0xFF
         q += 6
-        if typ == 1:
+        if kind == 1:
             props[key] = int.from_bytes(d[q:q + 8], 'big', signed=True); q += 8
-        elif typ == 4:
+        elif kind == 4:
             props[key] = struct.unpack('>d', d[q:q + 8])[0]; q += 8
-        elif typ == 2:
-            o = wk.try_object(q, limit)
-            if o is None:
-                raise ValueError(f'unparsed object property {key!r} at {q}')
-            props[key] = o; q = o.end
         else:
-            raise ValueError(f'unknown property type {typ} for {key!r} at {q - 6}')
+            o = wk.try_object(q, limit)
+            if o is not None:
+                props[key] = o; q = o.end
+            elif kind == 8 and _bomstring_at(d, q, limit) is not None:
+                end = _bomstring_at(d, q, limit)
+                props[key] = _pstring(d, q)[0]; q = end
+            else:
+                raise ValueError(f'unknown property type 0x{typ:04x} for {key!r} at {q - 6}')
     return props, q
 
 
@@ -367,7 +399,13 @@ def decode_part_events(wk: Walker, part: Obj) -> tuple[list[CprEvent], list[str]
                     raise ValueError('unparsed framed event')
                 status = CLASS_STATUS.get(o.cls.name)
                 if status is None:
-                    raise ValueError(f'framed {o.cls.name} not decoded')
+                    # A full object of another class (e.g. MScoreEvent: Score
+                    # Editor symbols, BBCSO verify file). Its length is
+                    # explicit, so step over it and keep decoding.
+                    skipped = info.setdefault('skipped', {})
+                    skipped[o.cls.name] = skipped.get(o.cls.name, 0) + 1
+                    p = o.end
+                    continue
                 ev, q = parse_event_body(wk, o.body_at, status, o.end)
                 ev.framed = True
                 if q != o.end:
@@ -549,45 +587,33 @@ def _bomstring_at(b: bytes, p: int, limit: int) -> int | None:
     return end
 
 
-def _flags_tail_ok(b: bytes, flags_at: int) -> bool:
-    """MInstrumentTrack after the flags: u16 count (0 or 1) | count x string
-    (e.g. a loaded Groove Agent pattern name, Ditty) | 14 bytes | i64 -1."""
-    q = flags_at + 4
-    n = int.from_bytes(b[q:q + 2], 'big')
-    q += 2
-    if n > 1:
-        return False
-    for _ in range(n):
-        q = _bomstring_at(b, q, len(b))
-        if q is None:
-            return False
-    return b[q + 14:q + 22] == FLAGS_SENTINEL
-
-
 def state_flags_offset(b: bytes, cls: str) -> int | None:
     """Offset of the channel state flags u32 in a track's mixer object body.
 
     Found by structure, independent of the port names:
-    - MInstrumentTrack (v10, v11): the last input port record followed by
-      the flags and a valid tail (_flags_tail_ok: usually 16 bytes then an
-      i64 -1). In v11 a short trailing object follows. The search covers the
-      body's last 512 bytes.
+    - MInstrumentTrack (v10, v11): the flags follow the **last** input port
+      record in the body's final 512 bytes. What follows varies (usually a
+      u16 count, optional name string, padding and FF x 8; BBCSO 15.0.10 has a
+      u32 count and the track's own name; Beat003vs ends FF FF FF FF 00 00 00
+      00), so only the flags value itself is checked (state bits only).
     - MMidiTrack (v8): the body starts with the output port (u16 3, id, 4
       bytes, name), then the input port record, a u32 (1 in the fixtures, a
       track on channel 2: possibly the channel), then the flags.
     """
+    def plausible(at: int) -> bool:
+        return at + 4 <= len(b) and int.from_bytes(b[at:at + 4], 'big') <= 0xFF
     if cls == 'MInstrumentTrack':
         lo = max(0, len(b) - 512)
         for p in range(len(b) - 2, lo - 1, -1):
             end = port_record_end(b, p, len(b))
-            if end is not None and _flags_tail_ok(b, end):
-                return end
+            if end is not None:
+                return end if plausible(end) else None
         return None
     if cls == 'MMidiTrack':
         for p in range(0, min(len(b), 512)):
             end = port_record_end(b, p, len(b))
             if end is not None:
-                return end + 4
+                return end + 4 if plausible(end + 4) else None
         return None
     return None
 

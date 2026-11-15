@@ -338,6 +338,36 @@ events, controller curve shapes, chord track names, and sysex.
     fault.
 - **Full suite:** 521 passed, 3 platform skips.
 
+### Spot-test fixes (2026-11-15)
+
+Four user projects in `samples/project-cubase-phases/Verify` (not yet
+committed; tests skip when absent) exposed decoder assumptions:
+
+- **Mixer flags tail varies.** After the flags, BBCSO (15.0.10) has a u32
+  count and the track's own name; Beat003vs ends `FF FF FF FF 00 00 00 00`.
+  The flags are now taken after the **last** input port record in the mixer
+  object's tail, checking only that the value holds state bits.
+- **Other objects inside parts.** BBCSO parts begin with `MScoreEvent`
+  objects (Score Editor symbols). Framed objects of unknown classes are now
+  stepped over (their length is explicit) and reported; previously decoding
+  stopped and those parts' notes were lost.
+- **Property types are a kind byte plus flags.** 1 = i64, 4 = f64; other kinds
+  hold objects (0x22 `ScAr` with **Omnivocal lyric attributes** such as
+  "Kettles[k eh]"; 0x0408 a string object). A future lyrics feature could
+  import these.
+- **Out-of-range stored values.** The orchestral project stores one
+  aftertouch value of 201; such events are skipped with a warning instead of
+  failing the import. Aftertouch is confirmed as channel · value · 0, with
+  `HRDT` = value / 128.
+- **Speed.** That project's arrangement archive is 172 MB, mostly plug-in
+  states inside mixer objects. The reader now registers every class
+  declaration with a regex pre-pass, then doesn't walk mixer-object bodies:
+  0.18 s instead of 3.5 s, with identical results on all 48 fixture and verify
+  projects.
+- **Cubase 14** (Scaler3Test, 14.0.20) walks with the same classes, but has no
+  MIDI parts, so it can't validate the reader; Cubase 14 stays unsupported
+  until a project with parts is checked.
+
 ## Prior work to read first
 
 Read for understanding; check each licence before copying any code.

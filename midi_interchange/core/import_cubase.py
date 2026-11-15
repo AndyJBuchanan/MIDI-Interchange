@@ -27,6 +27,7 @@ SUPPORTED_MAJOR = (15, 16)
 TICKS = 480                 # Cubase positions: ticks per quarter note
 MAX_TIME = 1_000_000        # quarter notes; session/workspace bound
 DEFAULT_RELEASE = 64
+SKIPPED_OBJECTS = {'MScoreEvent': 'Score Editor symbols and text in parts are not imported'}
 
 
 def _ticks(value: float) -> F:
@@ -94,13 +95,18 @@ def _message(e: cf.CprEvent, warn):
 
 def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter) -> list[Event]:
     """Events in content time (quarter notes from the part's content zero)."""
-    raw, problems, _ = cf.decode_part_events(wk, part)
+    raw, problems, info = cf.decode_part_events(wk, part)
     for problem in problems:
         warn(f'{label}: {problem}; later events in this part are not imported')
+    for cls in info.get('skipped', {}):
+        warn(SKIPPED_OBJECTS.get(cls, f'Part objects of type {cls} are not imported'))
     out: list[tuple[F, mido.Message]] = []
     for e in raw:
-        if e.channel > 15 or any(x > 127 for x in e.data):
-            raise ValueError(f'{label}: MIDI data out of range')
+        if e.channel > 15 or any(x > 127 for x in e.data[:1 if e.status in (0xC0, 0xD0) else 2]):
+            # Cubase can store out-of-range values (orchestral verify file:
+            # one aftertouch value of 201). Skip the event, keep the import.
+            warn('Events with out-of-range MIDI values were skipped')
+            continue
         at = _ticks(e.position)
         if e.status == 0x90:
             if e.length is None or e.length < 0:
@@ -163,7 +169,7 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
         if app != 'Cubase' or major not in SUPPORTED_MAJOR:
             raise ValueError(f'{app or "Unknown application"} {version or "(unknown version)"} projects are '
                              f'not supported; supported: Cubase {", ".join(map(str, SUPPORTED_MAJOR))}')
-        wk, _ = cf.walk_archive(container, 'Arrangement1')
+        wk, _ = cf.walk_archive(container, 'Arrangement1', skip=cf.READER_SKIP)
         warnings: list[str] = []
 
         def warn(text):
