@@ -371,9 +371,9 @@ this fast.
 | c21 ✱ | Time-signature change to 3/4 at bar 5 |
 | c22 ✱ | Marker track with a marker named `Verse` at bar 2 and `Chorus` at bar 6 |
 | c23 | One cycle (range) marker named `Intro`, bars 1–3 inclusive: start 1.1.1.0, end 4.1.1.0 |
-| c24 ✱ | In the first part, a mod wheel (CC1) ramp and a pitch bend |
+| c24 ✱ | In the MIDI track's part at bar 1 (channel 2), a mod wheel (CC1) ramp and a pitch bend |
 | c25 ✱ | Program change and sustain pedal (CC64) on/off |
-| c26 | Switch the first track to linear (seconds) time base |
+| c26 | Switch the Lead instrument track from musical to linear time base (Inspector: the note-symbol button beside the track name toggles to a clock). Its part at 5.2 lies after the tempo changes, so positions may be stored in time rather than ticks |
 
 ### Tier 4: inactive and generated material (phase 2 rules)
 
