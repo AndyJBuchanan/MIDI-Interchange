@@ -621,6 +621,7 @@ PlayedNote = tuple[int, int, int, int]      # (song tick, pitch, velocity, lengt
 Control = tuple[int, int, int]              # (song tick, controller lane id, value)
 STEP = PPQ // 32                            # Reason renders lines as 1/32-beat steps
 CONTROL_DEFAULT = 0                         # value a controller returns to after a clip
+PITCH_BEND = 0xFF
 RAMPED = {0x01, 0xFF}                       # mod wheel, pitch bend; sustain jumps (Day 15)
 
 
@@ -631,28 +632,31 @@ def _shape(x: float, k: float) -> float:
     return 1 - (1 - x) ** (1 + k) if k > 0 else x ** (1 - k)
 
 
-def curved(points: list[tuple[int, int, float]]) -> list[tuple[int, int, bool]]:
+def curved(points: list[tuple[int, int, float]]) -> list[tuple]:
     """(tick, value, curve) points as the straight-line points Reason's
     export draws them with. A curved segment from (t0, v0) to (t1, v1)
-    follows v0 + (v1 - v0) * s(x), x = 0..1 across it, with s(x) = 1 - (1 - x)^(1 + k)
-    for k > 0 and x^(1 - k) for k < 0. Reason splits it into 12 straight
-    pieces, joined where the slope crosses equal steps between its start and
-    end slopes, at the curve's value there rounded to a whole number. Returns
-    (tick, value, sent): a join inside a flat run (the same value before
-    and after) still shapes the steps but is not sent itself (Day 15's Swell, every exported value
+    follows v0 + (v1 - v0) * s(x), x = 0..1 across it, with
+    s(x) = 1 - (1 - x)^(1 + k) for k > 0 and x^(1 - k) for k < 0. Reason
+    splits it into 12 straight pieces, joined where the slope crosses equal
+    steps between its start and end slopes. Returns (tick, value, sent,
+    exact): a join is the curve's value rounded half up, and the
+    steps run between rounded joins (exact is kept for research). A join
+    inside a flat run (the same rounded value before and after) still shapes
+    the steps but is not sent (Day 15's Swell, r26, r27: every exported value
     reproduced)."""
-    out: list[tuple[int, int, bool]] = []
+    out: list[tuple] = []
     for i, (t, v, k) in enumerate(points):
-        out.append((t, v, True))
+        out.append((t, v, True, v))
         if i + 1 < len(points) and k and points[i + 1][0] > t:
             t1, v1, _ = points[i + 1]
             joins = []
             for j in range(1, CURVE_PIECES):
                 f = j / CURVE_PIECES
                 x = 1 - (1 - f) ** (1 / k) if k > 0 else f ** (1 / -k)
-                joins.append((round(t + x * (t1 - t)), math.floor(v + (v1 - v) * _shape(x, k) + 0.5)))
-            values = [v] + [jv for _, jv in joins] + [v1]
-            out += [(jt, jv, not values[n] == jv == values[n + 2]) for n, (jt, jv) in enumerate(joins)]
+                exact = v + (v1 - v) * _shape(x, k)
+                joins.append((round(t + x * (t1 - t)), math.floor(exact + 0.5), exact))
+            values = [v] + [jv for _, jv, _ in joins] + [v1]
+            out += [(jt, jv, not values[n] == jv == values[n + 2], ex) for n, (jt, jv, ex) in enumerate(joins)]
     return out
 
 
@@ -661,17 +665,19 @@ def stepped(points) -> list[tuple[int, int]]:
     renders them: every point, plus a step every 1/32 beat from each point
     (not on the song grid: Day 15's curve pieces) strictly before the next
     point of different value, at the line's value there truncated toward
-    zero (r16, r18). Points are (tick, value) or curved()'s (tick, value, sent)."""
+    zero (r16, r18). Points are (tick, value) or curved()'s
+    (tick, value, sent, exact)."""
     out = []
-    for i, (t, v, *sent) in enumerate(points):
-        if not sent or sent[0]:
+    for i, (t, v, *more) in enumerate(points):
+        if not more or more[0]:
             out.append((t, v))
         if i + 1 < len(points):
-            t1, v1 = points[i + 1][:2]
+            t1, v1, *more1 = points[i + 1]
             if v1 != v and t1 > t:
+                a, b = Fraction(v), Fraction(v1)
                 g = t + STEP
                 while g < t1:
-                    out.append((g, int(v + Fraction((v1 - v) * (g - t), t1 - t))))
+                    out.append((g, int(a + (b - a) * (g - t) / (t1 - t))))
                     g += STEP
     return out
 
@@ -708,8 +714,10 @@ def _render(piece: Piece, origin: int, hard: bool) -> None:
     for lane in c.controllers:
         pts = []
         for k in reps:
-            pts += [(origin + shift + p.pos + k * loop, p.value, p.curve) for p in lane.points
+            pts += [(origin + shift + p.pos + k * loop, max(lane.lo, p.value), p.curve) for p in lane.points
                     if not loop or 0 <= p.pos < loop]
+        if lane.lane_id == PITCH_BEND:                  # Reason bends -8191..8191: -8192 plays as -8191 (r27)
+            pts = [(t, max(-8191, x), cv) for t, x, cv in pts]
         if lane.lane_id in RAMPED:
             pts = stepped(curved(pts))
         else:

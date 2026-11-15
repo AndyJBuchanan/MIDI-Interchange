@@ -204,13 +204,13 @@ def test_curvature_is_an_80_bit_float_and_curves_split_into_twelve_pieces():
     assert [rf.curvature(ext(h)) for h in ('3ffe80', '4002c0', 'bfff80', 'c002c0')] == [0.5, 12.0, -1.0, -12.0]
     assert abs(rf.curvature(ext('4002bccccd')) - 11.8) < 1e-6 and rf.curvature(bytes(10)) == 0.0
     pts = rf.curved([(0, 0, 2.0), (12 * B, 120, 0.0)])
-    assert len(pts) == 13 and pts[0] == (0, 0, True) and pts[-1] == (12 * B, 120, True)
+    assert len(pts) == 13 and pts[0][:3] == (0, 0, True) and pts[-1][:3] == (12 * B, 120, True)
     # join j sits where the slope 3(1 - x)^2 has fallen j/12 of the way to 0
     x1 = 1 - (11 / 12) ** 0.5
-    assert pts[1] == (round(x1 * 12 * B), round(120 * (1 - (1 - x1) ** 3)), True)
+    assert pts[1][:3] == (round(x1 * 12 * B), round(120 * (1 - (1 - x1) ** 3)), True)
     # slow-first: a repeated join value still shapes the steps but is not sent
     flat = rf.curved([(0, 0, -12.0), (4 * B, 2, 0.0)])
-    assert any(not sent for _, _, sent in flat)
+    assert any(not p[2] for p in flat)
     steps = rf.stepped(flat)
     assert steps[0] == (0, 0) and steps[-1] == (4 * B, 2)
     assert [v for _, v in steps] == sorted(v for _, v in steps)

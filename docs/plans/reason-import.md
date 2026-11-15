@@ -250,19 +250,27 @@ Reason export, imported and exported by the app, against that export).
   s(x) = 1 - (1 - x)^(1 + k) for k > 0 and x^(1 - k) for k < 0. Reason's
   export draws it as **12 straight pieces**, joined where the slope crosses
   equal steps between the start and end slopes, at the curve's value
-  rounded to a whole number; each piece is stepped every 1/32 beat from its
-  own start (so curve steps fall off the beat grid), and a join inside a
-  flat run is not sent. This reproduces every event of Swell's three curved
-  segments (k = 2.1, -4.7, -1.8). Tempo clips can't be curved (user: r28 not
-  possible).
+  rounded half up; each piece is stepped every 1/32 beat from its own start
+  (so curve steps fall off the beat grid) between the rounded joins, and a
+  join inside a flat run is not sent. This reproduces every event of
+  Swell's three curved segments (k = 2.1, -4.7, -1.8) and r26's straight,
+  slight and full-down curves. Tempo clips can't be curved (user: r28 not
+  possible). Pitch bend runs -8191..8191: a -8192 point plays as -8191, and
+  steps truncate toward zero (r27).
+- **Open (strongest curves, k about 12):** the last piece of a fast-first
+  curve runs about 6% steeper than the line between its joins: it reaches
+  the end value after 47,184 of its 49,948 ticks (r27, pinned exactly; r26
+  agrees) and holds or clamps there. At k = 2.1 (Day 15) the effect is
+  under 0.7%, so it depends on k. And a few pitch-bend joins round toward
+  zero where half up predicts otherwise (r27: -459.73 → -459). Effect: within
+  one mod-wheel step, or 64 of 16383 bend (`test_strong_curves_are_close`).
 - TRDC byte 18 (once taken for the track kind) varies 0..0x0E across songs,
   probably the track colour.
 
 ### Next
 
-- Check the curve rule against Reason's exports of r26 and r27 (slight
-  curves, k between -1 and 1, and negative pitch bend values; rounding of
-  negative joins is assumed half up).
+- Strongest-curve last piece: needs pitch-bend curves at several strengths
+  (r28) to find how the steepening depends on k.
 - The user's checks: [TEST_CHECKLIST 8o](../TEST_CHECKLIST.md).
 
 ## Phase 0 result: GO

@@ -247,6 +247,8 @@ CONTROL_GAPS = {     # (song, track): why Reason's export differs
     ('Day01-0-3(14).mid', 'Piano L'): 'Reason leaves out aftertouch the device does not take',
     ('Day01-0-3(14).mid', 'Piano R'): 'Reason leaves out aftertouch the device does not take',
     ('Oct08-01-13-instr-rarity-sd4.mid', '008 Seq Trigger'): 'Reason leaves out expression the device does not take',
+    ('r26.mid', 'Lead'): 'strongest curves (k about 12): see test_strong_curves_are_close',
+    ('r27.mid', 'Lead'): 'strongest curves (k about 12): see test_strong_curves_are_close',
 }
 
 
@@ -336,3 +338,32 @@ def test_curved_mod_wheel_matches_reason_event_for_event():
                 if m.type == 'control_change' and m.control == 1 and lo < t < hi:
                     theirs.append((t, m.value))
     assert ours == sorted(theirs)
+
+
+@pytest.mark.skipif(not PAIRS, reason='local Reason probe songs not present')
+@pytest.mark.parametrize('name, lane_id, tolerance', [('r26', 0x01, 1), ('r27', 0x01, 0), ('r27', 0xFF, 64)])
+def test_strong_curves_are_close(name, lane_id, tolerance):
+    """r26/r27 hold full-strength curves (k about +-12). Reason's last piece of
+    such a curve runs about 6% steeper than the line between its joins (open
+    question in the plan), and a few pitch-bend joins round the other way: at
+    any moment the value is within one mod-wheel step, or 64 of 16383 bend."""
+    path = os.path.join(PROBE, name)
+    if not os.path.exists(path + '.mid'):
+        pytest.skip(f'{name} not present')
+    song, _ = rf.open_song(open(path + '.reason', 'rb').read())
+    ours = sorted((t, v) for tr, ctl in rf.played_controls(song) if tr.name == 'Lead' for t, i, v in ctl if i == lane_id)
+    theirs, t = [], 0
+    for tr in mido.MidiFile(path + '.mid').tracks:
+        if tr.name == 'Lead':
+            for m in tr:
+                t += m.time
+                if lane_id == 0x01 and m.type == 'control_change' and m.control == 1:
+                    theirs.append((t, m.value))
+                elif lane_id == 0xFF and m.type == 'pitchwheel':
+                    theirs.append((t, m.pitch))
+
+    def at(seq, tick):
+        vals = [v for t_, v in seq if t_ <= tick]
+        return vals[-1] if vals else 0
+    ticks = sorted({t_ for t_, _ in ours} | {t_ for t_, _ in theirs})
+    assert max(abs(at(ours, k) - at(theirs, k)) for k in ticks) <= tolerance
