@@ -173,7 +173,7 @@ keep export options the same throughout.
 | r21 ✱ | A Redrum (pattern) track with a one-bar pattern (expect: reported as skipped) |
 | r22 ✱ | r21 with the pattern track converted to notes in Reason |
 | r23 ✱ | A Player device on the first track (expect: reported) |
-| r24 ✱ | Blocks: one Block with the first clip, placed twice on the Blocks track |
+| r24 ✱ | Blocks: Block 1 (two bars) holds a new clip on one of `Lead`'s two note lanes with one note, A3 velocity 100, block beat 1, one beat; Blocks track enabled, Block 1 placed at bars 25 and 27; song extended, End marker after bar 29 |
 | r25 | A self-contained save of r20 (size and structure only) |
 
 Real-world: two or three of your own songs, each with a MIDI export (End
