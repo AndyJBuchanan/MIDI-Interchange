@@ -178,7 +178,6 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
   from r20. r20x (solo from the mixer) changes one parameter of the track's
   mixer channel device (`X15 Main Mixer Mix Channel`, parameter 2). Not
   pursued: see phase 2 decision 2.
-- Curve bytes (a float curvature; Reason renders curves with off-grid steps).
 
 ## Phase 2: reader
 
@@ -219,8 +218,9 @@ Reason export, imported and exported by the app, against that export).
    chunk) with "saved by Reason X ... open it in Reason 13 or later and save
    it again"; songs with no note clips; damaged files.
 7. **Reported, not imported:** pattern clips, audio clips (lane kind 0x5C),
-   device parameter automation, tempo automation inside Blocks, controller
-   curve shapes (imported as straight lines), Player devices and instruments.
+   device parameter automation, tempo automation inside Blocks, curves on
+   lanes that jump (sustain, expression, aftertouch: none seen), Player
+   devices and instruments.
 
 ### Export rules found in phase 2 (each against Reason's exports)
 
@@ -233,7 +233,7 @@ Reason export, imported and exported by the app, against that export).
 - **Controllers:** the value at a clip's start is the last point at or before
   it (hidden points count; Oct08), else the first point's value (Day01).
   Mod wheel and pitch bend are lines between points, stepped every 1/32 beat
-  on the song grid at the line's value truncated toward zero (r16); flat
+  from each point at the line's value truncated toward zero (r16); flat
   segments add no steps. Sustain and the others jump. Each controller returns
   to 0 at the clip's end unless another clip on the track takes it over there.
   Reason also leaves out values equal to the current one.
@@ -242,12 +242,27 @@ Reason export, imported and exported by the app, against that export).
   (Oct08). The reader can't know device capabilities and keeps the data.
 - **Device parameter automation is exported as CCs** (ChanEQ CC 29, Gain
   CC 40, Day 15's PAD as CC 64): not imported.
+- **Controller curves** (r26, r27 fixtures; Day 15's Swell exported): the 10
+  bytes after a point's value are an **80-bit extended float**, the curve
+  toward the next point. 0 is straight; Reason's curve handle spans about
+  -12..12 (r26: slight up 0.5, full up 12, slight down -1, full down -12;
+  positive is fast-first). The segment follows v0 + (v1 - v0) * s(x) with
+  s(x) = 1 - (1 - x)^(1 + k) for k > 0 and x^(1 - k) for k < 0. Reason's
+  export draws it as **12 straight pieces**, joined where the slope crosses
+  equal steps between the start and end slopes, at the curve's value
+  rounded to a whole number; each piece is stepped every 1/32 beat from its
+  own start (so curve steps fall off the beat grid), and a join inside a
+  flat run is not sent. This reproduces every event of Swell's three curved
+  segments (k = 2.1, -4.7, -1.8). Tempo clips can't be curved (user: r28 not
+  possible).
 - TRDC byte 18 (once taken for the track kind) varies 0..0x0E across songs,
   probably the track colour.
 
 ### Next
 
-- Controller curves, if wanted (four lanes in the probe set).
+- Check the curve rule against Reason's exports of r26 and r27 (slight
+  curves, k between -1 and 1, and negative pitch bend values; rounding of
+  negative joins is assumed half up).
 - The user's checks: [TEST_CHECKLIST 8o](../TEST_CHECKLIST.md).
 
 ## Phase 0 result: GO

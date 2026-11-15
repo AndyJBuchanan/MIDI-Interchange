@@ -114,9 +114,8 @@ def _report(song: rf.Song, ts: list[rf.Track], all_pieces, warn) -> None:
     clips = [p.clip for _, ps in all_pieces for p in ps]
     if any(c.info.loop for c in clips):
         warn('Looping clips are imported with their loops written out')
-    if any(pt.rest != bytes(10) for c in clips for cl in c.controllers if cl.lane_id in rf.RAMPED
-           for pt in cl.points):
-        warn('Controller curves are imported as straight lines')
+    if any(pt.curve for c in clips for cl in c.controllers if cl.lane_id not in rf.RAMPED for pt in cl.points):
+        warn('Curves on sustain, expression and aftertouch lanes are imported as jumps')
     if any(t.folder for t in ts):
         warn('Track folders are flattened')
     warn('Instruments, Player devices and track parameters are not applied; the stored notes are imported')

@@ -34,6 +34,7 @@ Note positions and lengths use MSB-first 7-bit varints (as in MIDI files).
 from __future__ import annotations
 
 import hashlib
+import math
 import struct
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -334,7 +335,29 @@ class Note:
 class Point:
     pos: int        # ticks from the clip start
     value: int
-    rest: bytes     # 10 bytes after the value (zero so far: linear)
+    rest: bytes     # 10 bytes after the value: the curve (see curvature)
+
+    @property
+    def curve(self) -> float:
+        return curvature(self.rest)
+
+
+def curvature(b: bytes) -> float:
+    """A point's curve toward the next point: an 80-bit extended float
+    (sign and 15-bit exponent, then a 64-bit mantissa with explicit integer
+    bit). 0 = straight; positive bends fast-first, negative slow-first. Reason's
+    curve handle spans about -12..12 (r26: slight up 0.5, full up 12, slight
+    down -1, full down -12)."""
+    if len(b) < 10:
+        return 0.0
+    se, m = struct.unpack_from('>HQ', b, 0)
+    if se & 0x7FFF == 0 or m == 0:
+        return 0.0
+    try:
+        v = m / 2.0 ** 63 * 2.0 ** ((se & 0x7FFF) - 16383)
+    except OverflowError:
+        return 0.0
+    return -v if se & 0x8000 else v
 
 
 @dataclass
@@ -601,18 +624,52 @@ CONTROL_DEFAULT = 0                         # value a controller returns to afte
 RAMPED = {0x01, 0xFF}                       # mod wheel, pitch bend; sustain jumps (Day 15)
 
 
-def stepped(points: list[tuple[int, int]]) -> list[tuple[int, int]]:
+CURVE_PIECES = 12
+
+
+def _shape(x: float, k: float) -> float:
+    return 1 - (1 - x) ** (1 + k) if k > 0 else x ** (1 - k)
+
+
+def curved(points: list[tuple[int, int, float]]) -> list[tuple[int, int, bool]]:
+    """(tick, value, curve) points as the straight-line points Reason's
+    export draws them with. A curved segment from (t0, v0) to (t1, v1)
+    follows v0 + (v1 - v0) * s(x), x = 0..1 across it, with s(x) = 1 - (1 - x)^(1 + k)
+    for k > 0 and x^(1 - k) for k < 0. Reason splits it into 12 straight
+    pieces, joined where the slope crosses equal steps between its start and
+    end slopes, at the curve's value there rounded to a whole number. Returns
+    (tick, value, sent): a join inside a flat run (the same value before
+    and after) still shapes the steps but is not sent itself (Day 15's Swell, every exported value
+    reproduced)."""
+    out: list[tuple[int, int, bool]] = []
+    for i, (t, v, k) in enumerate(points):
+        out.append((t, v, True))
+        if i + 1 < len(points) and k and points[i + 1][0] > t:
+            t1, v1, _ = points[i + 1]
+            joins = []
+            for j in range(1, CURVE_PIECES):
+                f = j / CURVE_PIECES
+                x = 1 - (1 - f) ** (1 / k) if k > 0 else f ** (1 / -k)
+                joins.append((round(t + x * (t1 - t)), math.floor(v + (v1 - v) * _shape(x, k) + 0.5)))
+            values = [v] + [jv for _, jv in joins] + [v1]
+            out += [(jt, jv, not values[n] == jv == values[n + 2]) for n, (jt, jv) in enumerate(joins)]
+    return out
+
+
+def stepped(points) -> list[tuple[int, int]]:
     """(tick, value) points joined by straight lines, as Reason's export
-    renders them: every point, plus a step on the song's 1/32-beat grid
-    strictly between two points of different value, at the line's value
-    there truncated toward zero (r16, r18)."""
+    renders them: every point, plus a step every 1/32 beat from each point
+    (not on the song grid: Day 15's curve pieces) strictly before the next
+    point of different value, at the line's value there truncated toward
+    zero (r16, r18). Points are (tick, value) or curved()'s (tick, value, sent)."""
     out = []
-    for i, (t, v) in enumerate(points):
-        out.append((t, v))
+    for i, (t, v, *sent) in enumerate(points):
+        if not sent or sent[0]:
+            out.append((t, v))
         if i + 1 < len(points):
-            t1, v1 = points[i + 1]
+            t1, v1 = points[i + 1][:2]
             if v1 != v and t1 > t:
-                g = (t // STEP + 1) * STEP
+                g = t + STEP
                 while g < t1:
                     out.append((g, int(v + Fraction((v1 - v) * (g - t), t1 - t))))
                     g += STEP
@@ -651,10 +708,12 @@ def _render(piece: Piece, origin: int, hard: bool) -> None:
     for lane in c.controllers:
         pts = []
         for k in reps:
-            pts += [(origin + shift + p.pos + k * loop, p.value) for p in lane.points
+            pts += [(origin + shift + p.pos + k * loop, p.value, p.curve) for p in lane.points
                     if not loop or 0 <= p.pos < loop]
         if lane.lane_id in RAMPED:
-            pts = stepped(pts)
+            pts = stepped(curved(pts))
+        else:
+            pts = [(t, x) for t, x, _ in pts]
         # the value at the start: the last point at or before it (hidden points
         # count, Oct08), else the first point's (Day01)
         held = [x for t, x in pts if t <= u] or [x for _, x in pts[:1]]

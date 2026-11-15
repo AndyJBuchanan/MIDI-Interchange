@@ -243,7 +243,6 @@ EXPECTED_NOTE_GAPS = {
     'Day01-0-3(14).mid': 'track mute is kept on Voclas Raw MIDI Ref',
 }
 CONTROL_GAPS = {     # (song, track): why Reason's export differs
-    ('Day 15(2019)-002(14).mid', 'Swell'): 'controller curves are imported as straight lines',
     ('Day 15(2019)-002(14).mid', 'PAD'): 'device automation exported as CC 64 by Reason, not imported',
     ('Day01-0-3(14).mid', 'Piano L'): 'Reason leaves out aftertouch the device does not take',
     ('Day01-0-3(14).mid', 'Piano R'): 'Reason leaves out aftertouch the device does not take',
@@ -315,3 +314,25 @@ def test_probe_song_round_trip_matches_reason_export(mid):
             assert our_ctl == their_ctl, track_name
     missing = {n for n, vs in theirs.items() if any(v[0] for v in vs)} - set(ours)
     assert not missing or name in EXPECTED_NOTE_GAPS, missing
+
+
+@pytest.mark.skipif(not PAIRS, reason='local Reason probe songs not present')
+def test_curved_mod_wheel_matches_reason_event_for_event():
+    """Day 15's Swell: three curved segments (k = 2.1, -4.7, -1.8). Every event
+    Reason exports after the clip start (where it leaves out the value 0,
+    already current) and before its end, and no others."""
+    mid = next((m for m in PAIRS if os.path.basename(m) == 'Day 15(2019)-002(14).mid'), None)
+    if mid is None:
+        pytest.skip('Day 15 not present')
+    song, _ = rf.open_song(open(mid[:-4] + '.reason', 'rb').read())
+    lo, hi = 64 * B, 88 * B
+    ours = sorted((t, v) for tr, ctl in rf.played_controls(song) if tr.name == 'Swell'
+                  for t, i, v in ctl if i == 0x01 and lo < t < hi)
+    theirs, t = [], 0
+    for tr in mido.MidiFile(mid).tracks:
+        if tr.name == 'Swell':
+            for m in tr:
+                t += m.time
+                if m.type == 'control_change' and m.control == 1 and lo < t < hi:
+                    theirs.append((t, m.value))
+    assert ours == sorted(theirs)

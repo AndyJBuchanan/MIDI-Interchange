@@ -198,6 +198,24 @@ def test_looping_clip_repeats_from_its_loop_offset():
 
 
 
+def test_curvature_is_an_80_bit_float_and_curves_split_into_twelve_pieces():
+    ext = lambda h: bytes.fromhex(h) + bytes(10 - len(bytes.fromhex(h)))
+    # r26: slight up, full up, slight down, full down, full-curve fall
+    assert [rf.curvature(ext(h)) for h in ('3ffe80', '4002c0', 'bfff80', 'c002c0')] == [0.5, 12.0, -1.0, -12.0]
+    assert abs(rf.curvature(ext('4002bccccd')) - 11.8) < 1e-6 and rf.curvature(bytes(10)) == 0.0
+    pts = rf.curved([(0, 0, 2.0), (12 * B, 120, 0.0)])
+    assert len(pts) == 13 and pts[0] == (0, 0, True) and pts[-1] == (12 * B, 120, True)
+    # join j sits where the slope 3(1 - x)^2 has fallen j/12 of the way to 0
+    x1 = 1 - (11 / 12) ** 0.5
+    assert pts[1] == (round(x1 * 12 * B), round(120 * (1 - (1 - x1) ** 3)), True)
+    # slow-first: a repeated join value still shapes the steps but is not sent
+    flat = rf.curved([(0, 0, -12.0), (4 * B, 2, 0.0)])
+    assert any(not sent for _, _, sent in flat)
+    steps = rf.stepped(flat)
+    assert steps[0] == (0, 0) and steps[-1] == (4 * B, 2)
+    assert [v for _, v in steps] == sorted(v for _, v in steps)
+
+
 def block_song(placements, mutes, blocks_on=True):
     """Transport track with Block placements [(start, length)] (all Block 1,
     offset 0), and one instrument track whose Block 1 clip holds notes at 0
