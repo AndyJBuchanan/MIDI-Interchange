@@ -3,9 +3,10 @@
 Branch: `feature/direct-daw-import-cubase`, based on and targeting
 `feature/direct-daw-import`.
 
-Status: **phase 1 complete, go** (2026-11-14). The object framing and MIDI
-part events are decoded for Cubase 15 and 16, `RIFF` and `RIF2`. Phase 2
-(musical mapping) is next. Cubase was chosen as the first native reader after
+Status: **phase 2 in progress** (2026-11-15). Phase 1 (object framing, MIDI
+part events) is complete for Cubase 15 and 16, `RIFF` and `RIF2`. Phase 2 has
+decoded part windows, trims, mute, shared copies, track mute, program change,
+tempo and signature tracks; see [Phase 2 findings](#phase-2-findings-2026-11-15). Cubase was chosen as the first native reader after
 DAWproject. Reason follows, after a short feasibility probe.
 
 The scope and rules come from the [roadmap entry](../ROADMAP.md) and the
@@ -187,6 +188,52 @@ field by field.
    setting (likely `PArrangeSetup`), so imports can decide whether bar 1
    lands at zero.
 4. Then the indy go/no-go comparison against `indy-001x.mid`.
+
+## Phase 2 findings (2026-11-15)
+
+Inspector: `cpr_inspect.py notes` now lists tracks with mute, and parts with
+window, offset, mute and shared state; `cpr_inspect.py timeline` lists tempo
+and signature points. 42 regression tests in `tests/test_cpr_inspect.py`.
+
+- **`MMidiPartEvent`:** u16 flags · f64 start · f64 length · f64 **content
+  offset** · contents. Bit 1 (`0x0002`) of the flags is **part mute** (c13;
+  Ditty 52, indy 2, GA 0, exactly as in the DAWproject exports). An end trim
+  changes only the length (c12); a start trim moves the start and sets the
+  content offset (c11: start 8160, offset 480). A note's absolute time is
+  start − offset + position; the visible window is [start, start + length).
+- **Shared copies (c16):** instead of an `MMidiPart` object, the part event
+  holds a W-byte **object back-reference**: high bit clear, value = the offset
+  of the referenced object's length field (just after its class tag or
+  declaration). An independent copy (c15) writes its own `MMidiPart`.
+- **Track mute (c14):** the mixer channel object (`MInstrumentTrack`) gains a
+  named record `SoloFlag` (i64) = 1; it is absent when unmuted. GA's two
+  muted tracks match its DAWproject. Solo bits and how a plain MIDI track
+  stores mute are not established yet (no fixture).
+- **Track names** start the track event's `MListNode` child; GA, Ditty and
+  indy names match their DAWproject tracks.
+- **Program change (c25):** the standard event layout; data = program, 0.
+  Every short MIDI event uses channel + two data bytes; poly and channel
+  pressure assumed the same (no fixture). Sysex not decoded.
+- **Channels:** a MIDI track on channel 2 (c17) writes channel byte 1 into
+  each event. Instrument-track events so far use 0.
+- **Tempo track (`MTempoTrackEvent`):** u32 count · points of f32 seconds per
+  beat · f64 seconds · f64 ticks · u16 type (1 = ramp into this point) · then
+  f32 tempo in BPM (120 in the tiers, 93 in GA; probably the fixed tempo).
+  **Ramps are linear in beats**: the stored seconds match
+  60·beats/(bpm₁−bpm₂)·ln(bpm₁/bpm₂) to 1 µs (c20). GA's native tempo track
+  has two real ramps (93→97 over beats 264–272, 97→93 over 384–432).
+  No separate "tempo track active" flag was found in `Arrangement1`.
+- **Signature track (`MSignatureTrackEvent`):** u32 count · 16-byte points of
+  u32 ticks · u16 numerator · u16 denominator · 8 bytes unknown (c21: 3/4 at
+  tick 7680).
+- **Instrument stack (c18is):** an `MFolderTrack`; no new track class.
+- **Linear time base (c26):** the part event holds seconds and the part body
+  layout differs; not decoded (deferred).
+
+Still to do in phase 2: the marker track (c22, c23), folder nesting and
+inherited mute, the display offset setting, MIDI-track mute, solo, then the
+indy go/no-go comparison against `indy-001x.mid`. Later: linear time base,
+pattern events, controller curve shapes, chord track names.
 
 ## Prior work to read first
 

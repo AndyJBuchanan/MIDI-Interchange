@@ -9,7 +9,8 @@ Usage:
     cpr_inspect.py roots FILE                 list ROOT/ARCH records
     cpr_inspect.py tree FILE [--archive NAME] [--depth N] [--offsets]
     cpr_inspect.py classes FILE [--archive NAME]
-    cpr_inspect.py notes FILE                 decoded MIDI parts and notes
+    cpr_inspect.py notes FILE                 tracks, parts (mute, trims, shared) and events
+    cpr_inspect.py timeline FILE              tempo and time-signature points
     cpr_inspect.py diff FILE_A FILE_B [--archive NAME]
     cpr_inspect.py hex FILE START END [--archive NAME]
 
@@ -152,7 +153,10 @@ class Walker:
         self.base_tag = b'\xff' * (width - 1) + b'\xfe'
         self.ref_bit = 1 << (8 * width - 1)
         self.classes: dict[int, ClassDef] = {}   # keyed by tag offsets
-        self.objects: dict[int, Obj] = {}
+        self.objects: dict[int, Obj] = {}        # keyed by tag offsets
+        # Object back-references (W bytes, high bit clear) give the offset of
+        # the object's length field, just after its class tag/declaration.
+        self.by_identity: dict[int, Obj] = {}
 
     def _name_at(self, p: int) -> tuple[str, int, int] | None:
         d = self.d
@@ -226,6 +230,7 @@ class Walker:
             if depth < max_depth:
                 o.children = self.walk(o.body_at, o.end, depth + 1, max_depth)
             self.objects[o.tag_at] = o
+            self.by_identity[o.body_at - self.w] = o
             out.append(o)
             i = o.end
         return out
@@ -245,9 +250,11 @@ CLASS_STATUS = {'MMidiNote': 0x90, 'MMidiPolyPressure': 0xA0, 'MMidiAfterTouch':
                 'MMidiProgramChange': 0xC0, 'MMidiController': 0xB0,
                 'MMidiPitchBend': 0xE0, 'MMidiSysex': 0xF0}
 # Bytes between the f64 position and the u32 that precedes the property
-# count: channel then two MIDI data bytes. Note (pitch, velocity) and
-# controller (number, value) confirmed; pitch bend (LSB, MSB) to confirm.
-DATA_BYTES = {0x90: 3, 0xB0: 3, 0xE0: 3}
+# count: channel then two MIDI data bytes. Confirmed: note (pitch, velocity),
+# controller (number, value), pitch bend (LSB, MSB; tier 3 c24), program
+# change (program, 0; c25). Poly and channel pressure assumed, no fixture yet.
+# Sysex is variable-length and not decoded.
+DATA_BYTES = {0x90: 3, 0xB0: 3, 0xE0: 3, 0xC0: 3, 0xA0: 3, 0xD0: 3}
 
 
 @dataclass
@@ -375,12 +382,118 @@ def decode_part_events(wk: Walker, part: Obj) -> tuple[list[Event], list[str], d
     return events, problems, info
 
 
+PART_MUTED = 0x0002
+
+
+@dataclass
+class PartEvent:
+    """MMidiPartEvent: a part placed on a track.
+
+    Body: u16 flags (bit 1 = muted) | f64 start | f64 length | f64 content
+    offset | the part contents: a NEW/REF MMidiPart object, or for a shared
+    copy a W-byte back-reference to an existing one. Musical time base: all
+    in ticks (480 PPQ) from the project's absolute zero; a note's absolute
+    time is start - offset + note position. Linear time base stores seconds
+    instead (tier 3 c26) and is not decoded yet.
+    """
+    obj: Obj
+    flags: int
+    start: float
+    length: float
+    offset: float
+    part: Obj | None
+    shared: bool
+
+    @property
+    def muted(self) -> bool:
+        return bool(self.flags & PART_MUTED)
+
+
+def part_event_info(wk: Walker, pe: Obj) -> PartEvent:
+    d, p, w = wk.d, pe.body_at, wk.w
+    flags = int.from_bytes(d[p:p + 2], 'big')
+    start, length, offset = struct.unpack('>ddd', d[p + 2:p + 26])
+    q = p + 26
+    part = next((ch for ch in pe.children if ch.cls.name == 'MMidiPart' and ch.tag_at == q), None)
+    shared = False
+    if part is None:
+        target = wk.by_identity.get(int.from_bytes(d[q:q + w], 'big'))
+        if target is not None and target.cls.name == 'MMidiPart':
+            part, shared = target, True
+    return PartEvent(pe, flags, start, length, offset, part, shared)
+
+
 def part_event_window(wk: Walker, part_event: Obj) -> tuple[float, float]:
-    """MMidiPartEvent: u16 ?, f64 start, f64 length (ticks)."""
-    d, p = wk.d, part_event.body_at
-    start = struct.unpack('>d', d[p + 2:p + 10])[0]
-    length = struct.unpack('>d', d[p + 10:p + 18])[0]
-    return start, length
+    info = part_event_info(wk, part_event)
+    return info.start, info.length
+
+
+# ------------------------------------------------------------ tracks/timing
+
+@dataclass
+class TempoPoint:
+    seconds_per_beat: float
+    seconds: float
+    ticks: float
+    ramp: bool           # tempo ramps (linearly in beats) from the previous point
+
+    @property
+    def bpm(self) -> float:
+        return 60.0 / self.seconds_per_beat
+
+
+def tempo_points(wk: Walker, ev: Obj) -> tuple[list[TempoPoint], float]:
+    """MTempoTrackEvent: u32 n | n x (f32 s/beat | f64 seconds | f64 ticks |
+    u16 type, 1 = ramp into this point) | f32 tempo (BPM; fixed tempo?)."""
+    d, p = wk.d, ev.body_at
+    n = int.from_bytes(d[p:p + 4], 'big')
+    p += 4
+    pts = []
+    for _ in range(n):
+        spb, = struct.unpack('>f', d[p:p + 4])
+        secs, ticks = struct.unpack('>dd', d[p + 4:p + 20])
+        typ = int.from_bytes(d[p + 20:p + 22], 'big')
+        pts.append(TempoPoint(spb, secs, ticks, typ == 1))
+        p += 22
+    fixed, = struct.unpack('>f', d[p:p + 4])
+    return pts, fixed
+
+
+def signature_points(wk: Walker, ev: Obj) -> list[tuple[int, int, int]]:
+    """MSignatureTrackEvent: u32 n | n x (u32 ticks | u16 num | u16 den |
+    8 bytes unknown). Returns (ticks, numerator, denominator)."""
+    d, p = wk.d, ev.body_at
+    n = int.from_bytes(d[p:p + 4], 'big')
+    p += 4
+    out = []
+    for _ in range(n):
+        out.append((int.from_bytes(d[p:p + 4], 'big'), int.from_bytes(d[p + 4:p + 6], 'big'),
+                    int.from_bytes(d[p + 6:p + 8], 'big')))
+        p += 16
+    return out
+
+
+TRACK_EVENTS = ('MInstrumentTrackEvent', 'MMidiTrackEvent')
+
+
+def track_name(wk: Walker, track_event: Obj) -> str:
+    """The track's name starts its MListNode child."""
+    node = next((ch for ch in track_event.children if ch.cls.name == 'MListNode'), None)
+    return _pstring(wk.d, node.body_at)[0] if node else '?'
+
+
+def track_solo_flag(wk: Walker, track_event: Obj) -> int | None:
+    """Mixer channel record 'SoloFlag' (i64) in the track's MInstrumentTrack.
+    Present with value 1 when the track is muted (tier 2 c14; GA's two muted
+    tracks); absent otherwise. Solo bits are not yet established."""
+    ch = next((c for c in track_event.children if c.cls.name in ('MInstrumentTrack', 'MMidiTrack')), None)
+    if ch is None:
+        return None
+    body = wk.d[ch.body_at:ch.end]
+    k = body.find(b'\x00\x00\x00\x09SoloFlag\x00\x00\x01')
+    if k < 0:
+        return None
+    return int.from_bytes(body[k + 15:k + 23], 'big', signed=True)   # 4 + 'SoloFlag\\0' + u16 type
 
 
 # --------------------------------------------------------------- reporting
@@ -441,31 +554,51 @@ def cmd_classes(a) -> None:
 def cmd_notes(a) -> None:
     c = read_container(a.file)
     wk, objs = walk_archive(c, 'Arrangement1')
-    stack = list(objs)
-    while stack:
-        o = stack.pop(0)
-        if o.cls.name == 'MMidiPartEvent':
-            start, length = part_event_window(wk, o)
-            for part in (ch for ch in o.children if ch.cls.name == 'MMidiPart'):
-                events, problems, info = decode_part_events(wk, part)
-                kinds: dict[str, int] = {}
-                for e in events:
-                    kinds[e.kind] = kinds.get(e.kind, 0) + 1
-                print(f"part {info.get('name', '?')!r}: start {start:g} ticks, length {length:g} ticks, "
-                      f"{len(events)}/{info.get('count')} events {kinds}")
-                for e in events:
-                    if e.status == 0x90:
-                        rel = e.props.get('OffV')
-                        relv = round(1 + 126 * rel) if isinstance(rel, float) else None
-                        print(f'  note pos {e.position:g}  pitch {e.data[0]}  vel {e.data[1]}  len {e.length:g}'
-                              f'  chan {e.channel}  release {relv}  framed {e.framed}')
-                    else:
-                        print(f'  {e.kind} pos {e.position:g}  chan {e.channel}  data {e.data.hex(" ")}'
-                              f'  framed {e.framed}')
-                for pr in problems:
-                    print('  !', pr)
-            continue
-        stack[0:0] = o.children
+    for te in sorted((o for o in wk.objects.values() if o.cls.name in TRACK_EVENTS), key=lambda o: o.tag_at):
+        flag = track_solo_flag(wk, te)
+        print(f'track {track_name(wk, te)!r} [{te.cls.name}] SoloFlag {flag}'
+              + ('  (muted)' if flag and flag & 1 else ''))
+        for pe_obj in sorted((o for o in wk.objects.values() if o.cls.name == 'MMidiPartEvent'
+                              and te.body_at <= o.tag_at < te.end), key=lambda o: o.tag_at):
+            pe = part_event_info(wk, pe_obj)
+            if pe.part is None:
+                print(f'  part event @{pe_obj.tag_at}: contents not found (linear time base?)')
+                continue
+            events, problems, info = decode_part_events(wk, pe.part)
+            kinds: dict[str, int] = {}
+            for e in events:
+                kinds[e.kind] = kinds.get(e.kind, 0) + 1
+            print(f"  part {info.get('name', '?')!r}: start {pe.start:g} length {pe.length:g} offset {pe.offset:g}"
+                  f" flags 0x{pe.flags:04x}{' MUTED' if pe.muted else ''}{' SHARED' if pe.shared else ''}"
+                  f" | {len(events)}/{info.get('count')} events {kinds}")
+            if pe.shared:
+                continue
+            for e in events:
+                if e.status == 0x90:
+                    rel = e.props.get('OffV')
+                    relv = round(1 + 126 * rel) if isinstance(rel, float) else None
+                    print(f'    note pos {e.position:g}  pitch {e.data[0]}  vel {e.data[1]}  len {e.length:g}'
+                          f'  chan {e.channel}  release {relv}  framed {e.framed}')
+                else:
+                    print(f'    {e.kind} pos {e.position:g}  chan {e.channel}  data {e.data.hex(" ")}'
+                          f'  framed {e.framed}')
+            for pr in problems:
+                print('    !', pr)
+
+
+def cmd_timeline(a) -> None:
+    c = read_container(a.file)
+    wk, _ = walk_archive(c, 'Arrangement1')
+    for o in sorted(wk.objects.values(), key=lambda o: o.tag_at):
+        if o.cls.name == 'MTempoTrackEvent':
+            pts, fixed = tempo_points(wk, o)
+            print(f'tempo track: {len(pts)} points, trailing tempo {fixed:g}')
+            for t in pts:
+                print(f'  tick {t.ticks:g} ({t.ticks / 480:g} beats)  {t.bpm:.3f} BPM  at {t.seconds:.6f} s'
+                      + ('  ramp' if t.ramp else ''))
+        elif o.cls.name == 'MSignatureTrackEvent':
+            for ticks, num, den in signature_points(wk, o):
+                print(f'signature {num}/{den} at tick {ticks} ({ticks / 480:g} beats)')
 
 
 def cmd_diff(a) -> None:
@@ -510,6 +643,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser('classes'); p.add_argument('file'); p.add_argument('--archive', default='Arrangement1')
     p.set_defaults(fn=cmd_classes)
     p = sub.add_parser('notes'); p.add_argument('file'); p.set_defaults(fn=cmd_notes)
+    p = sub.add_parser('timeline'); p.add_argument('file'); p.set_defaults(fn=cmd_timeline)
     p = sub.add_parser('diff'); p.add_argument('file_a'); p.add_argument('file_b')
     p.add_argument('--archive', default='Arrangement1'); p.set_defaults(fn=cmd_diff)
     p = sub.add_parser('hex'); p.add_argument('file'); p.add_argument('start', type=int); p.add_argument('end', type=int)
