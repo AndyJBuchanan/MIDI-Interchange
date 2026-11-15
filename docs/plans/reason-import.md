@@ -257,20 +257,23 @@ Reason export, imported and exported by the app, against that export).
   slight and full-down curves. Tempo clips can't be curved (user: r28 not
   possible). Pitch bend runs -8191..8191: a -8192 point plays as -8191, and
   steps truncate toward zero (r27).
-- **Open (strongest curves, k about 12):** the last piece of a fast-first
+- **Accepted gap (strongest curves, k about 12):** the last piece of a fast-first
   curve runs about 6% steeper than the line between its joins: it reaches
   the end value after 47,184 of its 49,948 ticks (r27, pinned exactly; r26
   agrees) and holds or clamps there. At k = 2.1 (Day 15) the effect is
   under 0.7%, so it depends on k. And a few pitch-bend joins round toward
   zero where half up predicts otherwise (r27: -459.73 → -459). Effect: within
   one mod-wheel step, or 64 of 16383 bend (`test_strong_curves_are_close`).
+  Accepted as close enough for practical purposes (user, 2026-11-15). To
+  close it later: r28 = r27 with five 4-beat pitch-bend falls (+100% to
+  -100%) at about quarter, half, three-quarter and full fast-first strength,
+  plus a full-strength fall over 8 beats, exported; fit how the last piece's
+  steepening depends on k and segment length.
 - TRDC byte 18 (once taken for the track kind) varies 0..0x0E across songs,
   probably the track colour.
 
 ### Next
 
-- Strongest-curve last piece: needs pitch-bend curves at several strengths
-  (r28) to find how the steepening depends on k.
 - The user's checks: [TEST_CHECKLIST 8o](../TEST_CHECKLIST.md).
 
 ## Phase 0 result: GO
