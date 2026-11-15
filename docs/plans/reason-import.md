@@ -1,6 +1,8 @@
 # Plan: native Reason song import (`.reason`), feasibility
 
-Status: **Phase 0 probe done: GO for Reason 13 and 14 songs** (2026-11-15).
+Status: **Phase 1 (format decoding) done** (2026-11-15): the r-series decodes
+note-for-note against Reason's MIDI exports; see [Phase 1 findings](#phase-1-findings).
+Phase 0 probe: GO for Reason 13 and 14 songs.
 Those are plain, structured IFF. Songs saved by Reason 12 and earlier have an
 encrypted payload and are out of scope (see [Phase 0 result](#phase-0-result-go)). The
 desk study below was written before any file was examined; where it conflicts
@@ -71,6 +73,96 @@ marker**. Not stated: PPQ, and whether muted clips, lanes or tracks are
 exported. The fixtures below settle that. Two consequences for fixtures: set
 the End marker after the last note, and expect channel 1 everywhere.
 
+## Phase 1 findings
+
+Decoder: `midi_interchange/core/reason_format.py`; research CLI:
+`tools/reason_inspect.py` (`copies`, `tree`, `tracks`, `diff`); tests:
+`tests/test_reason_format.py` (synthetic files, plus the r-series against the
+MIDI exports when the local fixtures are present).
+
+**Result: all 16 exported r-files render exactly the notes Reason exported**
+(position, pitch, velocity, length), including trims, the moved clip, muted
+clip, muted lane, two tracks, converted Redrum and Blocks. Every Reason 13 and
+14 real-world song in the probe set decodes in hundredths of a second.
+
+### Container: a paged store, not a single song
+
+- Header: `X15_FILE`, u32 page size (0x40000), u32 0x24, u64, u64 (an index
+  page, but not reliably the newest), 5 x u32 not decoded.
+- An **index page** (8 x 0xFF) lists streams: id, byte size, page list. Stream
+  1 is the song; other streams are embedded samples. Pages need not be
+  contiguous.
+- The song stream is `FORM X15S` + `Hash`; **the Hash is SHA-256 of the FORM
+  chunk**, so stale or partly overwritten copies are detected exactly.
+- A save writes a new song and index to free pages; the previous ones survive
+  until reused. **Many files hold two verified songs.** Rule adopted: the
+  newest is the verified copy whose index is on the **highest page**. It fits
+  every case with known order (10 two-copy r-files checked against exports,
+  a folders/no-folders pair, and the files mixing an older Reason's copy with
+  a 13/14 copy). The header pointer named the older copy in some files and
+  the newer in others, so it is not used. *To confirm (question 4 below).*
+- Note: an early pass took the last copy in the file and wrongly suggested the
+  r-saves lagged by a step. They did not; the fixtures are as described.
+
+### Song structure (RS1300)
+
+Records mostly start `BC <version> 00 00 00`. Times are ticks at **15360 PPQ**
+(Reason's MIDI export uses the same). Varints are MSB-first 7-bit (as MIDI).
+
+| Chunk path | Meaning |
+| --- | --- |
+| `CAT WWWI` | Metadata: `PROGRAMVERSION`, `SONGTEMPO` (milli-BPM), `SONGSIGNATURE`, song length |
+| `CAT RS10/CAT DEVL/FORM DEVI/DESC` | Rack device: u32 id at 6, name. **A track's name is its device's name** |
+| `CAT SQCT/CAT TTCT/FORM TFFM/CAT TFCT` | Reason 14 track list, inside a `Root` folder; nested `FORM TFFM` are **track folders** (`TFDC` holds the name) |
+| `CAT SQCT/CAT TSCT` | Reason 13 track list (no folders) |
+| `FORM TRFM/TRDC` | Track: u16 device id at 11, **mute** at 13, kind at 18 (0x0A instrument, 0x0B pattern device) |
+| `CAT LNCT/FORM LANF/LANC` | Lane: kind at 5 (0x59 notes, 0x5A pattern, 0x5B/0x5D automation), name, **lane mute** (last byte) |
+| `CAT LCCT/FORM LCFM/LCAI` | Clip's Block: 0 = in the song, n = belongs to Block n |
+| `FORM SNIF/SNIC` | Clip: u32 start at 5, u32 length at 9, name at 21, **clip mute** after the name |
+| `SNTE` | Notes: u32 count, each (varint delta, pitch, velocity, varint length, 1 byte); then u32 controller lane count, each (id: 0x01 mod wheel, 0x0B expression, 0x40 sustain, 0xFF pitch bend, 0xFD unknown; i32 min, max; points) |
+| `SAUT` | Automation clip: kind (0 tempo, 2 time signature, others are device parameters), i32 min, max, points |
+| `SPTN` | Pattern clip (Redrum, Matrix...): bank/pattern; notes live in the device |
+| `SBLK` | Block placement on the Transport track's Blocks lane |
+| `FORM SASF` | Audio clip (skip) |
+| `CAT SACT/SADC` | Block definitions (`Block 1`...: id, length, name) |
+
+Points (controllers and automation): varint delta, i32 value, 10 bytes. The 10
+bytes are zero for straight lines; non-zero values appear in a few songs and
+look like a float curve factor (to decode later; Cubase decision 6 applies).
+
+### Musical rules confirmed by the exports
+
+- **Notes are relative to the clip start**; a clip's length hides notes past
+  it. Trimming the start moves the clip and rewrites the note offsets.
+- **Muted clips and muted lanes do not export; muted and soloed tracks do**
+  (Reason's export ignores track mute and solo).
+- **Tempo:** global tempo (metadata) outside tempo clips; inside, points joined
+  by straight lines (a ramp is two points). Exported as 1/32-beat steps.
+- **Time signature:** clip-based like tempo; value = denominator << 8 | numerator.
+- **Controllers:** points joined by straight lines; exported at 1/32 beat.
+- **Pattern clips are not exported** (r21); converting to notes is (r22).
+- **Blocks are rendered** at each placement (r24).
+- **Transport track** is track 0 (named after the hardware interface device in
+  the rack; Reason's export calls it `Transport`). Track 1 is the master section.
+
+### Not found yet
+
+- **Track solo**: no byte changed where r20's solo was made (question 1).
+- The 1 byte after each note's length (0 in the r-series; 1 on 642 notes in
+  real songs).
+- Controller id 0xFD; curve bytes; what decides a Block placement shorter than
+  its Block.
+
+### Next: phase 2 (reader)
+
+`core/import_reason.py` mapping songs onto the workspace through the reader
+registry, as for Cubase: tracks named from devices, folders kept as path
+names, clips with trims and mute, lanes merged into their track with lane mute
+applied as clip mute, Blocks rendered, tempo map and signatures from the
+Transport clips (ramps as steps, as for Cubase decision 5), controllers
+rendered at Reason's density, pattern and audio clips reported as skipped,
+pre-13 songs refused with a re-save message.
+
 ## Phase 0 result: GO
 
 Probed 2026-11-15 with 62 `.reason` files (Reason 6, 9, 10, 11, 12, 13 and 14,
@@ -107,11 +199,7 @@ note), kept locally in the git-ignored `samples/reason-probe/`.
   embedded device assets, one chunk of 687 KB in the empty song), `RACK`,
   `CAT CCTL` (cables), then **`CAT SQCT`, the sequencer**: `TRDC` (track data),
   `CAT SACT` (one `FORM SAFM`/`SADC` per automation lane or track record).
-- **Two copies.** Most files hold two generations of the song at different
-  pages (journalled saves), usually of equal or near-equal size. Some copies
-  fail to walk (a stale, partly overwritten earlier generation). The reader
-  must choose the current copy; the header counts are the first thing to
-  decode for that.
+- **Two copies.** Superseded by the page-store description in Phase 1 below.
 - **A one-note change** rewrites the song body but not the container: r01 and
   r02 have identical headers and metadata layout; only the BODY and `Hash` differ.
 - **Sizes:** self-contained songs reach about 100 MB (samples embedded); the
@@ -181,14 +269,18 @@ marker after the last note), as for Cubase.
 
 ## Questions for later
 
-1. **Blocks:** do you use Blocks mode? If so, should an import render the song
-   as the Blocks track arranges it, or import only clips placed directly in
-   the song?
-2. **Pattern devices and Players:** how often do your songs rely on Redrum,
-   Matrix or Players without converting to notes? This decides whether
-   "reported as skipped" is acceptable.
-3. **Versions:** Reason 14 only at first, with a clean "unsupported version"
-   message for others?
+1. **Solo:** open r20 in Reason. Is `Basic FM Pluck` soloed? Did you use the
+   sequencer track's S button or the mixer? (Nothing in the saved song changed
+   for it.)
+2. **Blocks:** do you use Blocks mode? If so, should an import render the song
+   as the Blocks track arranges it (current plan, matching Reason's export)?
+3. **Pattern devices and Players:** Reason's own export leaves unconverted
+   pattern clips out. Is "reported as skipped" acceptable, or should patterns
+   be rendered from the device later (as Cubase decision 8)?
+4. **Which copy Reason opens:** open r04 in Reason. Is the note's velocity 64?
+   (If it shows 100, Reason opens the older copy and the rule must change.)
+5. **Versions:** Reason 13 and 14 read; older songs refused with "re-save in
+   Reason 13 or later". Agreed?
 
 ## Sources
 
