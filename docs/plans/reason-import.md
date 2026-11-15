@@ -174,7 +174,7 @@ keep export options the same throughout.
 | r22 ✱ | r21 with the pattern track converted to notes in Reason |
 | r23 ✱ | A Player device on the first track (expect: reported) |
 | r24 ✱ | Blocks: Block 1 (two bars) holds a new clip on one of `Lead`'s two note lanes with one note, A3 velocity 100, block beat 1, one beat; Blocks track enabled, Block 1 placed at bars 25 and 27; song extended, End marker after bar 29 |
-| r25 | A self-contained save of r20 (size and structure only) |
+| ~~r25~~ | Dropped: r20 uses only factory-library content, so a self-contained save embeds nothing. Large files are covered by real Reason 14 songs (`Sep13-01-02-hallow-01`, 85 MB; `PianoGuitarDrums-v02f(14)-NoEZ`, 100 MB) |
 
 Real-world: two or three of your own songs, each with a MIDI export (End
 marker after the last note), as for Cubase.
