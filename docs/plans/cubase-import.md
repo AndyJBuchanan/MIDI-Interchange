@@ -360,6 +360,7 @@ this fast.
 | c16 ✱ | From c14 + unmute, make the bar 9 copy a shared copy instead (Option/Alt-Shift-drag) |
 | c17 ✱ | Add a **MIDI track** (not an instrument track; Add Track ▸ MIDI), output to any instrument or Not Connected, MIDI channel 2 in the Inspector, with one part and one note. All realistic fixtures use instrument tracks only, so this is the only MIDI-track example |
 | c18 ✱ | Put both tracks in a folder track |
+| c18is ✱ | Optional, Cubase 16: from c17, move the instrument track To New Instrument Stack instead (only instrument tracks can be stacked) |
 
 ### Tier 3: tempo, meter, markers, controllers (phase 2)
 
@@ -414,6 +415,11 @@ the existing files too.
   sixteenth (length 3240 ticks). Still to decode: the start-trim offset (notes
   stay relative to the untrimmed origin), part and track mute, and the shared
   copy in c16 (its part event refers back to the first part's contents).
+  `c18is` (instrument stack) decodes as is: the stack is saved as an
+  `MFolderTrack` holding the instrument track, plus `VstInstrumentMidiChannel`,
+  `SoloManager` and `NodePath` objects. Cubase's MIDI export names the stacked
+  track after the stack ("Instrument Stack 01"), not the member ("Lead"):
+  decide in phase 2 which name imports use.
 
 ## Questions for you
 
