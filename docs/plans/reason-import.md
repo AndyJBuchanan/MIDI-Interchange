@@ -1,7 +1,8 @@
 # Plan: native Reason song import (`.reason`), feasibility
 
-Status: **Phase 0 probe done: GO** (2026-11-15). Song files are plain,
-structured IFF, not encrypted (see [Phase 0 result](#phase-0-result-go)). The
+Status: **Phase 0 probe done: GO for Reason 13 and 14 songs** (2026-11-15).
+Those are plain, structured IFF. Songs saved by Reason 12 and earlier have an
+encrypted payload and are out of scope (see [Phase 0 result](#phase-0-result-go)). The
 desk study below was written before any file was examined; where it conflicts
 with the probe, the probe wins. Work is on `feature/direct-daw-import-reason`.
 
@@ -76,11 +77,23 @@ Probed 2026-11-15 with 62 `.reason` files (Reason 6, 9, 10, 11, 12, 13 and 14,
 several songs saved in more than one version) plus r01 (empty) and r02 (one
 note), kept locally in the git-ignored `samples/reason-probe/`.
 
-- **Not encrypted.** The "encrypted from Reason 6 to 12.5" claim does not hold
-  for song files: every `.reason` from Reason 6 to 14 has the same container and
-  parses. (Reason 14's *clipboard* payload is a different matter and stays
-  unexplained.) `.rns` songs (Reason 5) are a different format, H = 8.00 from the
-  first byte (compressed or encrypted); out of scope.
+- **Split by the BODY magic, not by file extension.** The container is plain IFF
+  in every version, but the song's `BODY` chunk begins with a 128-byte plain
+  header whose magic names the generation, and after it:
+  - `RS1300` (Reason 13 and 14; 83 copies seen): `CAT RS10` follows in plain
+    IFF at +128. **Readable.**
+  - `RSN600` (6), `RSN900`/`RSN999` (9/9.5), `RS1000` (10), `RX1100` (11),
+    `RS1200` (12; 33 copies seen in all): random-looking bytes follow at +128.
+    **Payload encrypted.**
+  This matches the Reason Studios statement quoted earlier (encrypted from
+  Reason 6 up to 12.5). In a file saved by 13.x the stale second copy may still
+  be an old `RS1200` save, which is why one file can show both.
+- **Rule applied:** we do not break encryption. A song whose BODY magic is not
+  `RS1300` is refused with a clear message ("saved by Reason N; open and re-save
+  in Reason 13 or later"). Re-saving works: the `Grandfathered/` songs were
+  opened and re-saved in Reason 14 and are all `RS1300`.
+- `.rns` songs (Reason 5) are a different format, H = 8.00 from the first byte;
+  out of scope. Reason 14's *clipboard* payload is still unexplained and unrelated.
 - **Container:** a 52-byte header starting `X15_FILE`, then 256 KiB pages
   (file size = 52 + n x 262144). Header fields (big-endian u32 from offset 8):
   page size 0x40000, 36, 0, then two small counts that vary per file (meaning
