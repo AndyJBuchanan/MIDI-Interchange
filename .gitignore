@@ -12,3 +12,6 @@ scripts/signing.local.env
 
 # User's transient test notes (never commit)
 *delete-me*
+
+# Cubase auto-save backups inside fixture folders (never commit)
+samples/**/Auto Saves/

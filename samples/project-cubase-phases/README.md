@@ -31,3 +31,11 @@ Cubase 16.0.5 only (tier 1 showed the musical encoding matches 15).
 channel 2; c18 puts both tracks in a folder. `c18is` is c17 with the
 instrument track moved To New Instrument Stack instead (only instrument tracks
 can be stacked, so the stack holds one track and the MIDI track stays outside).
+
+## Tier 3 (2026-11-15)
+
+Cubase 16.0.5. `c19`–`c26.cpr`, with MIDI exports for c19–c22 and c24–c26.
+Built on tier 2 (the Lead track keeps its bar 9 copy; the MIDI track is on
+channel 2). c24's CC1 ramp and pitch bend, and c25's program change and
+sustain, are in the MIDI track's part at bar 1. c26 switches the Lead track to
+linear time base.

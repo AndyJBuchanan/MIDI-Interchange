@@ -420,6 +420,19 @@ the existing files too.
   `SoloManager` and `NodePath` objects. Cubase's MIDI export names the stacked
   track after the stack ("Instrument Stack 01"), not the member ("Lead"):
   decide in phase 2 which name imports use.
+- **Tier 3**, Cubase 16.0.5 (2026-11-15). First results:
+  - Pitch bend data bytes are LSB, MSB (stored `3c 10` = 2108 = −6084 from
+    centre, as exported); CC1 value matches.
+  - **Controller and pitch-bend curves are stored as points and rendered on
+    export:** c24 stores 2 CC1 and 12 pitch-bend points; Cubase exports 36 and
+    251 messages. A tempo ramp (c20) exports as 10 stepped tempo events.
+  - Cubase exports a cycle marker (c23) as a marker at its start ("Intro").
+  - **Linear time base (c26) stores seconds:** the Lead part event reads
+    start 9.266, length 4.5 (6.75 beats at 90 BPM), and the part body layout
+    changes. Defer linear tracks until musical tracks work; the user never
+    uses them.
+  - Not yet decoded: program change (status `C0`), tempo, signature and
+    marker tracks.
 
 ## Questions for you
 
@@ -434,5 +447,8 @@ the existing files too.
    replacing them going forward does not.
 4. **Range markers.** Map cycle markers to a marker at their start (named), or
    skip them with a diagnostic?
+6. **Controller curves.** Cubase stores CC/pitch-bend curve points and renders
+   them densely on export (c24: 2 → 36 CC1, 12 → 251 bends). Proposal: import
+   the stored points with a diagnostic first; render curves later if needed.
 5. **Tempo ramps.** DAWproject fails on ramps. For Cubase, should the reader
    approximate ramps with fine steps (and say so), or fail as DAWproject does?
