@@ -2,6 +2,7 @@
 """Compare actual app-exported MIDI against paired DAW MIDI exports.
 
 Run: .venv/bin/python scripts/compare_project_exports.py [project-set-directory]
+Compares each .dawproject and native .cpr project with the set's MIDI export.
 The comparison serializes and reparses the app output, normalizes PPQ, handles
 velocity-zero note-offs, and separates one-reference-tick differences from changed
 note lengths and unmatched notes. No source files are rewritten.
@@ -137,14 +138,17 @@ if __name__ == '__main__':
                         help='Explicit diagnostic export window, rebased to zero; never inferred or applied to input files')
     args = parser.parse_args()
     windows = {name: (Fraction(start), Fraction(end)) for name, start, end in args.window}
-    projects = sorted(args.directory.glob('*.dawproject'))
+    projects = sorted(args.directory.glob('*.dawproject')) + sorted(args.directory.glob('*.cpr'))
     unknown = windows.keys() - {p.stem for p in projects}
     if unknown:
         parser.error('Unknown project window: ' + ', '.join(sorted(unknown)))
     results = []
     for project in projects:
-        midi = project.with_suffix('.mid')
-        if not midi.exists():
-            midi = Path(str(project)+'.midi')
+        # Native and DAWproject exports of a set share one MIDI reference.
+        candidates = [project.with_suffix('.mid'), Path(str(project) + '.midi'),
+                      project.with_suffix('.dawproject.midi')]
+        midi = next((m for m in candidates if m.exists()), None)
+        if midi is None:
+            continue
         results.append(compare(project, midi, window=windows.get(project.stem)))
     print(json.dumps(results, indent=2))

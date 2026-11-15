@@ -131,8 +131,31 @@ def test_schema_v1_upgrade_preserves_workspace_and_reference_exports(tmp_path):
         assert [[label, data.hex()] for label, data in export_bytes(restored, mode)] == expected[mode.value]
     store.save(session)
     saved = json.loads(store.path.read_text())
-    assert saved['schema_version'] == SCHEMA_VERSION == 3
+    assert saved['schema_version'] == SCHEMA_VERSION == 4
     assert all(s['data']['raw']['data'] == '' for s in saved['workspace']['sources'])
+    assert encode(store.load()) == encode(session)
+
+
+def test_schema_v3_upgrade_preserves_workspace_and_reference_exports(tmp_path):
+    # Captured with the unchanged schema-3 codec at 1b41455: rich SMF workspace
+    # plus a DAWproject import with a looped, aliased and disabled clip.
+    fixtures = Path(__file__).parent / 'fixtures'
+    original = (fixtures / 'session-v3.json').read_bytes()
+    expected = json.loads((fixtures / 'session-v3-exports.json').read_text())
+    store = SessionStore(tmp_path)
+    store.path.write_bytes(original)
+    session = store.load()
+    assert store.path.read_bytes() == original  # upgrading in memory does not write
+    sources = session.workspace['sources']
+    assert [s.input_format for s in sources] == ['smf', 'smf', 'dawproject']
+    assert all(s.display_bar_offset is None for s in sources)
+    restored = Workspace()
+    restored.restore(session.workspace)
+    assert any(c.muted for t in restored.tracks for c in t.clips)
+    for mode in ExportMode:
+        assert [[label, data.hex()] for label, data in export_bytes(restored, mode)] == expected[mode.value]
+    store.save(session)
+    assert json.loads(store.path.read_text())['schema_version'] == 4
     assert encode(store.load()) == encode(session)
 
 

@@ -51,7 +51,7 @@ Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 
 
 ### Step 1: Bring MIDI in
 
-Drag MIDI from another app, or `.mid` / `.dawproject` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
+Drag MIDI from another app, or `.mid` / `.dawproject` / `.cpr` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
 
 DAWproject 1.0 imports arrangement MIDI, clip positions and mute states, stepped
 tempo changes, time signatures and markers. Audio, plug-ins and automation
@@ -60,6 +60,17 @@ are currently unsupported. Right-click a clip to **Mute Clip** or **Unmute Clip*
 muted clips remain visible and are excluded from exports. Cubase 15/16 fixtures
 are covered by automated tests; studio verification is pending. See the
 [supported scope and comparison results](docs/plans/dawproject-import.md).
+
+Cubase 15 and 16 projects (`.cpr`) import directly, without exporting from
+Cubase: arrangement MIDI parts with their trims, part and track mute/solo
+(folders flattened), shared copies, notes, controllers, pitch bend and program
+changes, tempo changes and time signatures, and markers (a cycle marker
+becomes a start marker plus a closing `name |` marker). Tempo ramps are
+approximated with a step every beat. The project file is only read. Audio,
+Pattern Editor parts, the chord track, instruments, MIDI inserts/modifiers,
+controller curve shapes and linear-time-base tracks are reported as skipped.
+Cubase's display bar offset is recorded in Source Info but not applied. See the
+[Cubase plan](docs/plans/cubase-import.md).
 
 ![Dragging a clip in, with the landing preview](docs/images/02-drag-in.png)
 

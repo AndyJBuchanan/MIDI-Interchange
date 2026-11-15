@@ -3,12 +3,14 @@
 Branch: `feature/direct-daw-import-cubase`, based on and targeting
 `feature/direct-daw-import`.
 
-Status: **phase 2 complete, go** (2026-11-15). Phase 1 (object framing, MIDI
+Status: **phase 3 implemented** (2026-11-15): the reader is in the app;
+manual checks are in [TEST_CHECKLIST section 8n](../TEST_CHECKLIST.md#8n-cubase-project-import-feature-direct-daw-import-cubase).
+Phase 2 complete, go (2026-11-15). Phase 1 (object framing, MIDI
 part events) is complete for Cubase 15 and 16, `RIFF` and `RIF2`. Phase 2 has
 decoded part windows, trims, mute, shared copies, track mute and solo,
 program change, tempo and signature tracks, markers, folders and the display
 offset, and indy matches Cubase's MIDI export; see
-[Phase 2 findings](#phase-2-findings-2026-11-15). Phase 3 (the reader) is next. Cubase was chosen as the first native reader after
+[Phase 2 findings](#phase-2-findings-2026-11-15) and [Phase 3](#phase-3-the-reader-2026-11-15). Cubase was chosen as the first native reader after
 DAWproject. Reason follows, after a short feasibility probe.
 
 The scope and rules come from the [roadmap entry](../ROADMAP.md) and the
@@ -286,6 +288,55 @@ of this.
 
 Open for phase 3 or later: linear time base, pattern
 events, controller curve shapes, chord track names, and sysex.
+
+## Phase 3: the reader (2026-11-15)
+
+- **Code.** `core/cpr_format.py` holds all format decoding (moved from the
+  inspector, which now imports it); `core/import_cubase.py` maps it onto the
+  model; `interchange/readers.py` registers `.cpr` (path-backed, detected by
+  extension or by the `RIFF`/`RIF2` + `NUND` magic). The tag scan jumps
+  between candidate bytes (`0x80`/`0xFF`): Ditty decodes in 0.04 s instead of
+  1.26 s, fast enough for drag-enter previews.
+- **Mapping.** One track per instrument/MIDI track with parts; clip zero is
+  the part's content zero (or its visible start when the part was extended
+  before its content: GA's negative offsets); trims and part mute map
+  directly; shared copies share one event list; fractional ticks are kept as
+  exact fractions (denominator-bounded). Notes carry release velocity from
+  `OffV`. Track mute/solo come from the state flags; folder state is applied to
+  contained tracks with a diagnostic. Instrument-stack parts arrive under the
+  stack track's name, as in Cubase's export. Tempo points become a stepped map
+  (ramps: one step per beat at the midpoint tempo; within about 0.02 BPM of
+  Cubase's own export steps); signatures map directly; markers go on an
+  auxiliary Markers track, with `name |` closing markers per decision 4.
+- **Source.** `input_format='cubase'`, `format_version` and `app` from the
+  `Version` archive, PPQ 480, `display_bar_offset` recorded (decision 7;
+  session schema 4 with a captured schema-3 upgrade fixture). Source Info shows
+  a "Display" line when the offset is non-zero.
+- **Diagnostics and failures.** Reported as skipped: audio, Pattern Editor
+  parts, the chord track, instruments/inserts/modifiers/track parameters,
+  controller curve shapes, linear-time-base tracks, and any part events after
+  an undecodable one (sysex). Versions other than Cubase 15/16, damaged files
+  and invalid values fail with `ImportError_` before the workspace changes.
+- **Evidence** (`tests/test_import_cubase.py`, 24 tests;
+  `scripts/compare_project_exports.py` now also compares `.cpr` projects):
+  - Note, muted-part and muted-track counts equal the DAWproject exports for
+    Ditty, GA and indy.
+  - indy through the real exporter vs Cubase's MIDI in [3, 196): all notes
+    match exactly except the two known Texture Bed tails.
+  - The native reader matches Cubase's MIDI exports more exactly than the
+    DAWproject route (e.g. Ditty Rare Flutes 47/47 exact vs 29 + 18 within a
+    tick; GA HALion Sonic 80/80 vs 68 + 12), because Cubase's DAWproject export
+    rounds positions through seconds.
+  - GA: the two readers agree within one tick before beat 264. After GA's
+    first tempo ramp, DAWproject positions drift (271.83 for 272) because
+    Cubase's DAWproject export keeps seconds but reduces ramps to steps; native
+    positions stay on the beat grid. This explains the earlier "first BPM
+    change near 271.834" observation.
+  - GA's windowed comparison shows five reference notes starting exactly at
+    the window end (beat 192, no note-off in Cubase's export); native positions
+    place them at 192, outside [0, 192). A boundary artefact, not a reader
+    fault.
+- **Full suite:** 521 passed, 3 platform skips.
 
 ## Prior work to read first
 
