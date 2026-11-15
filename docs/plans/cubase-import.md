@@ -3,10 +3,12 @@
 Branch: `feature/direct-daw-import-cubase`, based on and targeting
 `feature/direct-daw-import`.
 
-Status: **phase 2 in progress** (2026-11-15). Phase 1 (object framing, MIDI
+Status: **phase 2 complete, go** (2026-11-15). Phase 1 (object framing, MIDI
 part events) is complete for Cubase 15 and 16, `RIFF` and `RIF2`. Phase 2 has
-decoded part windows, trims, mute, shared copies, track mute, program change,
-tempo and signature tracks; see [Phase 2 findings](#phase-2-findings-2026-11-15). Cubase was chosen as the first native reader after
+decoded part windows, trims, mute, shared copies, track mute and solo,
+program change, tempo and signature tracks, markers, folders and the display
+offset, and indy matches Cubase's MIDI export; see
+[Phase 2 findings](#phase-2-findings-2026-11-15). Phase 3 (the reader) is next. Cubase was chosen as the first native reader after
 DAWproject. Reason follows, after a short feasibility probe.
 
 The scope and rules come from the [roadmap entry](../ROADMAP.md) and the
@@ -232,13 +234,42 @@ and signature points. 42 regression tests in `tests/test_cpr_inspect.py`.
 - **Signature track (`MSignatureTrackEvent`):** u32 count · 16-byte points of
   u32 ticks · u16 numerator · u16 denominator · 8 bytes unknown (c21: 3/4 at
   tick 7680).
-- **Instrument stack (c18is):** an `MFolderTrack`; no new track class.
+- **Folders (c18):** an `MFolderTrack` holds its own `MTrackList`, whose body
+  starts with the folder's name. Every project has a built-in
+  "Input/Output Channels" folder (device, tempo and signature tracks).
+  Folder mute/solo is not decoded (no fixture; a c18 with the folder muted
+  would isolate it).
+- **Instrument stack (c18is):** also an `MFolderTrack`, containing a MIDI
+  track named after the stack. Stacking **moves the parts onto that stack
+  track**; the member instrument track is left empty. Cubase's export naming
+  ("Instrument Stack 01") is therefore literal; imports should use it too.
+- **Markers (c22, c23):** the marker track's `MListNode` holds a count, then
+  `MMarkerEvent` / `MRangeMarkerEvent` objects: string name · u32 id · u16 ·
+  f64 start · f64 **length** (ticks; 0 for plain markers). indy's contiguous
+  sections (each 32 beats, each ending where the next starts) confirm length,
+  not end. Cubase's MIDI export writes plain marker meta events at starts.
+- **Display offset (c02-1):** `PArrangeSetup` i32 at body offset 84, in bars:
+  0 normally, −1 for one blank bar before bar 1. Ditty −3, indy −1, GA 0.
+  **The absolute timeline is unaffected, and Cubase's MIDI export ignores the
+  offset**: Ditty's first notes are a six-beat pickup at absolute beat 6, before
+  its displayed bar 1 (beat 12), and its export has them at beat 6.
 - **Linear time base (c26):** the part event holds seconds and the part body
   layout differs; not decoded (deferred).
 
-Still to do in phase 2: the marker track (c22, c23), folder nesting and
-inherited mute, the display offset setting, then the indy go/no-go comparison against `indy-001x.mid`. Later: linear time base,
-pattern events, controller curve shapes, chord track names.
+### Phase 2 go decision
+
+**Go.** indy's four available tracks match Cubase's own MIDI export in the
+explicit [3, 196) window: all **663 notes** match in onset, pitch, velocity
+and channel, and lengths match within one tick, except the two known Texture
+Bed tails (the clip-edge policy, the same residue as DAWproject). Cubase
+stores **fractional ticks** (e.g. 102.953) and rounds them on export; the reader
+should keep the fractions. The 644 missing drum notes are Pattern Editor data
+(`MPatternEvent`), as expected. `tests/test_cpr_inspect.py` (57 tests) pins all
+of this.
+
+Open for phase 3 or later: folder mute/solo, linear time base, pattern
+events, controller curve shapes, chord track names, sysex, and a structural
+parse of the track header that holds the state flags.
 
 ## Prior work to read first
 
@@ -511,3 +542,12 @@ the existing files too.
 6. **Controller curves.** Defer rendering. Import the stored points (with a
    diagnostic) and decode the curve shapes and control points, so rendering and
    its density can be decided later.
+
+### Pending decision
+
+7. **Display offset.** Proposal: keep Cubase's **absolute timeline**, as its own
+   MIDI export does, and record the display offset in the source details
+   (with a diagnostic such as "Cubase shows bar 1 at bar 4 of this import").
+   Shifting so Cubase's bar 1 becomes bar 1 would make bar numbers agree with
+   Cubase, but material before bar 1 (Ditty's pickup) would need negative time,
+   which the model does not have.
