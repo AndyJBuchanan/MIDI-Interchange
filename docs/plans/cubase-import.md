@@ -370,7 +370,7 @@ this fast.
 | c20 ✱ | Change that to a ramp from bar 3 to bar 5 |
 | c21 ✱ | Time-signature change to 3/4 at bar 5 |
 | c22 ✱ | Marker track with a marker named `Verse` at bar 2 and `Chorus` at bar 6 |
-| c23 | One cycle (range) marker named `Intro`, bars 1–3 |
+| c23 | One cycle (range) marker named `Intro`, bars 1–3 inclusive: start 1.1.1.0, end 4.1.1.0 |
 | c24 ✱ | In the first part, a mod wheel (CC1) ramp and a pitch bend |
 | c25 ✱ | Program change and sustain pedal (CC64) on/off |
 | c26 | Switch the first track to linear (seconds) time base |
