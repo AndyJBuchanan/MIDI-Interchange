@@ -467,7 +467,7 @@ class MainWindow(QMainWindow):
         m = QMenu(self)
         title = m.addAction(f"Clip: {clip.name or track.name}")
         title.setEnabled(False)
-        m.addAction("Unmute Clip" if clip.muted else "Mute Clip", lambda: self.ctl.toggle_clip_mute(clip_id))
+        m.addAction("Unmute Clip\tM" if clip.muted else "Mute Clip\tM", lambda: self.ctl.toggle_clip_mute(clip_id))
         m.addAction("Duplicate Clip (after it)", lambda: self.ctl.duplicate_clip(clip_id))
         a = m.addAction("Butt Against Previous Clip", lambda: self.ctl.snap_clip_to_previous(clip_id))
         a.setEnabled(any(c is not clip and c.start < clip.start for c in track.clips))

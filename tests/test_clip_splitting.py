@@ -246,3 +246,19 @@ def test_shift_move_copy_uses_original_track_and_time(win, copy, new_track):
     QTest.mouseRelease(tl.viewport(), Qt.LeftButton, Qt.AltModifier, p)
     ctl.undo()
     assert ctl.ws.snapshot() == before
+
+
+def test_m_key_mutes_clip_under_pointer_and_undoes(win):
+    tl, ctl = win.timeline, win.ctl
+    c = clip_of(ctl.ws)
+    tl._pointer = point(tl, 2)
+    QTest.keyClick(tl.viewport(), Qt.Key_M)
+    assert c.muted
+    tl.grab()                                # paints the cross without error
+    QTest.keyClick(tl.viewport(), Qt.Key_M)
+    assert not c.muted
+    ctl.undo()
+    assert clip_of(ctl.ws).muted
+    tl._pointer = None
+    QTest.keyClick(tl.viewport(), Qt.Key_M)
+    assert clip_of(ctl.ws).muted             # pointer off any clip: nothing happens
