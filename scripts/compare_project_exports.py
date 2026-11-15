@@ -2,7 +2,7 @@
 """Compare actual app-exported MIDI against paired DAW MIDI exports.
 
 Run: .venv/bin/python scripts/compare_project_exports.py [project-set-directory]
-Compares each .dawproject and native .cpr project with the set's MIDI export.
+Compares each .dawproject and native .cpr/.reason project with the set's MIDI export.
 The comparison serializes and reparses the app output, normalizes PPQ, handles
 velocity-zero note-offs, and separates one-reference-tick differences from changed
 note lengths and unmatched notes. No source files are rewritten.
@@ -138,7 +138,7 @@ if __name__ == '__main__':
                         help='Explicit diagnostic export window, rebased to zero; never inferred or applied to input files')
     args = parser.parse_args()
     windows = {name: (Fraction(start), Fraction(end)) for name, start, end in args.window}
-    projects = sorted(args.directory.glob('*.dawproject')) + sorted(args.directory.glob('*.cpr'))
+    projects = sorted(args.directory.glob('*.dawproject')) + sorted(args.directory.glob('*.cpr')) + sorted(args.directory.glob('*.reason'))
     unknown = windows.keys() - {p.stem for p in projects}
     if unknown:
         parser.error('Unknown project window: ' + ', '.join(sorted(unknown)))

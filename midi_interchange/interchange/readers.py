@@ -7,6 +7,8 @@ from ..core.import_smf import import_smf_bytes, ImportError_
 from ..core.import_dawproject import import_dawproject
 from ..core.import_cubase import import_cubase
 from ..core.cpr_format import is_cubase_project
+from ..core.import_reason import import_reason
+from ..core.reason_format import MAGIC as REASON_MAGIC
 from .payload import Payload
 from ..core.import_result import ImportResult
 
@@ -42,6 +44,9 @@ READERS = (
     Reader('Cubase projects', ('.cpr',),
            lambda p: os.path.splitext(p.path or p.name)[1].lower() == '.cpr' or is_cubase_project(p.data[:16]),
            lambda p: import_cubase(p.path, p.name, p.data, byte_size=p.byte_size), path_backed=True, preserve_track_state=True),
+    Reader('Reason songs', ('.reason',),
+           lambda p: os.path.splitext(p.path or p.name)[1].lower() == '.reason' or p.data[:8] == REASON_MAGIC,
+           lambda p: import_reason(p.path, p.name, p.data, byte_size=p.byte_size), path_backed=True, preserve_track_state=True),
 )
 EXTENSIONS = {ext for reader in READERS for ext in reader.extensions}
 FILE_FILTER = 'Supported imports (' + ' '.join('*'+e for r in READERS for e in r.extensions) + ');;' + ';;'.join(

@@ -41,7 +41,7 @@ class Source:
     song: str = ""              # song title, when known (see names.song_title)
     byte_size: int | None = None  # original input size, independent of retained bytes
 
-    input_format: str = 'smf'   # 'smf', 'dawproject' or 'cubase'
+    input_format: str = 'smf'   # 'smf', 'dawproject', 'cubase' or 'reason'
     format_version: str | None = None
     # Bars the source DAW displays before its bar 1 (Cubase: -1 = one blank bar).
     # Recorded only; imports keep the absolute timeline (Cubase plan, decision 7).
@@ -52,7 +52,7 @@ class Source:
         size = f"{self.byte_size:,} bytes" if self.byte_size is not None else "size unknown"
         version = self.format_version or '—'
         format_ = {'smf': f"SMF format {self.smf_format}", 'dawproject': f"DAWproject {version}",
-                   'cubase': f"Cubase project {version}"}.get(self.input_format, self.input_format)
+                   'cubase': f"Cubase project {version}", 'reason': f"Reason song {version}"}.get(self.input_format, self.input_format)
         return f"{format_} · {self.ppq} PPQ · {size}"
 
     @property

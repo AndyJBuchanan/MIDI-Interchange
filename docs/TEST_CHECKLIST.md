@@ -270,6 +270,19 @@ Use your own Cubase 15/16 projects as well as `samples/project-sets` and `sample
 - [ ] A project saved by an older Cubase, or a damaged file, fails with a clear message and leaves the workspace unchanged.
 - [ ] Save, quit and relaunch with a Cubase import: parts, mute states, source details and the display offset survive.
 
+## 8o. Reason song import (`feature/direct-daw-import-reason`)
+
+Use your own Reason 13/14 songs as well as `samples/reason-probe`. Implementation, evidence and limitations: [the Reason plan](plans/reason-import.md).
+
+- [ ] Open and drag a `.reason` into an empty workspace, and into one with tracks. Clips land where Reason shows them, one track per sequencer track (lanes merged). Source Info shows "Reason song", the version and the warnings.
+- [ ] Muted clips, muted lanes and muted Block placements arrive as muted clips (crossed through); a muted track arrives muted.
+- [ ] A song with Blocks (dec2024-27-02): Block content appears as "Block 1" clips at each placement, the hatched spots in Reason's song view arrive muted, and song clips over Blocks win.
+- [ ] A song with tempo and time-signature clips on the Transport track (r19, Day 15): the tempo map follows Reason's, with 1/32-beat steps through ramps, and returns to the song tempo outside the clips.
+- [ ] Export the import and drag it into Reason: notes, mod wheel, pitch bend and sustain sound as in Reason, except the reported skips (patterns, device automation, Players). Curved mod wheel and pitch bend (r26, r27) follow Reason's curves.
+- [ ] A song still open in Reason imports without disturbing it; the `.reason` is unchanged afterwards.
+- [ ] A song saved by Reason 12 or earlier fails with the re-save message; a damaged file fails cleanly. The workspace is unchanged either way.
+- [ ] Save, quit and relaunch with a Reason import: clips, mute states and source details survive.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.
