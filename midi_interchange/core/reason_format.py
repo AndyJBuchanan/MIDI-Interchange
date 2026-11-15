@@ -453,6 +453,8 @@ class Clip:
     notes: list[Note] = field(default_factory=list)
     controllers: list[ControllerLane] = field(default_factory=list)
     automation: Automation | None = None
+    placed_block: int = 0           # Block placement (SBLK): which Block, 1-based
+    placed_offset: int = 0          # where in the Block it starts playing (<= 0)
 
 
 @dataclass
@@ -489,6 +491,10 @@ def _clip(song: Song, lcfm: Chunk) -> list[Clip]:
             c.kind = 'pattern'
         elif 'SBLK' in rec:
             c.kind = 'block'
+            b = rec['SBLK']
+            (c.placed_block,) = struct.unpack_from('>H', b, 5)
+            c.placed_block += 1                     # stored 0-based; LCAI counts from 1
+            (c.placed_offset,) = struct.unpack_from('>i', b, 7)
         out.append(c)
     return out
 
@@ -577,13 +583,22 @@ def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
     - a covering clip cuts notes still sounding where it starts; a clip's own
       end does not cut them;
     - looping clips repeat their first `loop` ticks from start + loop_offset;
-    - Block clips play at each unmuted Block placement on the Transport
-      track, within the placement; song clips on the same lane cover them
-      (user: Blocks can be overridden on the timeline; not yet checked
-      against an export)."""
+    - when the Blocks switch is on, each unmuted Block placement on the
+      Transport track plays its Block's clips from the placement's offset into
+      the Block, within the placement; song clips on the same lane cover them
+      (user: empty clips are used to silence a Block locally). Verified on two
+      songs; a third (dec2024-27-02) still has unexplained silences.
+    """
     ts = tracks(song)
-    places = [c for t in ts for ln in t.lanes if not ln.info.muted
-              for c in ln.clips if c.kind == 'block' and not c.info.muted]
+    places = {}
+    if blocks_enabled(song):
+        for t in ts:
+            for ln in t.lanes:
+                if ln.info.muted:
+                    continue
+                for c in ln.clips:
+                    if c.kind == 'block' and not c.info.muted:     # identical duplicates occur; keep one
+                        places[(c.info.start, c.info.length, c.placed_block, c.placed_offset)] = c
     result = []
     for t in ts:
         out: list[PlayedNote] = []
@@ -597,11 +612,14 @@ def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
                 if not c.block:
                     songs.append((c.info.start, c.info.start + c.info.length, c, 0))
                     continue
-                for p in places:
-                    s = p.info.start + c.info.start
-                    e = min(s + c.info.length, p.info.start + p.info.length)
+                for p in places.values():
+                    if p.placed_block != c.block:
+                        continue
+                    base = p.info.start + p.placed_offset      # where the Block's beat 0 falls
+                    s = max(base + c.info.start, p.info.start)
+                    e = min(base + c.info.start + c.info.length, p.info.start + p.info.length)
                     if s < e:
-                        blocks.append((s, e, c, p.info.start))
+                        blocks.append((s, e, c, base))
             seg_song = _visible([(a, b) for a, b, _, _ in songs])
             seg_block = []
             for a, b, _, _ in blocks:
@@ -624,6 +642,14 @@ def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
                                 out.append((at, n.pitch, n.velocity, min(n.length, v - at) if hard else n.length))
         result.append((t, sorted(out)))
     return result
+
+
+def blocks_enabled(song: Song) -> bool:
+    """The Blocks switch: third byte from the end of the sequencer's TRDC
+    (1 in songs whose export plays Blocks, 0 in one whose export doesn't)."""
+    trdc = song.rs10('CAT:SQCT', 'TRDC')
+    b = song.bytes_of(trdc) if trdc is not None else b''
+    return len(b) >= 3 and bool(b[-3])
 
 
 def open_song(data: bytes) -> tuple[Song, list[str]]:

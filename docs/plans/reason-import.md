@@ -149,19 +149,26 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
 - **Controllers:** points joined by straight lines; exported at 1/32 beat.
 - **Pattern clips are not exported** (r21); converting to notes is (r22).
 - **Blocks are rendered** at each placement (r24).
-- **Song clips override Blocks** (user, 2026-11-15). Implemented as: a song
-  clip covers Block content in the same lane for its time span. **Not yet
-  checked against an export**: none of the six exported songs plays Block
-  content (their placements are muted or the Blocks are empty). Candidates:
-  `SelfDef000(14)`, `dec2024-27-02(14)`, `TUT_ElectroPopDrums000-4(14)`,
-  `T004-3.2(A hundred Steps)-3(14)(Self)`. Open: lane or whole track, and
-  whether a muted or empty song clip still overrides.
+- **Blocks:** placements (`SBLK`) name their Block (u16 at 5, 0-based) and an
+  i32 offset at 7 (where in the Block the placement starts: a split
+  placement's second half has a negative offset). Identical duplicate
+  placements occur and play once. The **Blocks switch** is the third byte from
+  the end of the sequencer's `TRDC`: off in SelfDef000 (its export plays no
+  Block content), on in r24 and dec2024-27-02. Song clips on the same lane
+  cover Block content (user: also empty clips, to silence a Block locally).
+  r24 and SelfDef000 match their exports. **Open: dec2024-27-02** plays Block
+  content on some tracks only at some placements (Arps silent at beats 0-40
+  and 128-140, Bassy Swells' second lane never), with no covering clip in the
+  saved song.
 - **Transport track** is track 0 (named after the hardware interface device in
   the rack; Reason's export calls it `Transport`). Track 1 is the master section.
 
 ### Not found yet
 
-- **Track solo**: r20 was saved without the solo (user); r20s/r20x requested.
+- **Track solo:** r20s (solo from the sequencer track) saves nothing different
+  from r20. r20x (solo from the mixer) changes one parameter of the track's
+  mixer channel device (`X15 Main Mixer Mix Channel`, parameter 2). Mapping a
+  mixer channel to its sequencer track is not decoded yet.
 - Controller id 0xFD; curve bytes; what decides a Block placement shorter than
   its Block.
 
