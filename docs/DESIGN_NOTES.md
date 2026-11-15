@@ -2,6 +2,22 @@
 
 Companion to [DESIGN_BRIEF.md](DESIGN_BRIEF.md), the original spec, kept verbatim. This file records how the brief was interpreted: decisions, deviations, known gaps and risks. Update it whenever direction changes.
 
+## Native Cubase reader (2026-11-15)
+
+The first native project reader reads Cubase 15/16 `.cpr` files through the
+shared registry (path-backed, read-only). The format was reverse-engineered
+from project files we saved ourselves (progressive fixture tiers plus three
+real projects); decoding lives in `core/cpr_format.py`, shared with the
+research inspector `tools/cpr_inspect.py`, and the mapping in
+`core/import_cubase.py`. Positions are Cubase's own ticks, kept as exact
+fractions, so native imports match Cubase's MIDI exports more closely than its
+DAWproject exports, which round through seconds and reduce tempo ramps to
+steps. The display bar offset is recorded on `Source` (session schema 4,
+with a schema-3 upgrade) but not applied: imports keep Cubase's absolute
+timeline, as its own MIDI export does. Generated or processed material (pattern
+parts, chord track, inserts, track transpose) is reported, not rendered.
+Evidence, decisions and limitations: [Cubase plan](plans/cubase-import.md).
+
 ## DAWproject importer (2026-11-14)
 
 The first project reader shares a registry and `(Source, tracks)` contract with

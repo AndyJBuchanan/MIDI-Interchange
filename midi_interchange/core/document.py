@@ -41,15 +41,26 @@ class Source:
     song: str = ""              # song title, when known (see names.song_title)
     byte_size: int | None = None  # original input size, independent of retained bytes
 
-    input_format: str = 'smf'
+    input_format: str = 'smf'   # 'smf', 'dawproject' or 'cubase'
     format_version: str | None = None
+    # Bars the source DAW displays before its bar 1 (Cubase: -1 = one blank bar).
+    # Recorded only; imports keep the absolute timeline (Cubase plan, decision 7).
+    display_bar_offset: int | None = None
 
     @property
     def file_summary(self) -> str:
         size = f"{self.byte_size:,} bytes" if self.byte_size is not None else "size unknown"
-        format_ = (f"SMF format {self.smf_format}" if self.input_format == "smf"
-                   else f"DAWproject {self.format_version or '—'}")
+        version = self.format_version or '—'
+        format_ = {'smf': f"SMF format {self.smf_format}", 'dawproject': f"DAWproject {version}",
+                   'cubase': f"Cubase project {version}"}.get(self.input_format, self.input_format)
         return f"{format_} · {self.ppq} PPQ · {size}"
+
+    @property
+    def display_offset_note(self) -> str | None:
+        if not self.display_bar_offset:
+            return None
+        return (f"{self.app or 'The source'} shows bar 1 at bar {1 - self.display_bar_offset} of this import "
+                f"(display offset {self.display_bar_offset} bars; recorded, not applied)")
 
     def describe(self) -> str:
         lines = [
@@ -61,6 +72,8 @@ class Source:
         ]
         if self.song:
             lines.append(f"Song: {self.song}")
+        if self.display_offset_note:
+            lines.append(f"Display: {self.display_offset_note}")
         if self.track_names:
             lines.append("Original tracks: " + ", ".join(n or "(unnamed)" for n in self.track_names))
         if not self.tempo_map.is_empty:

@@ -176,6 +176,7 @@ def test_schema_2_upgrades_defaults_and_preserves_exports():
             if obj.get('kind') == 'Source':
                 del obj['data']['input_format']
                 del obj['data']['format_version']
+                del obj['data']['display_bar_offset']   # schema 4
             if obj.get('kind') == 'Clip':
                 del obj['data']['muted']
             for value in obj.values():

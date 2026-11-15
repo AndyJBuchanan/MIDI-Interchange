@@ -174,6 +174,8 @@ class SourceInfoDialog(QDialog):
         self.detail.addRow("Application:", _value(s.app or "unknown"))
         self.detail.addRow("File:", _value(s.file_summary))
         self.detail.addRow("Imported:", _value(f"{s.imported_at:%Y-%m-%d %H:%M:%S}"))
+        if s.display_offset_note:
+            self.detail.addRow("Display:", _value(s.display_offset_note))
         if s.track_names:
             self.detail.addRow("Original tracks:", _value("\n".join(
                 f"{i + 1}. {n or '(unnamed)'}" for i, n in enumerate(s.track_names))))
