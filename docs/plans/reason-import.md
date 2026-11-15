@@ -1,8 +1,9 @@
 # Plan: native Reason song import (`.reason`), feasibility
 
-Status: **desk study only** (2026-11-15). No Reason song file has been
-examined yet. Recorded on the Cubase branch by agreement; Reason work gets its
-own branch after the Cubase branch is tested and merged.
+Status: **Phase 0 probe done: GO** (2026-11-15). Song files are plain,
+structured IFF, not encrypted (see [Phase 0 result](#phase-0-result-go)). The
+desk study below was written before any file was examined; where it conflicts
+with the probe, the probe wins. Work is on `feature/direct-daw-import-reason`.
 
 The scope and rules come from the [roadmap entry](../ROADMAP.md) and the
 [direct DAW import plan](direct-daw-import.md): read the saved song, import the
@@ -69,7 +70,46 @@ marker**. Not stated: PPQ, and whether muted clips, lanes or tracks are
 exported. The fixtures below settle that. Two consequences for fixtures: set
 the End marker after the last note, and expect channel 1 everywhere.
 
-## Phase 0: go/no-go probe (first, about an hour)
+## Phase 0 result: GO
+
+Probed 2026-11-15 with 62 `.reason` files (Reason 6, 9, 10, 11, 12, 13 and 14,
+several songs saved in more than one version) plus r01 (empty) and r02 (one
+note), kept locally in the git-ignored `samples/reason-probe/`.
+
+- **Not encrypted.** The "encrypted from Reason 6 to 12.5" claim does not hold
+  for song files: every `.reason` from Reason 6 to 14 has the same container and
+  parses. (Reason 14's *clipboard* payload is a different matter and stays
+  unexplained.) `.rns` songs (Reason 5) are a different format, H = 8.00 from the
+  first byte (compressed or encrypted); out of scope.
+- **Container:** a 52-byte header starting `X15_FILE`, then 256 KiB pages
+  (file size = 52 + n x 262144). Header fields (big-endian u32 from offset 8):
+  page size 0x40000, 36, 0, then two small counts that vary per file (meaning
+  not yet decoded). Unused page space is filled with `0xFE`.
+- **Songs are IFF:** at a page start, `FORM` + length + `X15S`, containing a
+  metadata `CAT WWWI` (song length, tempo, signature, program version, e.g.
+  `14.1.0`), `CAT ApVC`, an `REMB` block, one `BODY` (the song proper, starts
+  `RS1300` in Reason 14), and a trailing `Hash`. The BODY is itself IFF:
+  `CAT RS10` holding `HEAD`, `GLOB`, `USRI`, `SNGI`, `CAT 45IL`, `CAT DEVL`
+  (rack devices, as `FORM DEVI`; this is where the high-entropy bytes are:
+  embedded device assets, one chunk of 687 KB in the empty song), `RACK`,
+  `CAT CCTL` (cables), then **`CAT SQCT`, the sequencer**: `TRDC` (track data),
+  `CAT SACT` (one `FORM SAFM`/`SADC` per automation lane or track record).
+- **Two copies.** Most files hold two generations of the song at different
+  pages (journalled saves), usually of equal or near-equal size. Some copies
+  fail to walk (a stale, partly overwritten earlier generation). The reader
+  must choose the current copy; the header counts are the first thing to
+  decode for that.
+- **A one-note change** rewrites the song body but not the container: r01 and
+  r02 have identical headers and metadata layout; only the BODY and `Hash` differ.
+- **Sizes:** self-contained songs reach about 100 MB (samples embedded); the
+  reader stays path-backed and walks chunk headers without loading it all.
+
+Next: inspector (chunk tree, like `tools/cpr_inspect.py`), identify the current
+copy, decode `TRDC`/`SACT`/note clips on r02 and the r03-r25 series, then the
+reader. The `.reason` probe set is also the real-world set (SQCT sizes range
+from 44 KB upward).
+
+## Phase 0: go/no-go probe (done, kept for the record)
 
 1. Save an **empty song** and the **same song with one note** (r01, r02
    below) from Reason 14.
