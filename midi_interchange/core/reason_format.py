@@ -289,6 +289,13 @@ def varint(b: bytes, p: int) -> tuple[int, int]:
             return v, p
 
 
+def wrap32(v: int) -> int:
+    """Running positions are 32-bit two's complement: a note before its clip's
+    start (left by a split or trim) has a negative offset."""
+    v &= 0xFFFFFFFF
+    return v - (1 << 32) if v & 0x80000000 else v
+
+
 def _str32(b: bytes, p: int) -> tuple[str, int]:
     (n,) = struct.unpack_from('>I', b, p)
     return b[p + 4:p + 4 + n].decode('utf-8', 'replace'), p + 4 + n
@@ -296,11 +303,11 @@ def _str32(b: bytes, p: int) -> tuple[str, int]:
 
 @dataclass
 class Note:
-    pos: int        # ticks from the clip start
+    pos: int        # ticks from the clip start; negative = before it (hidden)
     pitch: int
     velocity: int
     length: int
-    extra: int      # byte after the length (0 so far)
+    extra: int      # flags after the length: bit 0 = muted note
 
 
 @dataclass
@@ -324,7 +331,7 @@ def _points(b: bytes, p: int, count: int) -> tuple[list[Point], int]:
     pos = 0
     for _ in range(count):
         d, p = varint(b, p)
-        pos += d
+        pos = wrap32(pos + d)
         (v,) = struct.unpack_from('>i', b, p)
         out.append(Point(pos, v, b[p + 4:p + 14]))
         p += 14
@@ -342,7 +349,7 @@ def decode_notes(b: bytes) -> tuple[list[Note], list[ControllerLane], bytes]:
     pos = 0
     for _ in range(count):
         d, p = varint(b, p)
-        pos += d
+        pos = wrap32(pos + d)
         pitch, vel = b[p], b[p + 1]
         length, p = varint(b, p + 2)
         notes.append(Note(pos, pitch, vel, length, b[p]))
@@ -381,13 +388,17 @@ class ClipInfo:
     length: int
     name: str
     muted: bool
+    loop: int = 0   # loop length in ticks; 0 = the content plays once
+    loop_offset: int = 0  # where the first loop pass starts, from the clip start (<= 0 after a start trim)
 
 
 def decode_clip(b: bytes) -> ClipInfo:
-    """SNIC: u32 start at 5, u32 length at 9, 8 bytes, str32 name at 21, u8 mute."""
+    """SNIC: u32 start at 5, u32 length at 9, 8 bytes, str32 name at 21, u8 mute,
+    3 bytes, u32 loop length (0 = no loop), i32 loop offset."""
     start, length = struct.unpack_from('>II', b, 5)
     name, p = _str32(b, 21)
-    return ClipInfo(start, length, name, bool(b[p]))
+    loop, offset = struct.unpack_from('>Ii', b, p + 4) if p + 12 <= len(b) else (0, 0)
+    return ClipInfo(start, length, name, bool(b[p]), loop, offset)
 
 
 @dataclass
@@ -522,6 +533,97 @@ def tracks(song: Song) -> list[Track]:
     elif sq is not None:
         walk(sq.find('CAT:TSCT'), ())
     return out
+
+
+# ---------------------------------------------------------------- playback rules
+
+def _cut(segs, s2, e2):
+    """Remove [s2, e2) from segments [(start, end, cuts_notes)]. An end made by
+    a covering clip cuts sounding notes; a clip's own end does not."""
+    out = []
+    for a, b, hard in segs:
+        if a < min(b, s2):
+            out.append((a, min(b, s2), True if s2 < b else hard))
+        if max(a, e2) < b:
+            out.append((max(a, e2), b, hard))
+    return out
+
+
+def _visible(windows):
+    """Overlapping clips on one lane: a later start wins (ties: later in the
+    lane). Returns each window's visible segments."""
+    out = []
+    for i, (s, e) in enumerate(windows):
+        segs = [(s, e, False)]
+        for j, (s2, e2) in enumerate(windows):
+            if j != i and (s2 > s or (s2 == s and j > i)):
+                segs = _cut(segs, s2, e2)
+        out.append(segs)
+    return out
+
+
+PlayedNote = tuple[int, int, int, int]      # (song tick, pitch, velocity, length)
+
+
+def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
+    """The notes each track plays, as Reason's own MIDI export renders them.
+
+    Rules (each checked against Reason's exports; see the plan):
+    - muted clips, muted lanes and muted notes (flag bit 0) are silent; track
+      mute and solo are not applied (Reason's export ignores them);
+    - a note sounds if its start lies in the visible part of its clip: inside
+      the clip, not covered by a later-starting clip on the same lane, and not
+      before the clip start (offsets left negative by splits and trims);
+    - a covering clip cuts notes still sounding where it starts; a clip's own
+      end does not cut them;
+    - looping clips repeat their first `loop` ticks from start + loop_offset;
+    - Block clips play at each unmuted Block placement on the Transport
+      track, within the placement; song clips on the same lane cover them
+      (user: Blocks can be overridden on the timeline; not yet checked
+      against an export)."""
+    ts = tracks(song)
+    places = [c for t in ts for ln in t.lanes if not ln.info.muted
+              for c in ln.clips if c.kind == 'block' and not c.info.muted]
+    result = []
+    for t in ts:
+        out: list[PlayedNote] = []
+        for ln in t.lanes:
+            if ln.info.muted:
+                continue
+            songs, blocks = [], []
+            for c in ln.clips:
+                if c.kind != 'notes' or c.info.muted:
+                    continue
+                if not c.block:
+                    songs.append((c.info.start, c.info.start + c.info.length, c, 0))
+                    continue
+                for p in places:
+                    s = p.info.start + c.info.start
+                    e = min(s + c.info.length, p.info.start + p.info.length)
+                    if s < e:
+                        blocks.append((s, e, c, p.info.start))
+            seg_song = _visible([(a, b) for a, b, _, _ in songs])
+            seg_block = []
+            for a, b, _, _ in blocks:
+                segs = [(a, b, False)]
+                for s2, e2, _, _ in songs:
+                    segs = _cut(segs, s2, e2)
+                seg_block.append(segs)
+            for (_, _, c, base), segs in list(zip(songs, seg_song)) + list(zip(blocks, seg_block)):
+                origin = base + c.info.start
+                loop = c.info.loop
+                shift = c.info.loop_offset if loop else 0
+                reps = range(-(-(c.info.length - shift) // loop)) if loop else (0,)
+                for u, v, hard in segs:
+                    for n in c.notes:
+                        if n.extra & 1 or (loop and not 0 <= n.pos < loop):
+                            continue
+                        for k in reps:
+                            at = origin + shift + n.pos + k * loop
+                            if u <= at < v:
+                                out.append((at, n.pitch, n.velocity, min(n.length, v - at) if hard else n.length))
+        result.append((t, sorted(out)))
+    return result
 
 
 def open_song(data: bytes) -> tuple[Song, list[str]]:

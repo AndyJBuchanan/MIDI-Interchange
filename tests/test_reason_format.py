@@ -150,25 +150,57 @@ def test_unreadable_files_raise(data):
         rf.open_song(data)
 
 
+def lane_song(clips):
+    """A one-track, one-lane song; clips: [(start, length, notes, muted, loop, loop_offset, note_flags)]."""
+    lcfms = []
+    for start, length, notes, muted, loop, offset, flags in clips:
+        body = struct.pack('>I', len(notes))
+        prev = 0
+        for i, (pos, pitch, length_) in enumerate(notes):
+            body += vlq((pos - prev) & 0xFFFFFFFF) + bytes([pitch, 100]) + vlq(length_) + bytes([flags[i] if flags else 0])
+            prev = pos
+        body += struct.pack('>I', 0)
+        snic = rec(5, struct.pack('>II', start, length) + bytes(8) + s32('') + bytes([muted]) + b'\x0a\x01\x07'
+                   + struct.pack('>Ii', loop, offset))
+        lcfms.append(group(b'FORM', b'LCFM', chunk(b'LCAI', b'\0'), group(b'CAT ', b'SNCT', group(b'FORM', b'SNIF',
+                     chunk(b'SNIC', snic), chunk(b'SNTE', rec(2, body))))))
+    track = group(b'FORM', b'TRFM', chunk(b'TRDC', rec(5, bytes(6) + struct.pack('>H', 7) + bytes(14))),
+                  group(b'CAT ', b'LNCT', group(b'FORM', b'LANF', chunk(b'LANC', rec(3, b'\x59' + s32('L') + b'\0')),
+                        group(b'CAT ', b'LCCT', *lcfms))))
+    devl = group(b'CAT ', b'DEVL', group(b'FORM', b'DEVI', chunk(b'DESC', rec(3, b'\xff' + struct.pack('>I', 7) + s32('T')))))
+    body = b'RS1300' + b'\x1a' + bytes(121) + group(b'CAT ', b'RS10', devl, group(b'CAT ', b'SQCT', group(b'CAT ', b'TSCT', track)))
+    form = group(b'FORM', b'X15S', chunk(b'BODY', body))
+    stream = form + chunk(b'Hash', rec(1, hashlib.sha256(form).digest()))
+    song, _ = rf.open_song(container({4: stream}, 5))
+    return rf.played_notes(song)[0][1]
+
+
+B = rf.PPQ
+
+
+def test_overlapping_clips_later_start_wins_and_cuts_sounding_notes():
+    played = lane_song([(0, 6 * B, [(0, 60, 6 * B), (3 * B, 61, B), (4 * B, 63, B)], False, 0, 0, None),
+                        (2 * B, 2 * B, [(0, 62, B)], False, 0, 0, None)])
+    # 60 is cut where the later clip starts; 61 lies under the cover; 63 after it plays
+    assert played == [(0, 60, 100, 2 * B), (2 * B, 62, 100, B), (4 * B, 63, 100, B)]
+
+
+def test_clip_end_does_not_cut_and_hidden_or_muted_notes_are_silent():
+    played = lane_song([(4 * B, 2 * B, [(-B, 59, B), (0, 60, 4 * B), (B, 61, B), (3 * B, 62, B)], False, 0, 0,
+                         [0, 0, 1, 0])])
+    assert played == [(4 * B, 60, 100, 4 * B)]     # -1 beat hidden, 61 muted, 62 past the clip end
+
+
+def test_looping_clip_repeats_from_its_loop_offset():
+    played = lane_song([(B, 7 * B, [(0, 60, B // 2), (B, 62, B // 2)], False, 2 * B, -B, None)])
+    # passes start at 0, 2, 4, 6 beats; the note at pass start 0 falls before the clip
+    assert [p for p, *_ in played] == [B, 2 * B, 3 * B, 4 * B, 5 * B, 6 * B, 7 * B]
+
+
 # ---------------------------------------------------------------- r-series against Reason's exports
 
 def rendered(song):
-    """Note-ons Reason would export: unmuted clips on unmuted lanes inside clip
-    bounds, plus Block clips at each Block placement. Muted tracks still export."""
-    out = {}
-    ts = rf.tracks(song)
-    places = [c for t in ts for ln in t.lanes if not ln.info.muted for c in ln.clips if c.kind == 'block' and not c.info.muted]
-    for t in ts:
-        for ln in t.lanes:
-            for c in ln.clips:
-                if c.kind != 'notes' or c.info.muted or ln.info.muted:
-                    continue
-                starts = [(p.info.start, p.info.length) for p in places] if c.block else [(0, None)]
-                for base, limit in starts:
-                    for n in c.notes:
-                        if n.pos < c.info.length and (limit is None or c.info.start + n.pos < limit):
-                            out.setdefault(t.name, []).append((base + c.info.start + n.pos, n.pitch, n.velocity, n.length))
-    return {k: sorted(v) for k, v in out.items()}
+    return {t.name: notes for t, notes in rf.played_notes(song) if notes}
 
 
 def exported(path):
@@ -180,22 +212,31 @@ def exported(path):
         for msg in tr:
             t += msg.time
             if msg.type == 'note_on' and msg.velocity:
-                on[msg.note] = (t, msg.velocity)
-            elif msg.type in ('note_on', 'note_off') and msg.note in on:
-                s, v = on.pop(msg.note)
+                on.setdefault(msg.note, []).append((t, msg.velocity))
+            elif msg.type in ('note_on', 'note_off') and on.get(msg.note):
+                s, v = on[msg.note].pop(0)
                 out.setdefault(tr.name, []).append((s, msg.note, v, t - s))
     return {k: sorted(v) for k, v in out.items()}
 
 
-R_EXPORTS = sorted(glob.glob(os.path.join(PROBE, 'r*.mid')))
+R_EXPORTS = sorted(m for m in glob.glob(os.path.join(PROBE, '**', '*.mid'), recursive=True)
+                   if os.path.exists(m[:-4] + '.reason'))
 
 
 @pytest.mark.skipif(not R_EXPORTS, reason='local Reason probe fixtures not present')
-@pytest.mark.parametrize('mid', R_EXPORTS, ids=os.path.basename)
+@pytest.mark.parametrize('mid', R_EXPORTS, ids=lambda m: os.path.relpath(m, PROBE))
 def test_r_series_matches_reason_midi_export(mid):
     with open(mid[:-4] + '.reason', 'rb') as f:
         song, _ = rf.open_song(f.read())
-    assert rendered(song) == exported(mid)
+    assert same_notes(rendered(song), exported(mid))
+
+
+def same_notes(a, b):
+    """Equal per track, allowing notes that share start and pitch to pair
+    their velocities and lengths either way (a MIDI file can't tell)."""
+    def key(d):
+        return {k: (sorted(n[:3] for n in v), sorted((n[0], n[1], n[3]) for n in v)) for k, v in d.items() if v}
+    return key(a) == key(b)
 
 
 @pytest.mark.skipif(not R_EXPORTS, reason='local Reason probe fixtures not present')

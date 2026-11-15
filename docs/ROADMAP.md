@@ -33,6 +33,8 @@ Updated 2026-11-14.
 
 - **Cubase chord track as chord names** (agreed 2026-11-15, after the Cubase reader): show a Cubase project's chord-track chords as names on a new proxy marker track, rather than rendering chords as notes. Needs investigation of how chord events are stored (`MChordTrackEvent`, `MChordEvent`, `ChordData`) and a design for a marker-style track. See [the Cubase plan](plans/cubase-import.md#decisions-2026-11-15).
 
+- **Reason pattern devices as notes** (agreed 2026-11-15, maybe): render unconverted pattern clips (Redrum, Matrix and similar) from the pattern data stored in the rack device, as Cubase decision 8 does for Pattern Editor parts. Reason's own MIDI export leaves them out, so the first reader reports them as skipped. See [the Reason plan](plans/reason-import.md).
+
 - **Imported note tails beyond part ends** (deferred by agreement, 2026-11-14): keep current clip-edge cutting for now. Consider a tail-preservation policy later, including its interaction with user trims, loops and ranges. This does not block provisional DAWproject completion. See the [Ditty](DAWPROJECT_DITTY_FINDINGS.md) and [other-pair](DAWPROJECT_OTHER_PAIRS_FINDINGS.md) evidence; no Cubase-export repair is planned.
 
 - **Intermittent cursor switching** (reported during clip-splitting verification, 2026-11-14): cursors occasionally stop switching. The user has observed this throughout the app's development, before clip splitting; the cause is unknown. Investigate later when a reproducible case is available. Clip-splitting manual checks otherwise passed.

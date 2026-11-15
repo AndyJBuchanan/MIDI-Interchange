@@ -80,9 +80,9 @@ Decoder: `midi_interchange/core/reason_format.py`; research CLI:
 `tests/test_reason_format.py` (synthetic files, plus the r-series against the
 MIDI exports when the local fixtures are present).
 
-**Result: all 16 exported r-files render exactly the notes Reason exported**
-(position, pitch, velocity, length), including trims, the moved clip, muted
-clip, muted lane, two tracks, converted Redrum and Blocks. Every Reason 13 and
+**Result: all 16 exported r-files and six real songs (51 tracks, Reason 13
+and 14) render exactly the notes Reason exported** (position, pitch,
+velocity, length). The rules are in `played_notes()`. Every Reason 13 and
 14 real-world song in the probe set decodes in hundredths of a second.
 
 ### Container: a paged store, not a single song
@@ -118,8 +118,8 @@ Records mostly start `BC <version> 00 00 00`. Times are ticks at **15360 PPQ**
 | `FORM TRFM/TRDC` | Track: u16 device id at 11, **mute** at 13, kind at 18 (0x0A instrument, 0x0B pattern device) |
 | `CAT LNCT/FORM LANF/LANC` | Lane: kind at 5 (0x59 notes, 0x5A pattern, 0x5B/0x5D automation), name, **lane mute** (last byte) |
 | `CAT LCCT/FORM LCFM/LCAI` | Clip's Block: 0 = in the song, n = belongs to Block n |
-| `FORM SNIF/SNIC` | Clip: u32 start at 5, u32 length at 9, name at 21, **clip mute** after the name |
-| `SNTE` | Notes: u32 count, each (varint delta, pitch, velocity, varint length, 1 byte); then u32 controller lane count, each (id: 0x01 mod wheel, 0x0B expression, 0x40 sustain, 0xFF pitch bend, 0xFD unknown; i32 min, max; points) |
+| `FORM SNIF/SNIC` | Clip: u32 start at 5, u32 length at 9, name at 21, **clip mute** after the name, 3 bytes, u32 **loop length** (0 = none), i32 **loop offset** |
+| `SNTE` | Notes: u32 count, each (varint delta, added modulo 2^32 and read signed, pitch, velocity, varint length, flags: bit 0 = **muted note**); then u32 controller lane count, each (id: 0x01 mod wheel, 0x0B expression, 0x40 sustain, 0xFF pitch bend, 0xFD unknown; i32 min, max; points) |
 | `SAUT` | Automation clip: kind (0 tempo, 2 time signature, others are device parameters), i32 min, max, points |
 | `SPTN` | Pattern clip (Redrum, Matrix...): bank/pattern; notes live in the device |
 | `SBLK` | Block placement on the Transport track's Blocks lane |
@@ -132,8 +132,15 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
 
 ### Musical rules confirmed by the exports
 
-- **Notes are relative to the clip start**; a clip's length hides notes past
-  it. Trimming the start moves the clip and rewrites the note offsets.
+- **Notes are relative to the clip start** and may be negative: splitting or
+  trimming a clip leaves hidden notes before its start. A note sounds if it
+  starts inside the visible part of its clip.
+- **A clip's own end does not cut a sounding note**; the note keeps its length.
+- **Overlapping clips on a lane: the later start wins** (ties: later in the
+  lane) and cuts notes still sounding where it starts.
+- **Looping clips** repeat their first `loop` ticks, starting `loop offset`
+  from the clip start (negative after a start trim).
+- **Muted notes** (flag bit 0) don't export.
 - **Muted clips and muted lanes do not export; muted and soloed tracks do**
   (Reason's export ignores track mute and solo).
 - **Tempo:** global tempo (metadata) outside tempo clips; inside, points joined
@@ -142,18 +149,19 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
 - **Controllers:** points joined by straight lines; exported at 1/32 beat.
 - **Pattern clips are not exported** (r21); converting to notes is (r22).
 - **Blocks are rendered** at each placement (r24).
-- **Song clips override Blocks** (user, 2026-11-15; used in the real songs).
-  Working assumption to verify against the song exports: a clip placed in the
-  song covers Block content in the same lane for its time span. Open: lane or
-  whole track, and whether a muted or empty song clip still overrides.
+- **Song clips override Blocks** (user, 2026-11-15). Implemented as: a song
+  clip covers Block content in the same lane for its time span. **Not yet
+  checked against an export**: none of the six exported songs plays Block
+  content (their placements are muted or the Blocks are empty). Candidates:
+  `SelfDef000(14)`, `dec2024-27-02(14)`, `TUT_ElectroPopDrums000-4(14)`,
+  `T004-3.2(A hundred Steps)-3(14)(Self)`. Open: lane or whole track, and
+  whether a muted or empty song clip still overrides.
 - **Transport track** is track 0 (named after the hardware interface device in
   the rack; Reason's export calls it `Transport`). Track 1 is the master section.
 
 ### Not found yet
 
-- **Track solo**: no byte changed where r20's solo was made (question 1).
-- The 1 byte after each note's length (0 in the r-series; 1 on 642 notes in
-  real songs).
+- **Track solo**: r20 was saved without the solo (user); r20s/r20x requested.
 - Controller id 0xFD; curve bytes; what decides a Block placement shorter than
   its Block.
 
@@ -273,16 +281,14 @@ marker after the last note), as for Cubase.
 
 ## Questions for later
 
-1. **Solo:** open r20 in Reason. Is `Basic FM Pluck` soloed? Did you use the
-   sequencer track's S button or the mixer? (Nothing in the saved song changed
-   for it.)
+1. **Solo:** r20 was saved without its solo. Fixtures requested: r20s (solo
+   from the sequencer track's S button) and r20x (solo from the mixer).
 2. **Blocks:** do you use Blocks mode? If so, should an import render the song
    as the Blocks track arranges it (current plan, matching Reason's export)?
-3. **Pattern devices and Players:** Reason's own export leaves unconverted
-   pattern clips out. Is "reported as skipped" acceptable, or should patterns
-   be rendered from the device later (as Cubase decision 8)?
-4. **Which copy Reason opens:** open r04 in Reason. Is the note's velocity 64?
-   (If it shows 100, Reason opens the older copy and the rule must change.)
+3. ~~Pattern devices~~: reported as skipped for now; rendering them is on the
+   roadmap as a later maybe (user).
+4. ~~Which copy Reason opens~~: r04 opens with velocity 64 (user), matching
+   the highest-page rule.
 5. **Versions:** Reason 13 and 14 read; older songs refused with "re-save in
    Reason 13 or later". Agreed?
 
