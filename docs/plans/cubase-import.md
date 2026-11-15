@@ -209,14 +209,23 @@ and signature points. 42 regression tests in `tests/test_cpr_inspect.py`.
   declaration). An independent copy (c15) writes its own `MMidiPart`.
 - **Track mute and solo (c14, c17s, c17m):** a u32 **channel state flags**
   word: bit 0 = solo, bit 2 = mute, the same for instrument and MIDI tracks.
-  It follows the track's MIDI input port name, which is stored twice (first
-  u32 after it in `MInstrumentTrack`, second in `MMidiTrack`). GA's two muted
-  tracks have mute set; all other fixture tracks are clear. Muting an
-  instrument track also adds a mixer record `SoloFlag` = 1, and soloing adds
-  `Solo` = 1; these look like mixer-side copies. **Phase 3 caveat:** the
-  inspector finds the flags after the default input name "All MIDI Inputs"; a
-  track set to a specific input has another name there, so the reader must
-  parse this header structurally.
+  GA's two muted tracks have mute set; all other fixture tracks are clear.
+  Muting an instrument track also adds a mixer record `SoloFlag` = 1, and
+  soloing adds `Solo` = 1; these look like mixer-side copies.
+  **Located by structure, not by port name** (`state_flags_offset`): the
+  track's MIDI input is a *port record* (u16 3 · string id · u16 0 · string
+  name; both "All MIDI Inputs" for the default input, but any name works).
+  - `MInstrumentTrack` (v10, v11): the flags follow the last input port
+    record, then a tail of u16 count (0 or 1) · that many BOM strings (Ditty's
+    Groove Agent track names its loaded pattern, "Feel How Sweet It Is - Groove
+    Agent SE [1]") · 14 bytes · i64 −1 (`FF` × 8). Cubase 16 (v11) appends a
+    short `FAttributes` object after that.
+  - `MMidiTrack` (v8, Cubase 16 fixtures only): the body starts with the
+    output port (u16 3 · id · 4 bytes · name, e.g. "Input 1"), then the input
+    port record, a u32 (1 for c17's channel-2 track; possibly the channel,
+    unconfirmed), then the flags.
+  Verified on every instrument and MIDI track in every fixture, plus
+  synthetic bodies with other port names.
 - **Track names** start the track event's `MListNode` child; GA, Ditty and
   indy names match their DAWproject tracks.
 - **Program change (c25):** the standard event layout; data = program, 0.
@@ -276,8 +285,7 @@ should keep the fractions. The 644 missing drum notes are Pattern Editor data
 of this.
 
 Open for phase 3 or later: linear time base, pattern
-events, controller curve shapes, chord track names, sysex, and a structural
-parse of the track header that holds the state flags.
+events, controller curve shapes, chord track names, and sysex.
 
 ## Prior work to read first
 

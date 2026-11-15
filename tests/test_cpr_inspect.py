@@ -372,3 +372,45 @@ def test_tempo_track_found_inside_or_outside_folders(path, io_folder, loose_temp
     # No MIDI track sits in the I/O folder, so it never appears in a path.
     tes = [o for o in wk.objects.values() if o.cls.name in ci.TRACK_EVENTS]
     assert all(io_folder not in ci.folder_path(wk, t) for t in tes)
+
+
+def _port(text: bytes) -> bytes:
+    def cstr(t):
+        return (len(t) + 1).to_bytes(4, 'big') + t + b'\x00'
+    return b'\x00\x03' + cstr(text) + b'\x00\x00' + cstr(text)
+
+
+@pytest.mark.parametrize('port', [b'All MIDI Inputs', b'IAC Driver Bus 1', 'Entrée MIDI'.encode()])
+def test_state_flags_found_by_structure_not_port_name(port):
+    """A track set to a specific MIDI input stores another port name; the
+    flags must still be found (synthetic bodies in the observed layouts)."""
+    inst = b'\x01' * 300 + _port(port) + (4).to_bytes(4, 'big') + b'\x00' * 16 + ci.FLAGS_SENTINEL
+    at = ci.state_flags_offset(inst, 'MInstrumentTrack')
+    assert int.from_bytes(inst[at:at + 4], 'big') == ci.TRACK_MUTE
+    v11 = inst + bytes.fromhex('8000000000000003e9') + b'\x00' * 11     # trailing object
+    at = ci.state_flags_offset(v11, 'MInstrumentTrack')
+    assert int.from_bytes(v11[at:at + 4], 'big') == ci.TRACK_MUTE
+    name = 'Feel How Sweet It Is - Groove Agent SE [1]'.encode() + b'\x00\xef\xbb\xbf'
+    named = (b'\x01' * 300 + _port(port) + (4).to_bytes(4, 'big') + b'\x00\x01'
+             + len(name).to_bytes(4, 'big') + name + b'\x00' * 14 + ci.FLAGS_SENTINEL)
+    at = ci.state_flags_offset(named, 'MInstrumentTrack')
+    assert int.from_bytes(named[at:at + 4], 'big') == ci.TRACK_MUTE
+    at = ci.state_flags_offset(v11, 'MInstrumentTrack')
+    assert int.from_bytes(v11[at:at + 4], 'big') == ci.TRACK_MUTE
+    out = b'\x00\x03' + (8).to_bytes(4, 'big') + b'Input 1\x00' + b'\x00' * 4 + (8).to_bytes(4, 'big') + b'Input 1\x00'
+    midi = out + _port(port) + (1).to_bytes(4, 'big') + (1).to_bytes(4, 'big') + b'\xff\xff\x00\xff'
+    at = ci.state_flags_offset(midi, 'MMidiTrack')
+    assert int.from_bytes(midi[at:at + 4], 'big') == ci.TRACK_SOLO
+
+
+def test_state_flags_every_fixture_track():
+    """Every instrument and MIDI track in every fixture yields flags."""
+    paths = sorted(TIER1.glob('*/*.cpr')) + sorted(TIER2.glob('*.cpr')) + sorted(TIER3.glob('*.cpr')) + sorted(SETS.glob('*.cpr'))
+    n = 0
+    for path in paths:
+        wk, _ = _walk(path)
+        for te in (o for o in wk.objects.values() if o.cls.name in ci.TRACK_EVENTS):
+            flags = ci.track_state_flags(wk, te)
+            assert flags is not None and flags & ~(ci.TRACK_SOLO | ci.TRACK_MUTE) == 0, (path.name, ci.track_name(wk, te), flags)
+            n += 1
+    assert n > 80

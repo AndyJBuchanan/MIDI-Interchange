@@ -486,28 +486,96 @@ TRACK_SOLO = 0x1
 TRACK_MUTE = 0x4
 
 
+def _cstring_at(b: bytes, p: int, limit: int) -> int | None:
+    """u32 length (including the NUL) | bytes | NUL, with no NUL inside.
+    Returns the end offset, or None. Port names may be any UTF-8."""
+    if p + 4 > limit:
+        return None
+    n = int.from_bytes(b[p:p + 4], 'big')
+    end = p + 4 + n
+    if not 1 <= n <= 512 or end > limit or b[end - 1] != 0 or 0 in b[p + 4:end - 1]:
+        return None
+    return end
+
+
+def port_record_end(b: bytes, p: int, limit: int) -> int | None:
+    """A MIDI port record: u16 3 | string id | u16 0 | string name. Returns
+    its end, or None. The input port of a track is stored this way (for the
+    default input both strings are 'All MIDI Inputs')."""
+    if b[p:p + 2] != b'\x00\x03':
+        return None
+    q = _cstring_at(b, p + 2, limit)
+    if q is None or b[q:q + 2] != b'\x00\x00':
+        return None
+    return _cstring_at(b, q + 2, limit)
+
+
+FLAGS_SENTINEL = b'\xff' * 8
+
+
+def _bomstring_at(b: bytes, p: int, limit: int) -> int | None:
+    """u32 length | UTF-8 | NUL | EF BB BF (the archive's usual string)."""
+    if p + 4 > limit:
+        return None
+    n = int.from_bytes(b[p:p + 4], 'big')
+    end = p + 4 + n
+    if not 4 <= n <= 1024 or end > limit or b[end - 4:end] != b'\x00\xef\xbb\xbf':
+        return None
+    return end
+
+
+def _flags_tail_ok(b: bytes, flags_at: int) -> bool:
+    """MInstrumentTrack after the flags: u16 count (0 or 1) | count x string
+    (e.g. a loaded Groove Agent pattern name, Ditty) | 14 bytes | i64 -1."""
+    q = flags_at + 4
+    n = int.from_bytes(b[q:q + 2], 'big')
+    q += 2
+    if n > 1:
+        return False
+    for _ in range(n):
+        q = _bomstring_at(b, q, len(b))
+        if q is None:
+            return False
+    return b[q + 14:q + 22] == FLAGS_SENTINEL
+
+
+def state_flags_offset(b: bytes, cls: str) -> int | None:
+    """Offset of the channel state flags u32 in a track's mixer object body.
+
+    Found by structure, independent of the port names:
+    - MInstrumentTrack (v10, v11): the last input port record followed by
+      the flags and a valid tail (_flags_tail_ok: usually 16 bytes then an
+      i64 -1). In v11 a short trailing object follows. The search covers the
+      body's last 512 bytes.
+    - MMidiTrack (v8): the body starts with the output port (u16 3, id, 4
+      bytes, name), then the input port record, a u32 (1 in the fixtures, a
+      track on channel 2: possibly the channel), then the flags.
+    """
+    if cls == 'MInstrumentTrack':
+        lo = max(0, len(b) - 512)
+        for p in range(len(b) - 2, lo - 1, -1):
+            end = port_record_end(b, p, len(b))
+            if end is not None and _flags_tail_ok(b, end):
+                return end
+        return None
+    if cls == 'MMidiTrack':
+        for p in range(0, min(len(b), 512)):
+            end = port_record_end(b, p, len(b))
+            if end is not None:
+                return end + 4
+        return None
+    return None
+
+
 def track_state_flags(wk: Walker, track_event: Obj) -> int | None:
     """Channel state flags: bit 0 = solo, bit 2 = mute (tier 2 c14, c17s,
-    c17m; GA's two muted tracks).
-
-    The u32 follows the track's MIDI input port, stored as the same
-    length-prefixed name twice; it is the first u32 after the second copy in
-    MInstrumentTrack and the second in MMidiTrack. Located here by the default
-    input name 'All MIDI Inputs', which every fixture uses. A track set to a
-    specific input stores another name, so the reader needs a structural parse
-    of this header (phase 3).
-    """
+    c17m, c18fm; GA's two muted tracks). See state_flags_offset()."""
     ch = next((c for c in track_event.children if c.cls.name in ('MInstrumentTrack', 'MMidiTrack')), None)
     if ch is None:
         return None
     body = wk.d[ch.body_at:ch.end]
-    name = b'All MIDI Inputs\x00'
-    k = body.find(name)
-    k = body.find(name, k + 1) if k >= 0 else -1
-    if k < 0:
-        return None
-    at = k + len(name) + (4 if ch.cls.name == 'MMidiTrack' else 0)
-    return int.from_bytes(body[at:at + 4], 'big')
+    at = state_flags_offset(body, ch.cls.name)
+    return None if at is None else int.from_bytes(body[at:at + 4], 'big')
 
 
 def track_solo_flag(wk: Walker, track_event: Obj) -> int | None:
