@@ -142,6 +142,10 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
 - **Controllers:** points joined by straight lines; exported at 1/32 beat.
 - **Pattern clips are not exported** (r21); converting to notes is (r22).
 - **Blocks are rendered** at each placement (r24).
+- **Song clips override Blocks** (user, 2026-11-15; used in the real songs).
+  Working assumption to verify against the song exports: a clip placed in the
+  song covers Block content in the same lane for its time span. Open: lane or
+  whole track, and whether a muted or empty song clip still overrides.
 - **Transport track** is track 0 (named after the hardware interface device in
   the rack; Reason's export calls it `Transport`). Track 1 is the master section.
 
