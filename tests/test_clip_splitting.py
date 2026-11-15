@@ -262,3 +262,24 @@ def test_m_key_mutes_clip_under_pointer_and_undoes(win):
     tl._pointer = None
     QTest.keyClick(tl.viewport(), Qt.Key_M)
     assert clip_of(ctl.ws).muted             # pointer off any clip: nothing happens
+
+
+def test_z_zooms_to_fit_and_text_fields_still_take_it(win, monkeypatch):
+    from PySide6.QtGui import QKeySequence
+    from PySide6.QtWidgets import QLineEdit
+    assert {s.toString() for s in win.a_zoom_fit.shortcuts()} == {QKeySequence('Ctrl+0').toString(), 'Z'}
+    calls = []
+    monkeypatch.setattr(win.timeline, 'zoom_to_fit', lambda: calls.append(1))
+    win.a_zoom_fit.triggered.disconnect()
+    win.a_zoom_fit.triggered.connect(win.timeline.zoom_to_fit)
+    win.show()
+    win.activateWindow()
+    QTest.qWaitForWindowActive(win)
+    win.timeline.setFocus()
+    QTest.keyClick(win.timeline.viewport(), Qt.Key_Z)
+    assert calls == [1]
+    edit = QLineEdit(win)
+    edit.show()
+    edit.setFocus()
+    QTest.keyClick(edit, Qt.Key_Z)
+    assert edit.text() == 'z' and calls == [1]

@@ -47,7 +47,7 @@ Ranges are optional, but they're what make this a palette rather than a file shu
 5. **Lanes:** one per track, showing its clips with their notes, lyrics and text. The timeline is this whole area.
 6. **Bottom panel:** the selected range's name and exact positions, then the export controls: the mode, the **Drag MIDI out** tile and **Save MIDI…**.
 
-Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 to fit everything. The **Snap** list (off, bar, beat, 1/8, 1/16, 1/32, 1/8T, 1/16T) controls how drags line up with the grid; hold **Shift** while dragging to ignore it.
+Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 or **Z** to fit everything. The **Snap** list (off, bar, beat, 1/8, 1/16, 1/32, 1/8T, 1/16T) controls how drags line up with the grid; hold **Shift** while dragging to ignore it.
 
 ### Step 1: Bring MIDI in
 
@@ -225,7 +225,7 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Delete / cycle / deselect ranges | Backspace or Delete (or the panel's Delete, Edit ▸ Delete Range) / Tab / Escape. Clear All Ranges is on the toolbar and the Edit menu |
 | Choose tracks per range | Padlock in the range header, then tick or untick its checkboxes; right-click ▸ Include All / Exclude All / Unlock |
 | Snap | Snap list on the toolbar, or Timing ▸ Snap. Hold Shift while dragging to bypass it |
-| Zoom | ⌘ + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit), or the toolbar |
+| Zoom | ⌘ + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 or Z (fit), or the toolbar |
 | Lane height | ⌥ + wheel, or ⌘⇧= / ⌘⇧- (View ▸ Taller / Shorter Lanes) |
 | Choose an export mode | The Export list: whole workspace, keep positions, rebase & concatenate, separate files |
 | Trim silence | Tick Trim leading/trailing silence |

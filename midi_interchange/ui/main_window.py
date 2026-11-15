@@ -122,6 +122,8 @@ class MainWindow(QMainWindow):
         self.a_zoom_in = self._act("Zoom In", lambda: self.timeline.zoom_by(1.4), QKeySequence.ZoomIn)
         self.a_zoom_out = self._act("Zoom Out", lambda: self.timeline.zoom_by(1 / 1.4), QKeySequence.ZoomOut)
         self.a_zoom_fit = self._act("Zoom to Fit", self.timeline.zoom_to_fit, "Ctrl+0")
+        # Z too (a single key: text fields still take it while typing)
+        self.a_zoom_fit.setShortcuts([QKeySequence("Ctrl+0"), QKeySequence("Z")])
         self.a_taller = self._act("Taller Lanes", lambda: self.timeline.set_lane_height(self.timeline.lane_h + 12),
                                   "Ctrl+Shift+=")
         self.a_shorter = self._act("Shorter Lanes", lambda: self.timeline.set_lane_height(self.timeline.lane_h - 12),
