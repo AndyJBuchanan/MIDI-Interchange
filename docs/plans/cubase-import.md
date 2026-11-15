@@ -238,7 +238,7 @@ and signature points. 42 regression tests in `tests/test_cpr_inspect.py`.
   starts with the folder's name. Every project has a built-in
   "Input/Output Channels" folder (device, tempo and signature tracks).
   **Folder mute (c18fm):** the folder's state flags (same bits as tracks) are
-  the u32 just before its `MTrackList`; muting a folder also sets the mute flag
+  the u32 just before its `MTrack` child, which follows its `MTrackList`; muting a folder also sets the mute flag
   on every track inside it, so the saved track flags carry the inherited
   state.
 - **Instrument stack (c18is):** also an `MFolderTrack`, containing a MIDI

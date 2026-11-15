@@ -524,37 +524,53 @@ def track_solo_flag(wk: Walker, track_event: Obj) -> int | None:
     return int.from_bytes(body[k + 15:k + 23], 'big', signed=True)   # 4 + 'SoloFlag\\0' + u16 type
 
 
-SYSTEM_FOLDER = 'Input/Output Channels'
+# Only the built-in folder holds these; an instrument stack also holds an
+# MDeviceTrackEvent (its shared instrument), so device tracks don't qualify.
+SYSTEM_TRACKS = ('MTempoTrackEvent', 'MSignatureTrackEvent')
+
+
+def is_system_folder(wk: Walker, folder: Obj) -> bool:
+    """The built-in folder holding the tempo and signature tracks.
+    Identified structurally: its name varies by version ('Input/Output' in
+    15.0.30 and 16, 'Input/Output Channels' in Ditty, saved by 15.0.21) and
+    probably by language."""
+    return any(o.cls.name in SYSTEM_TRACKS and folder.body_at <= o.tag_at < folder.end
+               for o in wk.objects.values())
+
 
 
 def folder_path(wk: Walker, track_event: Obj) -> list[str]:
     """Names of the MFolderTrack ancestors of a track, outermost first.
 
     A folder holds its own MTrackList, whose body starts with the folder's
-    name. Every project has a built-in 'Input/Output Channels' folder holding
-    the device, tempo and signature tracks; it is omitted here. An
+    name. Every project has a built-in folder holding the device, tempo and
+    signature tracks (is_system_folder); it is omitted here. An
     instrument stack (Cubase 16) is also an MFolderTrack (tier 2 c18is).
     Folder state flags: folder_state_flags().
     """
     names = []
     for f in sorted((o for o in wk.objects.values() if o.cls.name == 'MFolderTrack'
                      and o.body_at <= track_event.tag_at < o.end), key=lambda o: o.tag_at):
-        lst = next((ch for ch in f.children if ch.cls.name == 'MTrackList'), None)
-        name = _pstring(wk.d, lst.body_at)[0] if lst else '?'
-        if name != SYSTEM_FOLDER:
-            names.append(name)
+        if not is_system_folder(wk, f):
+            names.append(folder_name(wk, f))
     return names
+
+
+def folder_name(wk: Walker, folder: Obj) -> str:
+    lst = next((ch for ch in folder.children if ch.cls.name == 'MTrackList'), None)
+    return _pstring(wk.d, lst.body_at)[0] if lst else '?'
 
 
 def folder_state_flags(wk: Walker, folder: Obj) -> int | None:
     """MFolderTrack state flags (bit 0 solo, bit 2 mute, as for tracks): the
-    u32 immediately before the folder's MTrackList child (tier 2 c18fm).
-    Muting a folder also sets the mute flag on every track inside it, so the
-    saved track flags already carry the inherited state."""
-    lst = next((ch for ch in folder.children if ch.cls.name == 'MTrackList'), None)
-    if lst is None:
+    u32 immediately before the folder's MTrack child, which follows its
+    MTrackList (tier 2 c18fm). Muting a folder also sets the mute flag on
+    every track inside it, so the saved track flags already carry the
+    inherited state."""
+    trk = next((ch for ch in folder.children if ch.cls.name == 'MTrack'), None)
+    if trk is None:
         return None
-    return int.from_bytes(wk.d[lst.tag_at - 4:lst.tag_at], 'big')
+    return int.from_bytes(wk.d[trk.tag_at - 4:trk.tag_at], 'big')
 
 
 @dataclass
