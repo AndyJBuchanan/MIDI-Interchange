@@ -63,7 +63,7 @@ LANE_PX_PER_NOTCH = 3    # Alt+wheel lane height change per wheel notch (was 6 p
 EDGE_PX = 5
 TOGGLE_PX = 13        # range track toggle: size, and gap from the range's left edge
 TOGGLE_GAP = 6
-MIN_PPB, MAX_PPB = 1.5, 1600.0
+MIN_PPB, MAX_PPB = 0.1, 1600.0   # 0.1: about 10,000 beats fit 1,000 px (long songs, end-to-end drops)
 
 
 def clip_cursor(copy: bool = False) -> QCursor:

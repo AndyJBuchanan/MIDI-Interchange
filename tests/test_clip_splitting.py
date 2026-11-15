@@ -5,6 +5,7 @@ import pytest
 from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 
 from test_clip_trims import (app, win, ws, clip_of, abs_times, gesture)
 from midi_interchange.core.export_smf import ExportMode, ExportOptions, build_exports
@@ -283,3 +284,17 @@ def test_z_zooms_to_fit_and_text_fields_still_take_it(win, monkeypatch):
     edit.setFocus()
     QTest.keyClick(edit, Qt.Key_Z)
     assert edit.text() == 'z' and calls == [1]
+
+
+def test_zoom_to_fit_shows_a_long_timeline(win):
+    """Three GA imports end to end run past 1,600 beats; fitting them needs
+    under 1.5 px per beat (the old minimum), so the fit used to stop short."""
+    from helpers import note, smf, track
+    from midi_interchange.interchange.payload import Payload
+    win.ctl.import_payloads([Payload('long.mid', smf([track(note(0, 60, 1999 * 480, 480), name='Far')]))])
+    QApplication.processEvents()
+    tl = win.timeline
+    tl.zoom_to_fit()
+    assert float(win.ctl.ws.end) >= 2000
+    assert tl.x_of(float(win.ctl.ws.end)) <= tl.viewport().width()
+    tl.grab()                                    # paints grid and ruler when zoomed far out
