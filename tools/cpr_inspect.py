@@ -534,7 +534,7 @@ def folder_path(wk: Walker, track_event: Obj) -> list[str]:
     name. Every project has a built-in 'Input/Output Channels' folder holding
     the device, tempo and signature tracks; it is omitted here. An
     instrument stack (Cubase 16) is also an MFolderTrack (tier 2 c18is).
-    Folder mute/solo is not decoded yet (no fixture).
+    Folder state flags: folder_state_flags().
     """
     names = []
     for f in sorted((o for o in wk.objects.values() if o.cls.name == 'MFolderTrack'
@@ -544,6 +544,17 @@ def folder_path(wk: Walker, track_event: Obj) -> list[str]:
         if name != SYSTEM_FOLDER:
             names.append(name)
     return names
+
+
+def folder_state_flags(wk: Walker, folder: Obj) -> int | None:
+    """MFolderTrack state flags (bit 0 solo, bit 2 mute, as for tracks): the
+    u32 immediately before the folder's MTrackList child (tier 2 c18fm).
+    Muting a folder also sets the mute flag on every track inside it, so the
+    saved track flags already carry the inherited state."""
+    lst = next((ch for ch in folder.children if ch.cls.name == 'MTrackList'), None)
+    if lst is None:
+        return None
+    return int.from_bytes(wk.d[lst.tag_at - 4:lst.tag_at], 'big')
 
 
 @dataclass

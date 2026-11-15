@@ -237,8 +237,10 @@ and signature points. 42 regression tests in `tests/test_cpr_inspect.py`.
 - **Folders (c18):** an `MFolderTrack` holds its own `MTrackList`, whose body
   starts with the folder's name. Every project has a built-in
   "Input/Output Channels" folder (device, tempo and signature tracks).
-  Folder mute/solo is not decoded (no fixture; a c18 with the folder muted
-  would isolate it).
+  **Folder mute (c18fm):** the folder's state flags (same bits as tracks) are
+  the u32 just before its `MTrackList`; muting a folder also sets the mute flag
+  on every track inside it, so the saved track flags carry the inherited
+  state.
 - **Instrument stack (c18is):** also an `MFolderTrack`, containing a MIDI
   track named after the stack. Stacking **moves the parts onto that stack
   track**; the member instrument track is left empty. Cubase's export naming
@@ -267,7 +269,7 @@ should keep the fractions. The 644 missing drum notes are Pattern Editor data
 (`MPatternEvent`), as expected. `tests/test_cpr_inspect.py` (57 tests) pins all
 of this.
 
-Open for phase 3 or later: folder mute/solo, linear time base, pattern
+Open for phase 3 or later: linear time base, pattern
 events, controller curve shapes, chord track names, sysex, and a structural
 parse of the track header that holds the state flags.
 
@@ -445,6 +447,7 @@ this fast.
 | c18 ✱ | Put both tracks in a folder track |
 | c17s | Optional, from c17: solo the Lead track (isolates solo) |
 | c17m | Optional, from c17: mute the MIDI track (isolates MIDI-track mute) |
+| c18fm | Optional, from c18: mute the folder (isolates folder mute) |
 | c18is ✱ | Optional, Cubase 16: from c17, move the instrument track To New Instrument Stack instead (only instrument tracks can be stacked) |
 
 ### Tier 3: tempo, meter, markers, controllers (phase 2)
@@ -542,12 +545,8 @@ the existing files too.
 6. **Controller curves.** Defer rendering. Import the stored points (with a
    diagnostic) and decode the curve shapes and control points, so rendering and
    its density can be decided later.
-
-### Pending decision
-
-7. **Display offset.** Proposal: keep Cubase's **absolute timeline**, as its own
-   MIDI export does, and record the display offset in the source details
-   (with a diagnostic such as "Cubase shows bar 1 at bar 4 of this import").
-   Shifting so Cubase's bar 1 becomes bar 1 would make bar numbers agree with
-   Cubase, but material before bar 1 (Ditty's pickup) would need negative time,
-   which the model does not have.
+7. **Display offset** (2026-11-15). Import on Cubase's **absolute timeline**,
+   as its own MIDI export does; do not apply the offset. Record it in the
+   source details so it is available later. A likely future use is display
+   only: numbering the ruler's bars with the offset when that source supplies
+   the tempo map.

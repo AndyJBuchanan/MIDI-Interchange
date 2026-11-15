@@ -333,3 +333,23 @@ def test_indy_matches_cubase_midi_export_in_reference_window():
                 shortened.append((name, n[0] / 480, match[3] - n[3]))
     assert sum(len(v) for v in cpr.values()) == 663
     assert shortened == [('Texture Bed', 105, 480), ('Texture Bed', 121, 480)]
+
+
+@pytest.mark.parametrize('step, folder, tracks', [
+    ('c18', 0, {'Folder 01 / Lead': 0, 'Folder 01 / MIDI 01': 0}),
+    # Muting the folder sets its own mute bit and every child track's.
+    ('c18fm', ci.TRACK_MUTE, {'Folder 01 / Lead': ci.TRACK_MUTE, 'Folder 01 / MIDI 01': ci.TRACK_MUTE}),
+])
+def test_tier2_folder_mute(step, folder, tracks):
+    wk, _ = _walk(TIER2 / f'{step}.cpr')
+    folders = {_folder_name(wk, f): ci.folder_state_flags(wk, f)
+               for f in wk.objects.values() if f.cls.name == 'MFolderTrack'}
+    assert folders == {ci.SYSTEM_FOLDER: 0, 'Folder 01': folder}
+    tes = [o for o in wk.objects.values() if o.cls.name in ci.TRACK_EVENTS]
+    assert {' / '.join(ci.folder_path(wk, t) + [ci.track_name(wk, t)]): ci.track_state_flags(wk, t)
+            for t in tes} == tracks
+
+
+def _folder_name(wk, f):
+    lst = next(ch for ch in f.children if ch.cls.name == 'MTrackList')
+    return ci._pstring(wk.d, lst.body_at)[0]
