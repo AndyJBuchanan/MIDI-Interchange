@@ -401,6 +401,9 @@ def decode_clip(b: bytes) -> ClipInfo:
     return ClipInfo(start, length, name, bool(b[p]), loop, offset)
 
 
+LANE_NOTES = 0x59
+
+
 @dataclass
 class LaneInfo:
     kind: int       # 0x59 note lane, 0x5A pattern lane, 0x5B/0x5D automation
@@ -586,23 +589,33 @@ def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
     - when the Blocks switch is on, each unmuted Block placement on the
       Transport track plays its Block's clips from the placement's offset into
       the Block, within the placement; song clips on the same lane cover them
-      (user: empty clips are used to silence a Block locally). Verified on two
-      songs; a third (dec2024-27-02) still has unexplained silences.
+      (user: empty clips are used to silence a Block locally);
+    - a note lane's Block content can be muted at single placements (SMGC,
+      see block_mutes); identical duplicate placements play once, and as with
+      overlapping clips the later copy covers the earlier, so its mute counts.
     """
     ts = tracks(song)
-    places = {}
+    places: dict[tuple, list[int]] = {}         # placement -> its record numbers
+    first: dict[tuple, Clip] = {}
     if blocks_enabled(song):
+        n = -1
         for t in ts:
             for ln in t.lanes:
-                if ln.info.muted:
-                    continue
-                for c in ln.clips:
-                    if c.kind == 'block' and not c.info.muted:     # identical duplicates occur; keep one
-                        places[(c.info.start, c.info.length, c.placed_block, c.placed_offset)] = c
+                for c in (c for c in ln.clips if c.kind == 'block'):
+                    n += 1                              # record number, as SMGC counts them
+                    if ln.info.muted:
+                        continue
+                    key = (c.info.start, c.info.length, c.placed_block, c.placed_offset)
+                    first.setdefault(key, c)
+                    places.setdefault(key, []).append(-1 if c.info.muted else n)   # -1: muted
+    mutes = block_mutes(song)
     result = []
     for t in ts:
         out: list[PlayedNote] = []
+        note_lane = -1
         for ln in t.lanes:
+            if ln.info.kind == LANE_NOTES:
+                note_lane += 1
             if ln.info.muted:
                 continue
             songs, blocks = [], []
@@ -612,8 +625,11 @@ def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
                 if not c.block:
                     songs.append((c.info.start, c.info.start + c.info.length, c, 0))
                     continue
-                for p in places.values():
+                for key, recs in places.items():
+                    p = first[key]
                     if p.placed_block != c.block:
+                        continue
+                    if recs[-1] < 0 or (t.index, note_lane, recs[-1]) in mutes:   # a later twin covers
                         continue
                     base = p.info.start + p.placed_offset      # where the Block's beat 0 falls
                     s = max(base + c.info.start, p.info.start)
@@ -642,6 +658,37 @@ def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
                                 out.append((at, n.pitch, n.velocity, min(n.length, v - at) if hard else n.length))
         result.append((t, sorted(out)))
     return result
+
+
+def block_mutes(song: Song) -> set[tuple[int, int, int]]:
+    """Block content muted at single placements: (track index, note-lane
+    index, placement record number). CAT:SMGC holds one FORM MGDF per muted
+    spot: RLRF has the track at u32 5, the lane kind at 9 and the lane's index
+    among the track's note lanes at u32 10 (-1 for pattern lanes); RSRF has
+    the placement's record number on the Transport lane at u32 5, duplicates
+    counted. Verified on dec2024-27-02 against Reason's export."""
+    out: set[tuple[int, int, int]] = set()
+
+    def find(chunks):
+        for c in chunks:
+            if c.name == 'CAT:SMGC':
+                return c
+            r = find(c.kids)
+            if r is not None:
+                return r
+        return None
+
+    smgc = find(song.body)
+    for mgdf in (smgc.kids if smgc is not None else []):
+        rec = {k.id: song.bytes_of(k) for k in mgdf.kids}
+        lr, sr = rec.get('RLRF', b''), rec.get('RSRF', b'')
+        if len(lr) < 14 or len(sr) < 9 or lr[9] != LANE_NOTES:
+            continue
+        (track,) = struct.unpack_from('>I', lr, 5)
+        (lane,) = struct.unpack_from('>i', lr, 10)
+        (place,) = struct.unpack_from('>I', sr, 5)
+        out.add((track, lane, place))
+    return out
 
 
 def blocks_enabled(song: Song) -> bool:

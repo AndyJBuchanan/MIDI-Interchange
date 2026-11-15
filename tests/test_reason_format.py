@@ -197,6 +197,44 @@ def test_looping_clip_repeats_from_its_loop_offset():
     assert [p for p, *_ in played] == [B, 2 * B, 3 * B, 4 * B, 5 * B, 6 * B, 7 * B]
 
 
+
+def block_song(placements, mutes, blocks_on=True):
+    """Transport track with Block placements [(start, length)] (all Block 1,
+    offset 0), and one instrument track whose Block 1 clip holds notes at 0
+    and 2 beats. mutes: [(track, note lane, placement record)] for SMGC."""
+    def snif(snic, extra):
+        return group(b'FORM', b'SNIF', chunk(b'SNIC', snic), extra)
+
+    def trfm(device, kind, lcai, snifs):
+        return group(b'FORM', b'TRFM', chunk(b'TRDC', rec(5, bytes(6) + struct.pack('>H', device) + bytes(14))),
+                     group(b'CAT ', b'LNCT', group(b'FORM', b'LANF', chunk(b'LANC', rec(3, kind + s32('') + b'\0')),
+                           group(b'CAT ', b'LCCT', group(b'FORM', b'LCFM', chunk(b'LCAI', lcai),
+                                 group(b'CAT ', b'SNCT', *snifs))))))
+    transport = trfm(1, b'\x5d', b'\0', [snif(clip_rec(s, n), chunk(b'SBLK', rec(1, struct.pack('>Hi', 0, 0))))
+                                          for s, n in placements])
+    inst = trfm(7, b'\x59', b'\x01', [snif(clip_rec(0, 4 * B), chunk(b'SNTE', notes_rec([(0, 60, 100, B),
+                                                                                          (2 * B, 62, 100, B)])))])
+    smgc = group(b'CAT ', b'SMGC', *(group(b'FORM', b'MGDF',
+                 chunk(b'RLRF', rec(1, struct.pack('>IBi', t, 0x59, ln))),
+                 chunk(b'RSRF', rec(1, struct.pack('>I', r)))) for t, ln, r in mutes))
+    seq = group(b'CAT ', b'SQCT', chunk(b'TRDC', rec(5, bytes(4) + bytes([blocks_on, 0, 0]))),
+                group(b'CAT ', b'TSCT', transport, inst), smgc)
+    devl = group(b'CAT ', b'DEVL', *(group(b'FORM', b'DEVI', chunk(b'DESC', rec(3, b'\xff' + struct.pack('>I', d) + s32(n))))
+                                    for d, n in ((1, 'Transport'), (7, 'Keys'))))
+    body = b'RS1300' + b'\x1a' + bytes(121) + group(b'CAT ', b'RS10', devl, seq)
+    form = group(b'FORM', b'X15S', chunk(b'BODY', body))
+    song, _ = rf.open_song(container({4: form + chunk(b'Hash', rec(1, hashlib.sha256(form).digest()))}, 5))
+    return [p for p, *_ in rf.played_notes(song)[1][1]]
+
+
+def test_block_placements_play_their_block_and_per_placement_mutes_silence_a_lane():
+    places = [(0, 4 * B), (4 * B, 4 * B), (4 * B, 4 * B), (8 * B, 4 * B), (8 * B, 4 * B), (12 * B, 4 * B)]
+    assert block_song(places, []) == [0, 2 * B, 4 * B, 6 * B, 8 * B, 10 * B, 12 * B, 14 * B]   # twins play once
+    # record 0 muted; the later twin of beat 4 muted (silent); the earlier twin of beat 8 muted (later covers: plays)
+    assert block_song(places, [(1, 0, 0), (1, 0, 2), (1, 0, 3)]) == [8 * B, 10 * B, 12 * B, 14 * B]
+    assert block_song(places, [(1, 1, 0), (2, 0, 0)]) == block_song(places, [])     # other lanes and tracks
+    assert block_song(places, [], blocks_on=False) == []
+
 # ---------------------------------------------------------------- r-series against Reason's exports
 
 def rendered(song):
@@ -219,10 +257,7 @@ def exported(path):
     return {k: sorted(v) for k, v in out.items()}
 
 
-KNOWN_GAPS = {
-    'dec2024-27-02(14).mid': 'Block content is silent in the export on some tracks and times with no '
-                             'overriding clip decoded (open question in the plan)',
-}
+KNOWN_GAPS: dict[str, str] = {}
 R_EXPORTS = sorted(m for m in glob.glob(os.path.join(PROBE, '**', '*.mid'), recursive=True)
                    if os.path.exists(m[:-4] + '.reason'))
 

@@ -156,10 +156,15 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
   the end of the sequencer's `TRDC`: off in SelfDef000 (its export plays no
   Block content), on in r24 and dec2024-27-02. Song clips on the same lane
   cover Block content (user: also empty clips, to silence a Block locally).
-  r24 and SelfDef000 match their exports. **Open: dec2024-27-02** plays Block
-  content on some tracks only at some placements (Arps silent at beats 0-40
-  and 128-140, Bassy Swells' second lane never), with no covering clip in the
-  saved song.
+  **Block content can be muted per lane per placement** (shown hatched in
+  Reason's song view): top-level `CAT:SMGC` holds one `FORM MGDF` per muted
+  spot. `RLRF` has the track index at u32 5, the lane kind at 9 and the lane's
+  index among the track's note lanes at u32 10 (-1 for pattern lanes); `RSRF`
+  has the placement's record number on the Transport lane at u32 5, counting
+  duplicates. Of two identical placements the later covers the earlier, so
+  only the later copy's mute counts (Melody + mutes the first copy at beat
+  124 and still plays there). r24, SelfDef000 and dec2024-27-02 match their
+  exports.
 - **Transport track** is track 0 (named after the hardware interface device in
   the rack; Reason's export calls it `Transport`). Track 1 is the master section.
 
@@ -288,10 +293,12 @@ marker after the last note), as for Cubase.
 
 ## Questions for later
 
-1. **Solo:** r20 was saved without its solo. Fixtures requested: r20s (solo
-   from the sequencer track's S button) and r20x (solo from the mixer).
-2. **Blocks:** do you use Blocks mode? If so, should an import render the song
-   as the Blocks track arranges it (current plan, matching Reason's export)?
+1. **Solo:** sequencer-track solo isn't saved (r20s); mixer solo is (r20x),
+   pending the mixer-channel-to-track mapping. Track mute and solo are ignored
+   by Reason's export, so this only matters for preserving track state.
+2. ~~Blocks~~: rendered as the Blocks track arranges them, matching Reason's
+   export, with song-clip covers and per-placement lane mutes (user used both
+   in dec2024-27-02).
 3. ~~Pattern devices~~: reported as skipped for now; rendering them is on the
    roadmap as a later maybe (user).
 4. ~~Which copy Reason opens~~: r04 opens with velocity 64 (user), matching
