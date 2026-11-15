@@ -205,10 +205,16 @@ and signature points. 42 regression tests in `tests/test_cpr_inspect.py`.
   holds a W-byte **object back-reference**: high bit clear, value = the offset
   of the referenced object's length field (just after its class tag or
   declaration). An independent copy (c15) writes its own `MMidiPart`.
-- **Track mute (c14):** the mixer channel object (`MInstrumentTrack`) gains a
-  named record `SoloFlag` (i64) = 1; it is absent when unmuted. GA's two
-  muted tracks match its DAWproject. Solo bits and how a plain MIDI track
-  stores mute are not established yet (no fixture).
+- **Track mute and solo (c14, c17s, c17m):** a u32 **channel state flags**
+  word: bit 0 = solo, bit 2 = mute, the same for instrument and MIDI tracks.
+  It follows the track's MIDI input port name, which is stored twice (first
+  u32 after it in `MInstrumentTrack`, second in `MMidiTrack`). GA's two muted
+  tracks have mute set; all other fixture tracks are clear. Muting an
+  instrument track also adds a mixer record `SoloFlag` = 1, and soloing adds
+  `Solo` = 1; these look like mixer-side copies. **Phase 3 caveat:** the
+  inspector finds the flags after the default input name "All MIDI Inputs"; a
+  track set to a specific input has another name there, so the reader must
+  parse this header structurally.
 - **Track names** start the track event's `MListNode` child; GA, Ditty and
   indy names match their DAWproject tracks.
 - **Program change (c25):** the standard event layout; data = program, 0.
@@ -231,8 +237,7 @@ and signature points. 42 regression tests in `tests/test_cpr_inspect.py`.
   layout differs; not decoded (deferred).
 
 Still to do in phase 2: the marker track (c22, c23), folder nesting and
-inherited mute, the display offset setting, MIDI-track mute, solo, then the
-indy go/no-go comparison against `indy-001x.mid`. Later: linear time base,
+inherited mute, the display offset setting, then the indy go/no-go comparison against `indy-001x.mid`. Later: linear time base,
 pattern events, controller curve shapes, chord track names.
 
 ## Prior work to read first
@@ -407,6 +412,8 @@ this fast.
 | c16 ✱ | From c14 + unmute, make the bar 9 copy a shared copy instead (Option/Alt-Shift-drag) |
 | c17 ✱ | Add a **MIDI track** (not an instrument track; Add Track ▸ MIDI), output to any instrument or Not Connected, MIDI channel 2 in the Inspector, with one part and one note. All realistic fixtures use instrument tracks only, so this is the only MIDI-track example |
 | c18 ✱ | Put both tracks in a folder track |
+| c17s | Optional, from c17: solo the Lead track (isolates solo) |
+| c17m | Optional, from c17: mute the MIDI track (isolates MIDI-track mute) |
 | c18is ✱ | Optional, Cubase 16: from c17, move the instrument track To New Instrument Stack instead (only instrument tracks can be stacked) |
 
 ### Tier 3: tempo, meter, markers, controllers (phase 2)

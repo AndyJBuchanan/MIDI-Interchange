@@ -119,7 +119,7 @@ def _part_events(wk):
 
 def _tracks(wk):
     tes = sorted((o for o in wk.objects.values() if o.cls.name in ci.TRACK_EVENTS), key=lambda o: o.tag_at)
-    return {ci.track_name(wk, t): ci.track_solo_flag(wk, t) for t in tes}
+    return {ci.track_name(wk, t): ci.track_state_flags(wk, t) for t in tes}
 
 
 @pytest.mark.parametrize('step, start, length, offset, muted', [
@@ -139,11 +139,23 @@ def test_tier2_part_window_and_mute(step, start, length, offset, muted):
     assert [(pe.start - pe.offset + e.position) / 480 for e in events] == [17, 20]
 
 
-@pytest.mark.parametrize('step, muted', [('c13', False), ('c14', True)])
-def test_tier2_track_mute_solo_flag(step, muted):
+@pytest.mark.parametrize('step, flags', [
+    ('c13', {'Lead': 0}),
+    ('c14', {'Lead': ci.TRACK_MUTE}),                     # instrument track muted
+    ('c17', {'Lead': 0, 'MIDI 01': 0}),
+    ('c17s', {'Lead': ci.TRACK_SOLO, 'MIDI 01': 0}),      # instrument track soloed
+    ('c17m', {'Lead': 0, 'MIDI 01': ci.TRACK_MUTE}),      # MIDI track muted
+])
+def test_tier2_track_state_flags(step, flags):
     wk, _ = _walk(TIER2 / f'{step}.cpr')
-    flag = _tracks(wk)['Lead']
-    assert bool(flag and flag & 1) is muted
+    assert _tracks(wk) == flags
+
+
+@pytest.mark.parametrize('step, solo_flag', [('c13', None), ('c14', 1)])
+def test_tier2_mixer_solo_flag_record_follows_mute(step, solo_flag):
+    wk, _ = _walk(TIER2 / f'{step}.cpr')
+    te = next(o for o in wk.objects.values() if o.cls.name == 'MInstrumentTrackEvent')
+    assert ci.track_solo_flag(wk, te) == solo_flag
 
 
 @pytest.mark.parametrize('step, shared', [('c15', False), ('c16', True)])
@@ -211,4 +223,4 @@ def test_tier3_signature_points():
 def test_realistic_mute_states_match_dawproject(name, muted_parts, muted_tracks):
     wk, _ = _walk(SETS / f'{name}.cpr')
     assert sum(pe.muted for pe in _part_events(wk)) == muted_parts
-    assert [n for n, f in _tracks(wk).items() if f and f & 1] == muted_tracks
+    assert [n for n, f in _tracks(wk).items() if f & ci.TRACK_MUTE] == muted_tracks

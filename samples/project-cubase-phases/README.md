@@ -28,7 +28,8 @@ Cubase 16.0.5 only (tier 1 showed the musical encoding matches 15).
 `c14`, `c16`, `c17`, `c18`). The c12 end trim is one sixteenth, so the part is
 1.2.3 long (bars.beats.sixteenths) from 5.2. c15 is an independent copy at bar
 9; c16 a shared copy there. c17 adds a MIDI track (not an instrument track) on
-channel 2; c18 puts both tracks in a folder. `c18is` is c17 with the
+channel 2; `c17s` and `c17m` are c17 with the Lead track soloed and with
+the MIDI track muted. c18 puts both tracks in a folder. `c18is` is c17 with the
 instrument track moved To New Instrument Stack instead (only instrument tracks
 can be stacked, so the stack holds one track and the MIDI track stays outside).
 

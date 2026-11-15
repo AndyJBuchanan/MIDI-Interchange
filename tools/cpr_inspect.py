@@ -482,10 +482,38 @@ def track_name(wk: Walker, track_event: Obj) -> str:
     return _pstring(wk.d, node.body_at)[0] if node else '?'
 
 
+TRACK_SOLO = 0x1
+TRACK_MUTE = 0x4
+
+
+def track_state_flags(wk: Walker, track_event: Obj) -> int | None:
+    """Channel state flags: bit 0 = solo, bit 2 = mute (tier 2 c14, c17s,
+    c17m; GA's two muted tracks).
+
+    The u32 follows the track's MIDI input port, stored as the same
+    length-prefixed name twice; it is the first u32 after the second copy in
+    MInstrumentTrack and the second in MMidiTrack. Located here by the default
+    input name 'All MIDI Inputs', which every fixture uses. A track set to a
+    specific input stores another name, so the reader needs a structural parse
+    of this header (phase 3).
+    """
+    ch = next((c for c in track_event.children if c.cls.name in ('MInstrumentTrack', 'MMidiTrack')), None)
+    if ch is None:
+        return None
+    body = wk.d[ch.body_at:ch.end]
+    name = b'All MIDI Inputs\x00'
+    k = body.find(name)
+    k = body.find(name, k + 1) if k >= 0 else -1
+    if k < 0:
+        return None
+    at = k + len(name) + (4 if ch.cls.name == 'MMidiTrack' else 0)
+    return int.from_bytes(body[at:at + 4], 'big')
+
+
 def track_solo_flag(wk: Walker, track_event: Obj) -> int | None:
-    """Mixer channel record 'SoloFlag' (i64) in the track's MInstrumentTrack.
-    Present with value 1 when the track is muted (tier 2 c14; GA's two muted
-    tracks); absent otherwise. Solo bits are not yet established."""
+    """Mixer channel record 'SoloFlag' (i64), present with value 1 when an
+    instrument track is muted (alongside a 'Solo' record when soloed). The
+    channel state flags (track_state_flags) are the primary source."""
     ch = next((c for c in track_event.children if c.cls.name in ('MInstrumentTrack', 'MMidiTrack')), None)
     if ch is None:
         return None
@@ -555,9 +583,10 @@ def cmd_notes(a) -> None:
     c = read_container(a.file)
     wk, objs = walk_archive(c, 'Arrangement1')
     for te in sorted((o for o in wk.objects.values() if o.cls.name in TRACK_EVENTS), key=lambda o: o.tag_at):
-        flag = track_solo_flag(wk, te)
-        print(f'track {track_name(wk, te)!r} [{te.cls.name}] SoloFlag {flag}'
-              + ('  (muted)' if flag and flag & 1 else ''))
+        flags = track_state_flags(wk, te)
+        state = [] if flags is None else [n for bit, n in ((TRACK_MUTE, 'muted'), (TRACK_SOLO, 'soloed')) if flags & bit]
+        print(f'track {track_name(wk, te)!r} [{te.cls.name}] flags {flags}'
+              + (f"  ({', '.join(state)})" if state else ''))
         for pe_obj in sorted((o for o in wk.objects.values() if o.cls.name == 'MMidiPartEvent'
                               and te.body_at <= o.tag_at < te.end), key=lambda o: o.tag_at):
             pe = part_event_info(wk, pe_obj)
