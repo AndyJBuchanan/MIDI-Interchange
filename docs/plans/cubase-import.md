@@ -434,21 +434,26 @@ the existing files too.
   - Not yet decoded: program change (status `C0`), tempo, signature and
     marker tracks.
 
-## Questions for you
+## Decisions (2026-11-15)
 
-1. **Generated material.** Agree to skip MIDI inserts and the chord track with
-   diagnostics, and decide pattern events and track transpose/velocity after
-   phase 2?
-2. **Version support.** Cubase 15 and 16 only, with a clean "unsupported
-   version" message for others?
-3. **Fixture privacy.** Commit the new progressive fixtures (saved in a neutral
-   folder)? Keep, replace or remove the three existing `.cpr` files that
-   contain your local paths? Removing them from history would need a rewrite;
-   replacing them going forward does not.
-4. **Range markers.** Map cycle markers to a marker at their start (named), or
-   skip them with a diagnostic?
-5. **Tempo ramps.** DAWproject fails on ramps. For Cubase, should the reader
-   approximate ramps with fine steps (and say so), or fail as DAWproject does?
-6. **Controller curves.** Cubase stores CC/pitch-bend curve points and renders
-   them densely on export (c24: 2 → 36 CC1, 12 → 251 bends). Proposal: import
-   the stored points with a diagnostic first; render curves later if needed.
+1. **Generated material.** Skip MIDI inserts with diagnostics. Decide pattern
+   events and track transpose/velocity once phase 2 shows how they are stored.
+   **Chord track:** don't render chords as notes, but show the chord names on a
+   new proxy marker track. Investigation and design come in a later phase;
+   recorded in the roadmap.
+2. **Version support.** Cubase 15 and 16 for now, with a clean "unsupported
+   version" message for others. The user can later supply real-world projects
+   from Cubase 14, 13 and 10.5 (not progressive c-series files) for broader
+   support.
+3. **Fixture privacy.** No action. The embedded paths reveal only the user's
+   name, which is already public through the GitHub account. Revisit only if
+   fixtures would expose more.
+4. **Cycle (range) markers.** A named marker at the range start (`Intro`), and
+   a closing marker at the range end named after the range with a bar
+   (`Intro |`). Omit the closing marker when it coincides with the start of
+   another range or with a standard marker.
+5. **Tempo ramps.** Approximate with fine tempo steps, with a diagnostic.
+   Cubase's own MIDI export does the same (c20).
+6. **Controller curves.** Defer rendering. Import the stored points (with a
+   diagnostic) and decode the curve shapes and control points, so rendering and
+   its density can be decided later.
