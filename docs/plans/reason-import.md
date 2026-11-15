@@ -176,8 +176,8 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
 
 - **Track solo:** r20s (solo from the sequencer track) saves nothing different
   from r20. r20x (solo from the mixer) changes one parameter of the track's
-  mixer channel device (`X15 Main Mixer Mix Channel`, parameter 2). Mapping a
-  mixer channel to its sequencer track is not decoded yet.
+  mixer channel device (`X15 Main Mixer Mix Channel`, parameter 2). Not
+  pursued: see phase 2 decision 2.
 - Curve bytes (a float curvature; Reason renders curves with off-grid steps).
 
 ## Phase 2: reader
@@ -200,8 +200,13 @@ Reason export, imported and exported by the app, against that export).
 2. **Mutes:** muted clips, muted lanes and muted Block placements arrive as
    muted clips (rendered as if unmuted, so unmuting plays what Reason would).
    Track mute is kept, as for Cubase, so a muted track doesn't export from
-   the app (Reason's own export ignores track mute). Solo isn't stored for
-   sequencer tracks (r20s).
+   the app (Reason's own export ignores track mute). **Only track and clip
+   mutes are imported; the mixer is ignored** (user, 2026-11-15). Solo isn't
+   stored for sequencer tracks (r20s), and mixer mute/solo belong to the
+   rack: Reason is rack-based, a sequencer track drives a device rather than
+   owning a mixer channel, and there is no guaranteed one-to-one mapping
+   between tracks and mixer channels. The rack is treated as separate from
+   the sequencer, so imported tracks are never soloed.
 3. **Lanes merge into their track**; folders are flattened (the plan said
    folder path names; flattening keeps track names matching the user's other
    imports. Revisit if wanted).
@@ -242,7 +247,6 @@ Reason export, imported and exported by the app, against that export).
 
 ### Next
 
-- Mixer solo (r20x) needs the mixer-channel-to-track mapping.
 - Controller curves, if wanted (four lanes in the probe set).
 - The user's checks: [TEST_CHECKLIST 8o](../TEST_CHECKLIST.md).
 
@@ -352,9 +356,8 @@ marker after the last note), as for Cubase.
 
 ## Questions for later
 
-1. **Solo:** sequencer-track solo isn't saved (r20s); mixer solo is (r20x),
-   pending the mixer-channel-to-track mapping. Track mute and solo are ignored
-   by Reason's export, so this only matters for preserving track state.
+1. ~~Solo~~: only track and clip mutes are imported; the mixer (where solo
+   lives, r20x) is part of the rack and is ignored (user; phase 2 decision 2).
 2. ~~Blocks~~: rendered as the Blocks track arranges them, matching Reason's
    export, with song-clip covers and per-placement lane mutes (user used both
    in dec2024-27-02).

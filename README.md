@@ -78,7 +78,7 @@ Reason plays there: loops are written out, overlapped parts are left out, and
 Blocks are written out at each placement. Notes, mod wheel, pitch bend,
 sustain, expression and aftertouch come across, with tempo and time
 signatures. Muted clips, lanes and Block placements arrive as muted clips, and
-track mute is kept. The song file is only read. Pattern clips, audio, device
+track mute is kept; mixer mute and solo (part of Reason's rack) are not read. The song file is only read. Pattern clips, audio, device
 automation, Player devices and controller curve shapes are reported as
 skipped. Older songs are encrypted: open them in Reason 13 or later and save
 them again first. See the [Reason plan](docs/plans/reason-import.md).
