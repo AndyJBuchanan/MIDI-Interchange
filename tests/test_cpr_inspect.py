@@ -224,3 +224,112 @@ def test_realistic_mute_states_match_dawproject(name, muted_parts, muted_tracks)
     wk, _ = _walk(SETS / f'{name}.cpr')
     assert sum(pe.muted for pe in _part_events(wk)) == muted_parts
     assert [n for n, f in _tracks(wk).items() if f & ci.TRACK_MUTE] == muted_tracks
+
+
+def test_tier3_markers():
+    wk, _ = _walk(TIER3 / 'c23.cpr')
+    got = [(m.name, m.start / 480, m.length / 480, m.is_range) for m in ci.markers(wk)]
+    assert got == [('Intro', 0, 12, True),       # cycle marker bars 1-3 inclusive
+                   ('Verse', 4, 0, False),       # bar 2
+                   ('Chorus', 19, 0, False)]     # bar 6, after the 3/4 bar
+
+
+def test_indy_range_markers_are_contiguous_sections():
+    wk, _ = _walk(SETS / 'indy-001x.cpr')
+    ms = ci.markers(wk)
+    assert [m.name for m in ms] == ['INTRO', 'SECTION A', 'SECTION B', 'SECTION C', "SECTION B'", 'SECTION C']
+    assert all(m.is_range and m.length == 32 * 480 for m in ms)
+    assert all(a.start + a.length == b.start for a, b in zip(ms, ms[1:]))   # length, not end
+    assert ms[0].start == 4 * 480 and ms[-1].start + ms[-1].length == 196 * 480
+
+
+@pytest.mark.parametrize('path, offset', [
+    (TIER1 / 'Cubase16/c02.cpr', 0),
+    (TIER1 / 'Cubase16/c02-1.cpr', -1),
+    (TIER1 / 'Cubase15/c02-1.cpr', -1),
+    (SETS / 'Ditty-04-Macbook.cpr', -3),
+    (SETS / 'GA & Padshop 2-(alt instr 2)-01.cpr', 0),
+    (SETS / 'indy-001x.cpr', -1),
+])
+def test_display_bar_offset(path, offset):
+    wk, _ = _walk(path)
+    assert ci.display_bar_offset(wk) == offset
+
+
+def _track_paths(wk):
+    tes = sorted((o for o in wk.objects.values() if o.cls.name in ci.TRACK_EVENTS), key=lambda o: o.tag_at)
+    out = {}
+    for t in tes:
+        parts = [o for o in wk.objects.values() if o.cls.name == 'MMidiPartEvent' and t.body_at <= o.tag_at < t.end]
+        out[' / '.join(ci.folder_path(wk, t) + [ci.track_name(wk, t)])] = len(parts)
+    return out
+
+
+def test_tier2_folder_and_instrument_stack():
+    wk, _ = _walk(TIER2 / 'c18.cpr')
+    assert _track_paths(wk) == {'Folder 01 / Lead': 2, 'Folder 01 / MIDI 01': 1}
+    # Stacking moves the parts onto the stack's own MIDI track, named after
+    # the stack, as Cubase's MIDI export shows; the member track is empty.
+    wk, _ = _walk(TIER2 / 'c18is.cpr')
+    assert _track_paths(wk) == {'Instrument Stack 01 / Instrument Stack 01': 2,
+                                'Instrument Stack 01 / Lead': 0, 'MIDI 01': 1}
+
+
+def test_indy_matches_cubase_midi_export_in_reference_window():
+    """Phase 2 go/no-go: indy's arrangement vs Cubase's own MIDI export.
+
+    Same rules as the DAWproject comparison: part and track mute applied,
+    notes cut at the visible part edge, explicit [3, 196) beat window rebased
+    to zero, one-tick tolerance (Cubase stores fractional ticks and rounds on
+    export). Expected residue, as for DAWproject: the two Texture Bed tails
+    (clip-edge policy) and the 644 Pattern Editor drum notes (MPatternEvent).
+    """
+    import mido
+    w0, w1 = 3 * 480, 196 * 480
+    wk, _ = _walk(SETS / 'indy-001x.cpr')
+    cpr = {}
+    for te in (o for o in wk.objects.values() if o.cls.name in ci.TRACK_EVENTS):
+        if ci.track_state_flags(wk, te) & ci.TRACK_MUTE:
+            continue
+        notes = []
+        for o in (o for o in wk.objects.values() if o.cls.name == 'MMidiPartEvent' and te.body_at <= o.tag_at < te.end):
+            pe = ci.part_event_info(wk, o)
+            if pe.muted:
+                continue
+            events, problems, _ = ci.decode_part_events(wk, pe.part)
+            assert problems == []
+            hi = pe.start + pe.length
+            for e in events:
+                on = pe.start - pe.offset + e.position
+                if e.status == 0x90 and pe.start <= on < hi and w0 <= on < w1:
+                    notes.append((on - w0, e.data[0], e.data[1], min(on + e.length, hi, w1) - on))
+        if notes:
+            cpr[ci.track_name(wk, te)] = notes
+    ref = {}
+    mid = mido.MidiFile(str(SETS / 'indy-001x.mid'))
+    for t in mid.tracks:
+        name = next((m.name for m in t if m.type == 'track_name'), '?')
+        tick, held, out = 0, {}, []
+        for m in t:
+            tick += m.time
+            if m.type == 'note_on' and m.velocity:
+                held.setdefault(m.note, []).append((tick, m.velocity))
+            elif m.type in ('note_on', 'note_off') and held.get(m.note):
+                s, v = held[m.note].pop(0)
+                out.append((s, m.note, v, tick - s))
+        if out:
+            ref[name] = out
+    assert set(ref) - set(cpr) == {'Drum Core', 'Drum Core ='}
+    assert sum(len(ref[n]) for n in ('Drum Core', 'Drum Core =')) == 644
+    shortened = []
+    for name, notes in cpr.items():
+        pool = sorted(ref[name])
+        assert len(notes) == len(pool)
+        for n in sorted(notes):
+            match = next((r for r in pool if abs(r[0] - n[0]) <= 1 and r[1:3] == n[1:3]), None)
+            assert match is not None, (name, n)
+            pool.remove(match)
+            if abs(match[3] - n[3]) > 1:
+                shortened.append((name, n[0] / 480, match[3] - n[3]))
+    assert sum(len(v) for v in cpr.values()) == 663
+    assert shortened == [('Texture Bed', 105, 480), ('Texture Bed', 121, 480)]

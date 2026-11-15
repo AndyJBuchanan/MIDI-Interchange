@@ -10,7 +10,7 @@ Usage:
     cpr_inspect.py tree FILE [--archive NAME] [--depth N] [--offsets]
     cpr_inspect.py classes FILE [--archive NAME]
     cpr_inspect.py notes FILE                 tracks, parts (mute, trims, shared) and events
-    cpr_inspect.py timeline FILE              tempo and time-signature points
+    cpr_inspect.py timeline FILE              tempo, signatures, display offset, markers
     cpr_inspect.py diff FILE_A FILE_B [--archive NAME]
     cpr_inspect.py hex FILE START END [--archive NAME]
 
@@ -524,6 +524,67 @@ def track_solo_flag(wk: Walker, track_event: Obj) -> int | None:
     return int.from_bytes(body[k + 15:k + 23], 'big', signed=True)   # 4 + 'SoloFlag\\0' + u16 type
 
 
+SYSTEM_FOLDER = 'Input/Output Channels'
+
+
+def folder_path(wk: Walker, track_event: Obj) -> list[str]:
+    """Names of the MFolderTrack ancestors of a track, outermost first.
+
+    A folder holds its own MTrackList, whose body starts with the folder's
+    name. Every project has a built-in 'Input/Output Channels' folder holding
+    the device, tempo and signature tracks; it is omitted here. An
+    instrument stack (Cubase 16) is also an MFolderTrack (tier 2 c18is).
+    Folder mute/solo is not decoded yet (no fixture).
+    """
+    names = []
+    for f in sorted((o for o in wk.objects.values() if o.cls.name == 'MFolderTrack'
+                     and o.body_at <= track_event.tag_at < o.end), key=lambda o: o.tag_at):
+        lst = next((ch for ch in f.children if ch.cls.name == 'MTrackList'), None)
+        name = _pstring(wk.d, lst.body_at)[0] if lst else '?'
+        if name != SYSTEM_FOLDER:
+            names.append(name)
+    return names
+
+
+@dataclass
+class Marker:
+    name: str
+    ident: int
+    start: float         # ticks
+    length: float        # ticks; 0 for a plain marker
+    is_range: bool       # cycle (range) marker
+
+
+def markers(wk: Walker) -> list[Marker]:
+    """MMarkerEvent / MRangeMarkerEvent in the marker track's list.
+
+    Body: string name | u32 id | u16 (0) | f64 start | f64 length (ticks).
+    A range marker ends at start + length (indy's contiguous sections confirm
+    length, not end).
+    """
+    out = []
+    for o in sorted(wk.objects.values(), key=lambda o: o.tag_at):
+        if o.cls.name in ('MMarkerEvent', 'MRangeMarkerEvent'):
+            name, p = _pstring(wk.d, o.body_at)
+            ident = int.from_bytes(wk.d[p:p + 4], 'big')
+            start, length = struct.unpack('>dd', wk.d[p + 6:p + 22])
+            out.append(Marker(name, ident, start, length, o.cls.name == 'MRangeMarkerEvent'))
+    return out
+
+
+def display_bar_offset(wk: Walker) -> int | None:
+    """PArrangeSetup: i32 at body offset 84 (v8 and v9, RIFF and RIF2).
+
+    0 normally; -1 when the project shows a blank bar before bar 1 (tier 1
+    c02-1), so displayed bar 1 is at absolute tick 1920 in 4/4. Ditty is -3,
+    indy -1, GA 0. The absolute timeline is unaffected.
+    """
+    o = next((o for o in wk.objects.values() if o.cls.name == 'PArrangeSetup'), None)
+    if o is None or o.length < 88:
+        return None
+    return int.from_bytes(wk.d[o.body_at + 84:o.body_at + 88], "big", signed=True)
+
+
 # --------------------------------------------------------------- reporting
 
 def _fmt_obj(o: Obj, offsets: bool) -> str:
@@ -585,7 +646,8 @@ def cmd_notes(a) -> None:
     for te in sorted((o for o in wk.objects.values() if o.cls.name in TRACK_EVENTS), key=lambda o: o.tag_at):
         flags = track_state_flags(wk, te)
         state = [] if flags is None else [n for bit, n in ((TRACK_MUTE, 'muted'), (TRACK_SOLO, 'soloed')) if flags & bit]
-        print(f'track {track_name(wk, te)!r} [{te.cls.name}] flags {flags}'
+        path = ' / '.join(folder_path(wk, te) + [track_name(wk, te)])
+        print(f'track {path!r} [{te.cls.name}] flags {flags}'
               + (f"  ({', '.join(state)})" if state else ''))
         for pe_obj in sorted((o for o in wk.objects.values() if o.cls.name == 'MMidiPartEvent'
                               and te.body_at <= o.tag_at < te.end), key=lambda o: o.tag_at):
@@ -628,6 +690,11 @@ def cmd_timeline(a) -> None:
         elif o.cls.name == 'MSignatureTrackEvent':
             for ticks, num, den in signature_points(wk, o):
                 print(f'signature {num}/{den} at tick {ticks} ({ticks / 480:g} beats)')
+    print(f'display bar offset: {display_bar_offset(wk)}')
+    for m in markers(wk):
+        kind = 'range ' if m.is_range else ''
+        end = f' to {(m.start + m.length) / 480:g}' if m.is_range else ''
+        print(f'{kind}marker {m.ident} {m.name!r} at {m.start / 480:g} beats{end}')
 
 
 def cmd_diff(a) -> None:
