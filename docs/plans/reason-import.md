@@ -55,7 +55,7 @@ would meet:
 | **Pattern lanes** on pattern devices (Redrum, Matrix…): clips hold bank + pattern number | The notes are in the device, not the sequencer; report as skipped unless converted to notes in Reason |
 | **Player** devices (MIDI effects generating notes) | Generated at playback; report, don't render |
 | **Blocks mode**: a Blocks track whose Block automation clips choose which Block section plays | The arrangement may be built from Blocks; needs a rule (see questions) |
-| **Transport track**: tempo automation lane and time-signature automation lane | The tempo map; ramps likely (automation curves) |
+| **Transport track**: tempo automation lane and time-signature automation lane | The tempo map. Tempo automation lives in **clips**; outside any clip the song's global tempo applies (confirmed by the user, r17). Ramps are lines between automation points |
 | Left/Right locators, **End marker** | MIDI export runs from song start to the End marker |
 | Alien clips (imported data that doesn't fit a lane) | Report |
 | No MIDI channels in the sequencer | Every imported track is channel 1, as Reason's own export does |
@@ -166,8 +166,8 @@ keep export options the same throughout.
 | r14 ✱ | Unmute it; mute the track |
 | r15 ✱ | Unmute; add a second note lane with one clip, then mute that lane |
 | r16 ✱ | Unmute the lane; add a mod wheel move and a pitch bend in the first clip |
-| r17 ✱ | Tempo automation: 90 BPM from bar 3 (a step) |
-| r18 ✱ | Make it a ramp from bar 3 to bar 5 |
+| r17 ✱ | Tempo automation clip on the Transport track, bars 3-18, at 90 BPM (global tempo 120 applies outside the clip); End marker after bar 18 |
+| r18 ✱ | Same clip: points 120 at bar 3 and 90 at bar 5 (a ramp), then 90 to the clip end; End marker after bar 18 |
 | r19 ✱ | Time signature 3/4 at bar 5 |
 | r20 ✱ | Second instrument track with one clip; solo it |
 | r21 ✱ | A Redrum (pattern) track with a one-bar pattern (expect: reported as skipped) |
