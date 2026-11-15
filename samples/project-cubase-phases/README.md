@@ -41,3 +41,13 @@ Built on tier 2 (the Lead track keeps its bar 9 copy; the MIDI track is on
 channel 2). c24's CC1 ramp and pitch bend, and c25's program change and
 sustain, are in the MIDI track's part at bar 1. c26 switches the Lead track to
 linear time base.
+
+## Verify (2026-11-15)
+
+Real projects from the user's spot test. Committed: `Beat003vs.cpr` (15.0.30;
+Omnivocal lyric properties, varied mixer tail), `seqtest-001.cpr` (16.0.5; a
+drum and a melodic Pattern Editor track) and `vocalfun001(16).cpr` (16.0.5;
+Omnivocal score lyrics, a Drum Track, an ARA Synthesizer V track). Kept local
+and ignored by git (size): BBCSO Woodwinds (15.0.10, 25 MB), an orchestral
+project (15.0.5, 173 MB) and Scaler3Test (14.0.20). Tests skip files that are
+absent.

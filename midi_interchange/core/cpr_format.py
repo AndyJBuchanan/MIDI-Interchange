@@ -514,7 +514,9 @@ def signature_points(wk: Walker, ev: Obj) -> list[tuple[int, int, int]]:
     return out
 
 
-TRACK_EVENTS = ('MInstrumentTrackEvent', 'MMidiTrackEvent')
+# MDrumTrackEvent (Cubase's Drum Track) derives from MInstrumentTrackEvent and
+# has the same MInstrumentTrack mixer object (verify file vocalfun001, 16.0.5).
+TRACK_EVENTS = ('MInstrumentTrackEvent', 'MMidiTrackEvent', 'MDrumTrackEvent')
 
 
 def track_time_base_linear(wk: Walker, track_event: Obj) -> bool:

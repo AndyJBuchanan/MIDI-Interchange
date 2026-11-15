@@ -368,6 +368,48 @@ committed; tests skip when absent) exposed decoder assumptions:
   MIDI parts, so it can't validate the reader; Cubase 14 stays unsupported
   until a project with parts is checked.
 
+## Phase 4: Pattern Editor, Drum Tracks and lyrics (scoped 2026-11-15)
+
+**Decision 8 (2026-11-15).** Render Pattern Editor parts as notes, as
+accurately as possible from their start bars, including different lane
+lengths, and render random events as if played. Best effort first, then
+iterate. Cubase 14 has drum patterns only; 15 and later also have melodic
+patterns (whether stored differently is to find out).
+
+Known so far:
+
+- **Pattern placements** (`MPatternEvent`) are named records: `Start` and
+  `Length` (ticks), `priority`, `vertical`, `patternNr` (index into a pattern
+  bank). indy has 40, on its two drum tracks.
+- **Pattern definitions** are named records elsewhere in the arrangement
+  (`Lanes`, `LaneInfo`, `LaneMetaDataList`, `NrOfSteps`, `Steps`, `Velocity`,
+  `StepResolution`, `ActivePattern`), probably inside each track's mixer object
+  with its inserts. `PatternEditorProjectData` holds only the last scale and
+  root key.
+- **Ground truth:** indy's MIDI export has the rendered drums (Drum Core 596
+  notes, Drum Core = 48), to compare with the decoded patterns. `seqtest-001`
+  has a drum and a melodic pattern track.
+- **Drum Track** (`MDrumTrackEvent`) derives from `MInstrumentTrackEvent`;
+  recognised from this phase on (name and state read). vocalfun's holds a
+  pattern part only.
+- **Lyrics:** Omnivocal lyrics are stored per note as `ScTextAttrib` objects in
+  note properties (Beat003vs: "Kettles[k eh]", syllable plus phonemes), and
+  Cubase 16's lyrics as `MScoreEvent` objects with `ScLyricAttrib` in parts
+  (vocalfun: 69). Importing them as lyric meta events fits the roadmap's
+  lyrics goal; scope to agree.
+- **ARA tracks** (`AXtProjectTrackEvent`; vocalfun's Synthesizer V track): the
+  notes live inside the plug-in, not in MIDI parts. Report as skipped.
+
+Fixture requests (Cubase 15/16, each with a MIDI export): a one-bar drum
+pattern (kick on 1 and 3); add snare on 2 and 4; change one step's velocity;
+change the step resolution; change the pattern length; lanes of different
+lengths; a second pattern placed after the first; a muted pattern part; swing
+and any per-step extras used (repeats, probability, conditions); then the
+melodic equivalents.
+
+Pattern decoding is reverse-engineering again: High effort suits it, as for
+phases 1 and 2.
+
 ## Prior work to read first
 
 Read for understanding; check each licence before copying any code.

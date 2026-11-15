@@ -310,3 +310,19 @@ def test_skipping_mixer_bodies_does_not_change_imports():
         finally:
             cf.READER_SKIP = original
         assert skipped == full, path.name
+
+
+def test_verify_drum_track_is_a_track_and_lyric_project_imports():
+    """16.0.5: Cubase's Drum Track (MDrumTrackEvent) is recognised and its
+    state read; this one holds only a pattern part (reported until pattern
+    rendering exists). The project's Omnivocal parts import."""
+    from midi_interchange.core import cpr_format as cf
+    path = verify('vocalfun001(16).cpr')
+    c = cf.read_container(str(path))
+    wk, _ = cf.walk_archive(c, 'Arrangement1', skip=cf.READER_SKIP)
+    drums = [o for o in wk.objects.values() if o.cls.name == 'MDrumTrackEvent']
+    assert [cf.track_name(wk, o) for o in drums] == ['Drums']
+    assert cf.track_state_flags(wk, drums[0]) == 0
+    source, tracks, _ = read(path)
+    assert by_name(tracks)['Omnivocal Reeve'].clips
+    assert any('Pattern Editor parts are not imported' in w for w in source.warnings)
