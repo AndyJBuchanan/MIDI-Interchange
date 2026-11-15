@@ -283,6 +283,9 @@ CLASS_STATUS = {'MMidiNote': 0x90, 'MMidiPolyPressure': 0xA0, 'MMidiAfterTouch':
 DATA_BYTES = {0x90: 3, 0xB0: 3, 0xE0: 3, 0xC0: 3, 0xA0: 3, 0xD0: 3}
 
 
+EVENT_MUTED = 0x20000     # a note muted in the editors (GA's kit: 2,399 notes Cubase doesn't export)
+
+
 @dataclass
 class CprEvent:
     status: int
@@ -293,6 +296,11 @@ class CprEvent:
     length: float | None = None   # notes only, ticks
     tail: bytes = b''             # notes only: 17 bytes after the length
     framed: bool = False          # written as a full object (00 + tag)
+    flags: int = 0                # u32 after the data bytes: EVENT_MUTED
+
+    @property
+    def muted(self) -> bool:
+        return bool(self.flags & EVENT_MUTED)
 
     @property
     def kind(self) -> str:
@@ -342,9 +350,10 @@ def parse_event_body(wk: Walker, p: int, status: int, limit: int) -> tuple[CprEv
     nd = DATA_BYTES[status]
     chan = d[p + 8]
     data = d[p + 9:p + 8 + nd]
-    q = p + 8 + nd + 4                         # u32 unknown (zero so far)
+    flags = int.from_bytes(d[p + 8 + nd:p + 12 + nd], 'big')
+    q = p + 8 + nd + 4
     props, q = _props(wk, q, limit)
-    ev = CprEvent(status, pos, chan, data, props)
+    ev = CprEvent(status, pos, chan, data, props, flags=flags)
     if status == 0x90:
         ev.length = struct.unpack('>d', d[q:q + 8])[0]
         ev.tail = d[q + 8:q + 25]

@@ -69,6 +69,7 @@ becomes a start marker plus a closing `name |` marker). Tempo ramps are
 approximated with a step every beat. The project file is only read. Audio,
 Pattern Editor parts, the chord track, instruments, MIDI inserts/modifiers,
 controller curve shapes and linear-time-base tracks are reported as skipped.
+Notes muted in Cubase's editors are left out, as Cubase's own MIDI export does.
 Cubase's display bar offset is recorded in Source Info but not applied. See the
 [Cubase plan](docs/plans/cubase-import.md).
 

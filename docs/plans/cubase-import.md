@@ -364,6 +364,15 @@ committed; tests skip when absent) exposed decoder assumptions:
   declaration with a regex pre-pass, then doesn't walk mixer-object bodies:
   0.18 s instead of 3.5 s, with identical results on all 48 fixture and verify
   projects.
+- **Muted notes** (GA's whole-song MIDI export, 2026-11-15). The u32 after
+  each event's data bytes, previously "unknown, zero so far", is a flags word:
+  **0x20000 = note muted** in the editors (drawn hollow in the Key Editor).
+  All 2,399 flagged notes on GA's kit are absent from Cubase's MIDI export,
+  and all 2,548 unflagged ones are present, exactly. Muted notes are now left
+  out with a warning (the workspace has no per-note mute). Across the
+  fixtures 5,019 notes carry it, and nothing else ever sets that word.
+  Cubase's **DAWproject export keeps muted notes and doesn't mark them**,
+  which explains GA's "846 extra kit notes" in the DAWproject comparison.
 - **Cubase 14** (Scaler3Test, 14.0.20) walks with the same classes, but has no
   MIDI parts, so it can't validate the reader; Cubase 14 stays unsupported
   until a project with parts is checked.

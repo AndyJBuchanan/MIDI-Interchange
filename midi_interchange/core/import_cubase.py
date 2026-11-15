@@ -102,6 +102,11 @@ def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter) -> list
         warn(SKIPPED_OBJECTS.get(cls, f'Part objects of type {cls} are not imported'))
     out: list[tuple[F, mido.Message]] = []
     for e in raw:
+        if e.muted:
+            # Muted in Cubase's editors: silent, and left out of its MIDI export
+            # (GA's kit: all 2,399 flagged notes absent from the export).
+            warn('Muted notes are not imported')
+            continue
         if e.channel > 15 or any(x > 127 for x in e.data[:1 if e.status in (0xC0, 0xD0) else 2]):
             # Cubase can store out-of-range values (orchestral verify file:
             # one aftertouch value of 201). Skip the event, keep the import.

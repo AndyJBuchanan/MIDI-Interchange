@@ -137,16 +137,28 @@ def test_tier3_linear_time_base_track_reported_not_imported():
 
 # --------------------------------------------------------- real projects
 
-@pytest.mark.parametrize('name, version, offset, notes_, muted_clips, muted_tracks', [
-    ('Ditty-04-Macbook', '15.0.21', -3, 1501, 52, set()),
-    ('GA & Padshop 2-(alt instr 2)-01', '15.0.30', 0, 6435, 0, {'Engaging Peace', 'Where Are We'}),
-    ('indy-001x', '15.0.30', -1, 819, 2, set()),
+def muted_note_count(path):
+    from midi_interchange.core import cpr_format as cf
+    wk, _ = cf.walk_archive(cf.read_container(None, path.read_bytes()), 'Arrangement1', skip=cf.READER_SKIP)
+    parts = [o for o in wk.objects.values() if o.cls.name == 'MMidiPartEvent']
+    return sum(1 for o in parts for e in cf.decode_part_events(wk, cf.part_event_info(wk, o).part)[0]
+               if e.status == 0x90 and e.muted)
+
+
+@pytest.mark.parametrize('name, version, offset, notes_, muted_notes, muted_clips, muted_tracks', [
+    ('Ditty-04-Macbook', '15.0.21', -3, 1501, 19, 52, set()),
+    ('GA & Padshop 2-(alt instr 2)-01', '15.0.30', 0, 6435, 2486, 0, {'Engaging Peace', 'Where Are We'}),
+    ('indy-001x', '15.0.30', -1, 819, 2, 2, set()),
 ])
-def test_real_projects_match_dawproject_counts(name, version, offset, notes_, muted_clips, muted_tracks):
+def test_real_projects_match_dawproject_counts(name, version, offset, notes_, muted_notes, muted_clips, muted_tracks):
+    """Cubase's DAWproject export keeps muted notes (unmarked); its MIDI
+    export and the native reader leave them out."""
     source, tracks, _ = read(SETS / f'{name}.cpr')
     assert source.format_version == version and source.display_bar_offset == offset
     music = [t for t in tracks if not t.auxiliary]
-    assert sum(1 for t in music for c in t.clips for e in c.events if e.msg.type == 'note_on') == notes_
+    assert muted_note_count(SETS / f'{name}.cpr') == muted_notes
+    assert sum(1 for t in music for c in t.clips for e in c.events if e.msg.type == 'note_on') == notes_ - muted_notes
+    assert ('Muted notes are not imported' in source.warnings) == bool(muted_notes)
     assert sum(c.muted for t in music for c in t.clips) == muted_clips
     assert {t.name for t in music if t.muted} == muted_tracks
 
@@ -163,6 +175,24 @@ def test_indy_export_matches_cubase_midi_in_reference_window():
     assert any('Pattern Editor' in w for w in result['warnings'])
 
 
+def test_ga_whole_song_matches_cubase_midi_export():
+    """GA's whole-song MIDI export (2026-11-15), through the reader and the
+    real exporter: every note on every exported track, across the tempo
+    ramp, with the kit's 2,399 muted notes left out as Cubase does. Prologue
+    differs only by its +24 track transpose, not applied yet."""
+    from scripts.compare_project_exports import compare
+    stem = 'GA & Padshop 2-(alt instr 2)-01'
+    if not (SETS / f'{stem}.mid').exists():
+        pytest.skip('whole-song GA export not present')
+    rows = {r['track']: r['notes'] for r in compare(SETS / f'{stem}.cpr', SETS / f'{stem}.mid')['tracks']}
+    assert {k: (v['exact'], v['changed_duration'], v['app_only'], v['cubase_only']) for k, v in rows.items()} == {
+        'hbar Sample Pack 1 Kit': (2548, 0, 0, 0), 'HALion Sonic SE 01': (80, 0, 0, 0),
+        'Retrologue 01': (14, 0, 0, 0), 'Piano Chords': (499, 0, 0, 0), 'Piano Chords (D)': (748, 0, 0, 0),
+        'Prologue 01': (0, 0, 20, 20)}
+    assert all(b[2] == a[2] + 24 for a, b in zip(rows['Prologue 01']['app_only_examples'],
+                                                rows['Prologue 01']['cubase_only_examples']))
+
+
 def test_ga_matches_dawproject_before_tempo_ramp_and_stays_on_grid_after():
     """Native positions are beats. Cubase's DAWproject export stores seconds
     but reduces GA's tempo ramps (from beat 264) to steps, so DAWproject
@@ -170,16 +200,18 @@ def test_ga_matches_dawproject_before_tempo_ramp_and_stays_on_grid_after():
     readers agree within one tick."""
     cpr = by_name(read(SETS / 'GA & Padshop 2-(alt instr 2)-01.cpr')[1])
     daw = by_name(read(SETS / 'GA & Padshop 2-(alt instr 2)-01.dawproject')[1])
-    for name in ('hbar Sample Pack 1 Kit', 'Piano Chords', 'Piano Chords (D)', 'Engaging Peace', 'Where Are We'):
+    # Muted notes are in the DAWproject (unmarked) but not imported: the kit's
+    # 2,399 (see the whole-song test), 1 on Engaging Peace, 4 on Where Are We.
+    for name, muted in (('Piano Chords', 0), ('Piano Chords (D)', 0), ('Engaging Peace', 1), ('Where Are We', 4)):
         x, y = notes(cpr[name]), notes(daw[name])
-        assert len(x) == len(y)
-        early = [(p, q) for p, q in zip(x, y) if q[0] < 264]
-        assert all(abs(p[0] - q[0]) <= F(1, 480) and p[2:4] == q[2:4] for p, q in early)
+        assert len(x) == len(y) - muted
+        for p in (n for n in x if n[0] < 264):
+            assert any(abs(p[0] - q[0]) <= F(1, 480) and p[2:4] == q[2:4] for q in y)
     # A part extended before its content (negative offset): content zero 392,
     # visible from 376; its notes sit on the beat grid.
     clip = next(c for c in cpr['Where Are We'].clips if c.start == 376)
     assert clip.trim_start == 0 and clip.offset == 376
-    assert [n[0] for n in notes(cpr['Where Are We']) if n[0] >= 376][:3] == [384, 388, 392]
+    assert [n[0] for n in notes(cpr['Where Are We']) if n[0] >= 376][:3] == [384, 392, 400]   # 388 is a muted note
 
 
 # ------------------------------------------------- registry and failures
@@ -267,7 +299,7 @@ def test_verify_beat003_object_properties_and_flags_sentinel():
     t = by_name(tracks)
     counts = {n: sum(1 for c in t[n].clips for e in c.events if e.msg.type == 'note_on')
               for n in ('Melody', 'Omnivocal Chorus', 'Chord Bed', 'DUNE 3 01')}
-    assert counts == {'Melody': 104, 'Omnivocal Chorus': 20, 'Chord Bed': 256, 'DUNE 3 01': 56}
+    assert counts == {'Melody': 104, 'Omnivocal Chorus': 20, 'Chord Bed': 252, 'DUNE 3 01': 56}   # Chord Bed: 4 muted notes
     assert t['Omnivocal Chorus'].muted and source.display_bar_offset == -2
     assert not any('later events' in w for w in source.warnings)
 

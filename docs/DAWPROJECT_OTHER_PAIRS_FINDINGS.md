@@ -119,6 +119,11 @@ Neither MIDI comparison contains controller or pitch-bend messages.
 
 ### 846 extra kit notes: important source discrepancy, not repeated import
 
+**Resolved 2026-11-15:** they are **muted notes**. The native `.cpr` flags
+each one (see the [Cubase plan](plans/cubase-import.md), spot-test fixes), and
+Cubase's MIDI export leaves them out; its DAWproject export keeps them without
+any mute attribute. The analysis below is kept as it was written.
+
 The 1,008 reference kit notes all match, but 846 additional notes remain inside
 the same 192-beat window. They are not just copies of matching reference notes.
 Extra-note counts by key are:
