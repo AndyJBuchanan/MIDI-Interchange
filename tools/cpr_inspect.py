@@ -524,36 +524,23 @@ def track_solo_flag(wk: Walker, track_event: Obj) -> int | None:
     return int.from_bytes(body[k + 15:k + 23], 'big', signed=True)   # 4 + 'SoloFlag\\0' + u16 type
 
 
-# Only the built-in folder holds these; an instrument stack also holds an
-# MDeviceTrackEvent (its shared instrument), so device tracks don't qualify.
-SYSTEM_TRACKS = ('MTempoTrackEvent', 'MSignatureTrackEvent')
-
-
-def is_system_folder(wk: Walker, folder: Obj) -> bool:
-    """The built-in folder holding the tempo and signature tracks.
-    Identified structurally: its name varies by version ('Input/Output' in
-    15.0.30 and 16, 'Input/Output Channels' in Ditty, saved by 15.0.21) and
-    probably by language."""
-    return any(o.cls.name in SYSTEM_TRACKS and folder.body_at <= o.tag_at < folder.end
-               for o in wk.objects.values())
-
-
-
 def folder_path(wk: Walker, track_event: Obj) -> list[str]:
     """Names of the MFolderTrack ancestors of a track, outermost first.
 
-    A folder holds its own MTrackList, whose body starts with the folder's
-    name. Every project has a built-in folder holding the device, tempo and
-    signature tracks (is_system_folder); it is omitted here. An
-    instrument stack (Cubase 16) is also an MFolderTrack (tier 2 c18is).
-    Folder state flags: folder_state_flags().
+    No folder is special-cased. A folder holds its own MTrackList, whose body
+    starts with the folder's name. Cubase's I/O folder ('Input/Output' or
+    'Input/Output Channels') holds in/out channel (device) tracks, and rack
+    instrument folders hold device tracks too; neither normally holds MIDI
+    parts, so they only appear here if the user put a MIDI track inside.
+    Tempo, signature, marker and chord tracks are loose by default and can be
+    moved anywhere, including into folders (GA has them loose; the other
+    fixtures have tempo and signature inside the I/O folder); they are found
+    by class wherever they are. An instrument stack (Cubase 16) is also an
+    MFolderTrack (tier 2 c18is). Folder state flags: folder_state_flags().
     """
-    names = []
-    for f in sorted((o for o in wk.objects.values() if o.cls.name == 'MFolderTrack'
-                     and o.body_at <= track_event.tag_at < o.end), key=lambda o: o.tag_at):
-        if not is_system_folder(wk, f):
-            names.append(folder_name(wk, f))
-    return names
+    return [folder_name(wk, f) for f in sorted(
+        (o for o in wk.objects.values() if o.cls.name == 'MFolderTrack' and o.body_at <= track_event.tag_at < o.end),
+        key=lambda o: o.tag_at)]
 
 
 def folder_name(wk: Walker, folder: Obj) -> str:

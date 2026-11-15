@@ -235,8 +235,14 @@ and signature points. 42 regression tests in `tests/test_cpr_inspect.py`.
   u32 ticks · u16 numerator · u16 denominator · 8 bytes unknown (c21: 3/4 at
   tick 7680).
 - **Folders (c18):** an `MFolderTrack` holds its own `MTrackList`, whose body
-  starts with the folder's name. Every project has a built-in
-  "Input/Output Channels" folder (device, tempo and signature tracks).
+  starts with the folder's name. **No folder is special.** Cubase's I/O folder
+  ("Input/Output", or "Input/Output Channels" in older saves) holds in/out
+  channel (device) tracks; rack instrument folders (e.g. HALion Sonic) hold
+  device tracks too. Neither normally holds MIDI parts. Tempo, signature,
+  marker and chord tracks are loose by default and can be moved anywhere,
+  including into folders (GA has them loose; the other fixtures have tempo and
+  signature inside the I/O folder), so the reader finds them by class
+  wherever they are.
   **Folder mute (c18fm):** the folder's state flags (same bits as tracks) are
   the u32 just before its `MTrack` child, which follows its `MTrackList`; muting a folder also sets the mute flag
   on every track inside it, so the saved track flags carry the inherited

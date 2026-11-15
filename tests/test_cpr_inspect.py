@@ -342,20 +342,33 @@ def test_indy_matches_cubase_midi_export_in_reference_window():
 ])
 def test_tier2_folder_mute(step, folder, tracks):
     wk, _ = _walk(TIER2 / f'{step}.cpr')
-    folders = {('system' if ci.is_system_folder(wk, f) else ci.folder_name(wk, f)): ci.folder_state_flags(wk, f)
+    folders = {ci.folder_name(wk, f): ci.folder_state_flags(wk, f)
                for f in wk.objects.values() if f.cls.name == 'MFolderTrack'}
-    assert folders == {'system': 0, 'Folder 01': folder}
+    assert folders == {'Input/Output': 0, 'Folder 01': folder}
     tes = [o for o in wk.objects.values() if o.cls.name in ci.TRACK_EVENTS]
     assert {' / '.join(ci.folder_path(wk, t) + [ci.track_name(wk, t)]): ci.track_state_flags(wk, t)
             for t in tes} == tracks
 
 
 
-@pytest.mark.parametrize('path, name', [
-    (TIER2 / 'c18.cpr', 'Input/Output'),
-    (SETS / 'Ditty-04-Macbook.cpr', 'Input/Output Channels'),
+def _loose(wk, folders, cls):
+    return [o for o in wk.objects.values() if o.cls.name == cls
+            and not any(f.body_at <= o.tag_at < f.end for f in folders)]
+
+
+@pytest.mark.parametrize('path, io_folder, loose_tempo', [
+    (TIER2 / 'c18.cpr', 'Input/Output', False),
+    (SETS / 'Ditty-04-Macbook.cpr', 'Input/Output Channels', False),
+    (SETS / 'GA & Padshop 2-(alt instr 2)-01.cpr', 'Input/Output Channels', True),
 ])
-def test_system_folder_identified_structurally(path, name):
+def test_tempo_track_found_inside_or_outside_folders(path, io_folder, loose_tempo):
+    """Tempo/signature tracks can sit anywhere; no folder is special."""
     wk, _ = _walk(path)
-    (sys_folder,) = [f for f in wk.objects.values() if f.cls.name == 'MFolderTrack' and ci.is_system_folder(wk, f)]
-    assert ci.folder_name(wk, sys_folder) == name
+    folders = [f for f in wk.objects.values() if f.cls.name == 'MFolderTrack']
+    assert io_folder in [ci.folder_name(wk, f) for f in folders]
+    assert bool(_loose(wk, folders, 'MTempoTrackEvent')) is loose_tempo
+    ev = next(o for o in wk.objects.values() if o.cls.name == 'MTempoTrackEvent')
+    assert ci.tempo_points(wk, ev)[0]
+    # No MIDI track sits in the I/O folder, so it never appears in a path.
+    tes = [o for o in wk.objects.values() if o.cls.name in ci.TRACK_EVENTS]
+    assert all(io_folder not in ci.folder_path(wk, t) for t in tes)
