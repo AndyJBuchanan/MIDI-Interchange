@@ -20,3 +20,6 @@ samples/**/Auto Saves/
 samples/project-cubase-phases/Verify/BBCSO_Woodwinds101-App01-MacBook.cpr
 samples/project-cubase-phases/Verify/orchestral-import-test-01.cpr
 samples/project-cubase-phases/Verify/Scaler3Test-001(14).cpr
+
+# Reason probe: the user's original songs, local only
+samples/reason-probe/
