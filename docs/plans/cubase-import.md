@@ -447,8 +447,8 @@ the existing files too.
    replacing them going forward does not.
 4. **Range markers.** Map cycle markers to a marker at their start (named), or
    skip them with a diagnostic?
+5. **Tempo ramps.** DAWproject fails on ramps. For Cubase, should the reader
+   approximate ramps with fine steps (and say so), or fail as DAWproject does?
 6. **Controller curves.** Cubase stores CC/pitch-bend curve points and renders
    them densely on export (c24: 2 → 36 CC1, 12 → 251 bends). Proposal: import
    the stored points with a diagnostic first; render curves later if needed.
-5. **Tempo ramps.** DAWproject fails on ramps. For Cubase, should the reader
-   approximate ramps with fine steps (and say so), or fail as DAWproject does?
