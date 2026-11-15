@@ -51,7 +51,7 @@ Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 
 
 ### Step 1: Bring MIDI in
 
-Drag MIDI from another app, or `.mid` / `.dawproject` / `.cpr` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
+Drag MIDI from another app, or `.mid` / `.dawproject` / `.cpr` / `.reason` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
 
 DAWproject 1.0 imports arrangement MIDI, clip positions and mute states, stepped
 tempo changes, time signatures and markers. Audio, plug-ins and automation
@@ -71,6 +71,17 @@ Pattern Editor parts, the chord track, instruments, MIDI inserts/modifiers,
 controller curve shapes and linear-time-base tracks are reported as skipped.
 Cubase's display bar offset is recorded in Source Info but not applied. See the
 [Cubase plan](docs/plans/cubase-import.md).
+
+Reason songs (`.reason`) saved by Reason 13 or 14 import directly too. Each
+track's note lanes become one track. Each clip becomes a clip holding what
+Reason plays there: loops are written out, overlapped parts are left out, and
+Blocks are written out at each placement. Notes, mod wheel, pitch bend,
+sustain, expression and aftertouch come across, with tempo and time
+signatures. Muted clips, lanes and Block placements arrive as muted clips, and
+track mute is kept. The song file is only read. Pattern clips, audio, device
+automation, Player devices and controller curve shapes are reported as
+skipped. Older songs are encrypted: open them in Reason 13 or later and save
+them again first. See the [Reason plan](docs/plans/reason-import.md).
 
 ![Dragging a clip in, with the landing preview](docs/images/02-drag-in.png)
 

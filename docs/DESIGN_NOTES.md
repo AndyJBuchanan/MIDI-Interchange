@@ -2,6 +2,24 @@
 
 Companion to [DESIGN_BRIEF.md](DESIGN_BRIEF.md), the original spec, kept verbatim. This file records how the brief was interpreted: decisions, deviations, known gaps and risks. Update it whenever direction changes.
 
+## Native Reason reader (2026-11-15)
+
+The second native reader reads Reason 13/14 `.reason` songs through the same
+registry (path-backed through a memory map, so self-contained songs' samples
+are never loaded; read-only). Decoding and Reason's playback rules live in
+`core/reason_format.py` (research CLI `tools/reason_inspect.py`); the mapping
+is `core/import_reason.py`. Unlike the Cubase reader, clips are imported
+*as Reason plays them*: Reason's overlap, loop, hidden-note and Block rules
+differ from the workspace's trim semantics (a Reason clip's own end does not
+cut its notes; a covering clip does), so each visible stretch of a clip
+becomes a workspace clip holding the rendered notes and controller values.
+Every rule was checked against Reason's own MIDI export of the same song.
+Muted clips, lanes and Block placements are kept as muted clips. Songs saved
+by Reason 12.6 and earlier are encrypted and refused with a re-save message;
+we do not break the encryption. No session schema change: `reason` is a new
+input format value. Evidence, decisions and limitations:
+[Reason plan](plans/reason-import.md).
+
 ## Native Cubase reader (2026-11-15)
 
 The first native project reader reads Cubase 15/16 `.cpr` files through the

@@ -36,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import struct
 from dataclasses import dataclass, field
+from fractions import Fraction
 
 MAGIC = b'X15_FILE'
 HEADER_SIZE = 52
@@ -157,6 +158,25 @@ def current_song(data: bytes) -> tuple[SongCopy, list[str]]:
     pick = max(copies, key=lambda c: c.index_page)
     notes = [] if len(copies) == 1 else [f'{len(copies)} saved copies; using the one indexed on page {pick.index_page}']
     return pick, notes
+
+
+def unverified_song(data: bytes) -> Song | None:
+    """The song stream of a file with no hash-verified copy, read for its
+    generation and metadata only (Reason 10 and earlier saves have no Hash
+    chunk). None if no index names a song stream starting FORM X15S."""
+    h = read_header(data)
+    for n in range(page_count(data, h) - 1, -1, -1):
+        if page(data, h, n)[:8] != INDEX_MARK:
+            continue
+        try:
+            idx = read_index(data, h, n)
+            if SONG_STREAM in idx:
+                s = read_stream(data, h, *idx[SONG_STREAM])
+                if s[:4] == b'FORM' and s[8:12] == b'X15S':
+                    return read_song(s)
+        except (ReasonFormatError, struct.error, IndexError):
+            continue
+    return None
 
 
 # ---------------------------------------------------------------- IFF
@@ -406,7 +426,7 @@ LANE_NOTES = 0x59
 
 @dataclass
 class LaneInfo:
-    kind: int       # 0x59 note lane, 0x5A pattern lane, 0x5B/0x5D automation
+    kind: int       # 0x59 notes, 0x5A pattern, 0x5B automation, 0x5C audio, 0x5D Blocks
     name: str
     muted: bool
 
@@ -421,7 +441,7 @@ def decode_lane(b: bytes) -> LaneInfo:
 class TrackInfo:
     device: int     # id of the rack device the track plays (0 for none)
     muted: bool
-    kind: int       # 0x0A instrument, 0x0B pattern device (to confirm)
+    kind: int       # byte 18; varies 0..0x0E across songs, probably the track colour
 
 
 def decode_track(b: bytes) -> TrackInfo:
@@ -452,7 +472,7 @@ def device_names(song: Song) -> dict[int, str]:
 class Clip:
     info: ClipInfo
     block: int                      # LCAI: 0 = song, n = Block n
-    kind: str                       # 'notes', 'automation', 'pattern', 'block', '?'
+    kind: str                       # 'notes', 'automation', 'pattern', 'audio', 'block', '?'
     notes: list[Note] = field(default_factory=list)
     controllers: list[ControllerLane] = field(default_factory=list)
     automation: Automation | None = None
@@ -481,7 +501,7 @@ def _clip(song: Song, lcfm: Chunk) -> list[Clip]:
     snct = lcfm.find('CAT:SNCT')
     out = []
     for snif in (snct.kids if snct else []):
-        rec = {k.id: song.bytes_of(k) for k in snif.kids}
+        rec = {k.id: song.bytes_of(k) for k in snif.kids if not k.kids}
         if 'SNIC' not in rec:
             continue
         c = Clip(decode_clip(rec['SNIC']), block, '?')
@@ -492,6 +512,8 @@ def _clip(song: Song, lcfm: Chunk) -> list[Clip]:
             c.kind, c.automation = 'automation', decode_automation(rec['SAUT'])
         elif 'SPTN' in rec:
             c.kind = 'pattern'
+        elif any(k.name == 'FORM:SASF' for k in snif.kids):
+            c.kind = 'audio'
         elif 'SBLK' in rec:
             c.kind = 'block'
             b = rec['SBLK']
@@ -558,24 +580,95 @@ def _cut(segs, s2, e2):
     return out
 
 
-def _visible(windows):
+def _visible(windows, covers=None):
     """Overlapping clips on one lane: a later start wins (ties: later in the
-    lane). Returns each window's visible segments."""
+    lane). Returns each window's visible segments. covers[j] False: window j
+    is cut by others but cuts nothing (a muted clip)."""
     out = []
     for i, (s, e) in enumerate(windows):
         segs = [(s, e, False)]
         for j, (s2, e2) in enumerate(windows):
-            if j != i and (s2 > s or (s2 == s and j > i)):
+            if j != i and (covers is None or covers[j]) and (s2 > s or (s2 == s and j > i)):
                 segs = _cut(segs, s2, e2)
         out.append(segs)
     return out
 
 
 PlayedNote = tuple[int, int, int, int]      # (song tick, pitch, velocity, length)
+Control = tuple[int, int, int]              # (song tick, controller lane id, value)
+STEP = PPQ // 32                            # Reason renders lines as 1/32-beat steps
+CONTROL_DEFAULT = 0                         # value a controller returns to after a clip
+RAMPED = {0x01, 0xFF}                       # mod wheel, pitch bend; sustain jumps (Day 15)
 
 
-def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
-    """The notes each track plays, as Reason's own MIDI export renders them.
+def stepped(points: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """(tick, value) points joined by straight lines, as Reason's export
+    renders them: every point, plus a step on the song's 1/32-beat grid
+    strictly between two points of different value, at the line's value
+    there truncated toward zero (r16, r18)."""
+    out = []
+    for i, (t, v) in enumerate(points):
+        out.append((t, v))
+        if i + 1 < len(points):
+            t1, v1 = points[i + 1]
+            if v1 != v and t1 > t:
+                g = (t // STEP + 1) * STEP
+                while g < t1:
+                    out.append((g, int(v + Fraction((v1 - v) * (g - t), t1 - t))))
+                    g += STEP
+    return out
+
+
+@dataclass
+class Piece:
+    """One visible stretch of a note clip, as it plays: a song clip, or a
+    Block clip at one placement. Muted pieces (clip, lane or placement mute)
+    are rendered as if unmuted, so they can be kept and switched on later."""
+    lane: Lane
+    clip: Clip
+    start: int                      # visible window, song ticks
+    end: int
+    muted: bool
+    placement: Clip | None = None   # the Block placement, for Block content
+    notes: list[PlayedNote] = field(default_factory=list)
+    controls: list[Control] = field(default_factory=list)
+
+
+def _render(piece: Piece, origin: int, hard: bool) -> None:
+    """Fill a piece's notes and controllers. origin: song tick of the clip's
+    content zero."""
+    c, u, v = piece.clip, piece.start, piece.end
+    loop = c.info.loop
+    shift = c.info.loop_offset if loop else 0
+    reps = range(-(-(c.info.length - shift) // loop)) if loop else (0,)
+    for n in c.notes:
+        if n.extra & 1 or (loop and not 0 <= n.pos < loop):
+            continue
+        for k in reps:
+            at = origin + shift + n.pos + k * loop
+            if u <= at < v:
+                piece.notes.append((at, n.pitch, n.velocity, min(n.length, v - at) if hard else n.length))
+    for lane in c.controllers:
+        pts = []
+        for k in reps:
+            pts += [(origin + shift + p.pos + k * loop, p.value) for p in lane.points
+                    if not loop or 0 <= p.pos < loop]
+        if lane.lane_id in RAMPED:
+            pts = stepped(pts)
+        # the value at the start: the last point at or before it (hidden points
+        # count, Oct08), else the first point's (Day01)
+        held = [x for t, x in pts if t <= u] or [x for _, x in pts[:1]]
+        sent = [(u, lane.lane_id, held[-1])] if held else []
+        sent += [(t, lane.lane_id, x) for t, x in pts if u < t < v]
+        if sent:
+            piece.controls += sent + [(v, lane.lane_id, CONTROL_DEFAULT)]   # reset at the end (r16)
+    piece.notes.sort()
+    piece.controls.sort(key=lambda x: x[0])
+
+
+def pieces(song: Song) -> list[tuple[Track, list[Piece]]]:
+    """Every track's note clips as they play, as Reason's own MIDI export
+    renders them (unmuted pieces) plus muted ones.
 
     Rules (each checked against Reason's exports; see the plan):
     - muted clips, muted lanes and muted notes (flag bit 0) are silent; track
@@ -584,7 +677,7 @@ def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
       the clip, not covered by a later-starting clip on the same lane, and not
       before the clip start (offsets left negative by splits and trims);
     - a covering clip cuts notes still sounding where it starts; a clip's own
-      end does not cut them;
+      end does not cut them; a muted clip covers nothing;
     - looping clips repeat their first `loop` ticks from start + loop_offset;
     - when the Blocks switch is on, each unmuted Block placement on the
       Transport track plays its Block's clips from the placement's offset into
@@ -592,10 +685,16 @@ def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
       (user: empty clips are used to silence a Block locally);
     - a note lane's Block content can be muted at single placements (SMGC,
       see block_mutes); identical duplicate placements play once, and as with
-      overlapping clips the later copy covers the earlier, so its mute counts.
+      overlapping clips the later copy covers the earlier, so its mute counts;
+    - controllers: the value in force at a piece's start (points before it
+      count, Oct08; else the first point's value, Day01), then its points; mod wheel and pitch bend are lines
+      between points (see stepped), others jump. A controller returns to
+      CONTROL_DEFAULT at the end of a piece unless another piece on the track
+      takes it over there. Reason's export also leaves out values equal to
+      the current one; pieces keep them so each stands alone.
     """
     ts = tracks(song)
-    places: dict[tuple, list[int]] = {}         # placement -> its record numbers
+    places: dict[tuple, list[int]] = {}         # placement -> its record numbers (-1: muted)
     first: dict[tuple, Clip] = {}
     if blocks_enabled(song):
         n = -1
@@ -607,57 +706,176 @@ def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
                         continue
                     key = (c.info.start, c.info.length, c.placed_block, c.placed_offset)
                     first.setdefault(key, c)
-                    places.setdefault(key, []).append(-1 if c.info.muted else n)   # -1: muted
+                    places.setdefault(key, []).append(-1 if c.info.muted else n)
     mutes = block_mutes(song)
     result = []
     for t in ts:
-        out: list[PlayedNote] = []
+        out: list[Piece] = []
         note_lane = -1
         for ln in t.lanes:
             if ln.info.kind == LANE_NOTES:
                 note_lane += 1
-            if ln.info.muted:
-                continue
-            songs, blocks = [], []
-            for c in ln.clips:
-                if c.kind != 'notes' or c.info.muted:
-                    continue
-                if not c.block:
-                    songs.append((c.info.start, c.info.start + c.info.length, c, 0))
-                    continue
-                for key, recs in places.items():
-                    p = first[key]
-                    if p.placed_block != c.block:
-                        continue
-                    if recs[-1] < 0 or (t.index, note_lane, recs[-1]) in mutes:   # a later twin covers
-                        continue
-                    base = p.info.start + p.placed_offset      # where the Block's beat 0 falls
-                    s = max(base + c.info.start, p.info.start)
-                    e = min(base + c.info.start + c.info.length, p.info.start + p.info.length)
-                    if s < e:
-                        blocks.append((s, e, c, base))
-            seg_song = _visible([(a, b) for a, b, _, _ in songs])
-            seg_block = []
-            for a, b, _, _ in blocks:
-                segs = [(a, b, False)]
-                for s2, e2, _, _ in songs:
-                    segs = _cut(segs, s2, e2)
-                seg_block.append(segs)
-            for (_, _, c, base), segs in list(zip(songs, seg_song)) + list(zip(blocks, seg_block)):
-                origin = base + c.info.start
-                loop = c.info.loop
-                shift = c.info.loop_offset if loop else 0
-                reps = range(-(-(c.info.length - shift) // loop)) if loop else (0,)
+            songs = [c for c in ln.clips if c.kind == 'notes' and not c.block]
+            covers = [not c.info.muted for c in songs]
+            windows = [(c.info.start, c.info.start + c.info.length) for c in songs]
+            for c, segs in zip(songs, _visible(windows, covers)):
                 for u, v, hard in segs:
-                    for n in c.notes:
-                        if n.extra & 1 or (loop and not 0 <= n.pos < loop):
-                            continue
-                        for k in reps:
-                            at = origin + shift + n.pos + k * loop
-                            if u <= at < v:
-                                out.append((at, n.pitch, n.velocity, min(n.length, v - at) if hard else n.length))
-        result.append((t, sorted(out)))
+                    p = Piece(ln, c, u, v, ln.info.muted or c.info.muted)
+                    _render(p, c.info.start, hard)
+                    out.append(p)
+            for c in (c for c in ln.clips if c.kind == 'notes' and c.block):
+                for key, recs in places.items():
+                    pl = first[key]
+                    if pl.placed_block != c.block:
+                        continue
+                    base = pl.info.start + pl.placed_offset      # where the Block's beat 0 falls
+                    s = max(base + c.info.start, pl.info.start)
+                    e = min(base + c.info.start + c.info.length, pl.info.start + pl.info.length)
+                    if s >= e:
+                        continue
+                    muted = (ln.info.muted or c.info.muted or recs[-1] < 0
+                             or (t.index, note_lane, recs[-1]) in mutes)   # a later twin covers
+                    segs = [(s, e, False)]
+                    for (s2, e2), cov in zip(windows, covers):
+                        if cov:
+                            segs = _cut(segs, s2, e2)
+                    for u, v, hard in segs:
+                        p = Piece(ln, c, u, v, muted, pl)
+                        _render(p, base + c.info.start, hard)
+                        out.append(p)
+        out.sort(key=lambda p: (p.start, p.end))
+        starts = {(p.start, i) for p in out if not p.muted for a, i, _ in p.controls if a == p.start}
+        for p in out:       # a piece's only control at its end is its reset
+            p.controls = [x for x in p.controls if not (x[0] == p.end and (p.end, x[1]) in starts)]
+        result.append((t, out))
     return result
+
+
+def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:
+    """The notes each track plays in Reason's export (see pieces)."""
+    return [(t, sorted(n for p in ps if not p.muted for n in p.notes)) for t, ps in pieces(song)]
+
+
+def played_controls(song: Song) -> list[tuple[Track, list[Control]]]:
+    """The controller values each track sends in Reason's export (see pieces)."""
+    return [(t, sorted((c for p in ps if not p.muted for c in p.controls), key=lambda x: x[0]))
+            for t, ps in pieces(song)]
+
+
+TEMPO_PARAM, SIGNATURE_PARAM = 0x80, 0x81
+
+
+def _transport_statics(song: Song) -> dict[int, int]:
+    """{parameter: value outside clips} for the Transport's automated
+    parameters: the Transport track's TRSC is u32 count, then per parameter
+    u16 id (0x80 tempo, 0x81 signature), i32 value, and more not decoded
+    (tempo: i32 min, i32 max; signature: 8 bytes). Day 15: tempo 104000
+    here while the metadata says 109000, and the export uses 104000."""
+    sq = song.rs10('CAT:SQCT')
+
+    def first_trfm(c):
+        for k in (c.kids if c else []):
+            if k.name == 'FORM:TRFM':
+                return k
+            r = first_trfm(k)
+            if r is not None:
+                return r
+        return None
+
+    tr = first_trfm(sq)
+    trsc = next((k for k in tr.kids if k.id == 'TRSC'), None) if tr is not None else None
+    b = song.bytes_of(trsc) if trsc is not None else b''
+    out: dict[int, int] = {}
+    if len(b) < 4:
+        return out
+    (n,) = struct.unpack_from('>I', b, 0)
+    p = 4
+    for _ in range(min(n, 16)):
+        if p + 6 > len(b):
+            break
+        pid, value = struct.unpack_from('>Hi', b, p)
+        out[pid] = value
+        p += 6 + (8 if pid in (TEMPO_PARAM, SIGNATURE_PARAM) else 0)
+    return out
+
+
+def global_tempo_and_signature(song: Song) -> tuple[int, tuple[int, int]]:
+    """(milli-BPM, (numerator, denominator)) outside any Transport clip: the
+    Transport's static values when tempo or signature is automated, else the
+    sequencer TRDC (tempo u32 at 23; signature bytes 27, 28), else the
+    metadata, else 120 BPM 4/4."""
+    statics = _transport_statics(song)
+    trdc = song.rs10('CAT:SQCT', 'TRDC')
+    b = song.bytes_of(trdc) if trdc is not None else b''
+    tempo = statics.get(TEMPO_PARAM)
+    if tempo is None and len(b) >= 27:
+        (tempo,) = struct.unpack_from('>I', b, 23)
+    if tempo is None or not 1000 <= tempo <= 999999:
+        try:
+            tempo = int(song.metadata.get('SONGTEMPO', '120000'))
+        except ValueError:
+            tempo = 120000
+    sig = statics.get(SIGNATURE_PARAM)
+    if sig is not None:
+        num, den = sig & 0xFF, sig >> 8 & 0xFF
+    elif len(b) >= 29:
+        num, den = b[27], b[28]
+    else:
+        num, den = 0, 0
+    if not (1 <= num <= 64 and den in (1, 2, 4, 8, 16, 32)):
+        try:
+            num, den = (int(x) for x in song.metadata.get('SONGSIGNATURE', '4/4').split('/'))
+        except ValueError:
+            num, den = 4, 4
+    return tempo, (num, den)
+
+
+def tempo_and_signatures(song: Song) -> tuple[list[tuple[int, int]], list[tuple[int, int, int]], list[str]]:
+    """([(tick, milli-BPM)], [(tick, numerator, denominator)], problems) from
+    the Transport track's automation clips. Outside any clip the song's global
+    tempo and signature apply (user, r17, r19; see global_tempo_and_signature); inside, the clip's points,
+    joined by stepped lines (r18), the first value holding from the clip start
+    and the last to its end."""
+    g_tempo, (num, den) = global_tempo_and_signature(song)
+    problems: list[str] = []
+    ts = tracks(song)
+    clips = {0: [], 2: []}
+    for ln in (ts[0].lanes if ts else []):
+        for c in ln.clips:
+            if c.kind == 'automation' and c.automation and c.automation.kind in clips and not c.info.muted:
+                if c.block:
+                    problems.append('Tempo or time signature automation inside Blocks is not imported')
+                    continue
+                clips[c.automation.kind].append(c)
+
+    def timeline(kind, default):
+        cs = clips[kind]
+        windows = [(c.info.start, c.info.start + c.info.length) for c in cs]
+        out = [(0, default)]
+        spans = []
+        for c, segs in zip(cs, _visible(windows)):
+            pts = [(c.info.start + p.pos, p.value) for p in c.automation.points]
+            if kind == 0:
+                pts = stepped(pts)
+            for u, v, _ in segs:
+                spans.append((u, v, pts))
+        spans.sort(key=lambda x: x[0])
+        for u, v, pts in spans:
+            inside = [(t, x) for t, x in pts if u <= t < v]
+            before = [x for t, x in pts if t < u]
+            start_value = before[-1] if before else (pts[0][1] if pts else default)
+            out.append((u, start_value))
+            out.extend(inside)
+            out.append((v, default))
+        # later entries at the same tick win; a span end followed by a span start keeps the start
+        merged: dict[int, int] = {}
+        for t, x in sorted(out, key=lambda e: e[0]):
+            merged[t] = x
+        return sorted(merged.items())
+
+    tempos = timeline(0, g_tempo)
+    sigs = [(t, v & 0xFF, v >> 8) for t, v in timeline(2, den << 8 | num)]
+    return tempos, sigs, problems
 
 
 def block_mutes(song: Song) -> set[tuple[int, int, int]]:

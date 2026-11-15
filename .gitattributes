@@ -11,3 +11,4 @@
 *.midi binary
 *.cpr binary
 *.dawproject binary
+*.reason binary

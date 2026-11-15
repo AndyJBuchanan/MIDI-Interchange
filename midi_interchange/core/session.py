@@ -280,7 +280,7 @@ def validate_workspace(ws):
             string(value)
         integer(src.ppq, 1, 32767)
         integer(src.smf_format, 0, 2)
-        require(src.input_format in ('smf', 'dawproject', 'cubase'), 'Invalid input format')
+        require(src.input_format in ('smf', 'dawproject', 'cubase', 'reason'), 'Invalid input format')
         require(src.format_version is None or type(src.format_version) is str)
         if src.display_bar_offset is not None:
             integer(src.display_bar_offset, -9999, 9999)

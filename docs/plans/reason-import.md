@@ -1,7 +1,10 @@
 # Plan: native Reason song import (`.reason`), feasibility
 
-Status: **Phase 1 (format decoding) done** (2026-11-15): the r-series decodes
-note-for-note against Reason's MIDI exports; see [Phase 1 findings](#phase-1-findings).
+Status: **Phase 2 (reader) done** (2026-11-15): `.reason` songs import through
+the reader registry, and every probe song with a Reason export round-trips
+through the app's exporter to the same notes, tempo map and controllers,
+apart from the explained differences in [Phase 2](#phase-2-reader).
+Phase 1 (format decoding): see [Phase 1 findings](#phase-1-findings).
 Phase 0 probe: GO for Reason 13 and 14 songs.
 Those are plain, structured IFF. Songs saved by Reason 12 and earlier have an
 encrypted payload and are out of scope (see [Phase 0 result](#phase-0-result-go)). The
@@ -143,10 +146,11 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
 - **Muted notes** (flag bit 0) don't export.
 - **Muted clips and muted lanes do not export; muted and soloed tracks do**
   (Reason's export ignores track mute and solo).
-- **Tempo:** global tempo (metadata) outside tempo clips; inside, points joined
-  by straight lines (a ramp is two points). Exported as 1/32-beat steps.
+- **Tempo:** the global tempo outside tempo clips (see phase 2: not the
+  metadata); inside, points joined by straight lines (a ramp is two points).
+  Exported as 1/32-beat steps.
 - **Time signature:** clip-based like tempo; value = denominator << 8 | numerator.
-- **Controllers:** points joined by straight lines; exported at 1/32 beat.
+- **Controllers:** see phase 2 for the full rules.
 - **Pattern clips are not exported** (r21); converting to notes is (r22).
 - **Blocks are rendered** at each placement (r24).
 - **Blocks:** placements (`SBLK`) name their Block (u16 at 5, 0-based) and an
@@ -174,18 +178,73 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
   from r20. r20x (solo from the mixer) changes one parameter of the track's
   mixer channel device (`X15 Main Mixer Mix Channel`, parameter 2). Mapping a
   mixer channel to its sequencer track is not decoded yet.
-- Controller id 0xFD; curve bytes; what decides a Block placement shorter than
-  its Block.
+- Curve bytes (a float curvature; Reason renders curves with off-grid steps).
 
-### Next: phase 2 (reader)
+## Phase 2: reader
 
-`core/import_reason.py` mapping songs onto the workspace through the reader
-registry, as for Cubase: tracks named from devices, folders kept as path
-names, clips with trims and mute, lanes merged into their track with lane mute
-applied as clip mute, Blocks rendered, tempo map and signatures from the
-Transport clips (ramps as steps, as for Cubase decision 5), controllers
-rendered at Reason's density, pattern and audio clips reported as skipped,
-pre-13 songs refused with a re-save message.
+`core/import_reason.py`, registered for `.reason` (by extension or the
+`X15_FILE` magic), path-backed through a memory map, `preserve_track_state`.
+Tests: `tests/test_import_reason.py` (synthetic songs; every probe song with a
+Reason export, imported and exported by the app, against that export).
+
+### Decisions
+
+1. **Clips are imported as Reason plays them.** Reason's clip rules don't map
+   onto workspace trims: a workspace trim cuts notes at the clip end, Reason's
+   own clip end doesn't, but a covering clip does. So each visible stretch of
+   a note clip becomes one workspace clip holding the notes and controller
+   values Reason plays there (`reason_format.pieces`). Loops are written out,
+   hidden and covered notes are left out, and Block content becomes a clip
+   named "Block n" at each placement. The cost: hidden notes and loop
+   structure can't be restored in the app.
+2. **Mutes:** muted clips, muted lanes and muted Block placements arrive as
+   muted clips (rendered as if unmuted, so unmuting plays what Reason would).
+   Track mute is kept, as for Cubase, so a muted track doesn't export from
+   the app (Reason's own export ignores track mute). Solo isn't stored for
+   sequencer tracks (r20s).
+3. **Lanes merge into their track**; folders are flattened (the plan said
+   folder path names; flattening keeps track names matching the user's other
+   imports. Revisit if wanted).
+4. **Channel 1** throughout, as Reason's export.
+5. **Controllers:** 0x01 → CC 1, 0x0B → CC 11, 0x40 → CC 64, 0xFF → pitch
+   bend, 0xFD → channel aftertouch (recorded pressure data; Reason's export
+   resets it as aftertouch). Other lanes are reported and skipped.
+6. **Refused:** songs saved by Reason 12.6 and earlier (generation `RS1250`
+   and below, encrypted; Reason 10 and earlier saves also lack the `Hash`
+   chunk) with "saved by Reason X ... open it in Reason 13 or later and save
+   it again"; songs with no note clips; damaged files.
+7. **Reported, not imported:** pattern clips, audio clips (lane kind 0x5C),
+   device parameter automation, tempo automation inside Blocks, controller
+   curve shapes (imported as straight lines), Player devices and instruments.
+
+### Export rules found in phase 2 (each against Reason's exports)
+
+- **Global tempo** is the Transport's static value: the Transport track's
+  `TRSC` (u32 count; per parameter u16 id, 0x80 tempo / 0x81 signature, i32
+  value, 8 more bytes) when tempo is automated, else the sequencer `TRDC` u32
+  at 23. The metadata `SONGTEMPO` is not it (Day 15: metadata 109, export
+  104 after the last tempo clip, as `TRSC`).
+- **Tempo is truncated** to whole microseconds per beat (90 BPM → 666666).
+- **Controllers:** the value at a clip's start is the last point at or before
+  it (hidden points count; Oct08), else the first point's value (Day01).
+  Mod wheel and pitch bend are lines between points, stepped every 1/32 beat
+  on the song grid at the line's value truncated toward zero (r16); flat
+  segments add no steps. Sustain and the others jump. Each controller returns
+  to 0 at the clip's end unless another clip on the track takes it over there.
+  Reason also leaves out values equal to the current one.
+- **Reason's export leaves out controllers the device doesn't take**:
+  aftertouch on the pianos (Day01), expression on the Seq Trigger player
+  (Oct08). The reader can't know device capabilities and keeps the data.
+- **Device parameter automation is exported as CCs** (ChanEQ CC 29, Gain
+  CC 40, Day 15's PAD as CC 64): not imported.
+- TRDC byte 18 (once taken for the track kind) varies 0..0x0E across songs,
+  probably the track colour.
+
+### Next
+
+- Mixer solo (r20x) needs the mixer-channel-to-track mapping.
+- Controller curves, if wanted (four lanes in the probe set).
+- The user's checks: [TEST_CHECKLIST 8o](../TEST_CHECKLIST.md).
 
 ## Phase 0 result: GO
 
