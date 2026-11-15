@@ -373,6 +373,21 @@ committed; tests skip when absent) exposed decoder assumptions:
   fixtures 5,019 notes carry it, and nothing else ever sets that word.
   Cubase's **DAWproject export keeps muted notes and doesn't mark them**,
   which explains GA's "846 extra kit notes" in the DAWproject comparison.
+- **Track transpose** (user request, 2026-11-15). Each track body holds
+  'MIDI Modifiers' effects (`TrackParaEffect`, a `PDuplicator` parameter tree:
+  Transpose, Velocity Shift, Delay, Length Compression, Velocity Compression,
+  Channelizer, Scale...), in slots by `Index`. Integer parameters are stored
+  as name | u16 0x0206 | u32 3 | 'Value' | u16 1 | i64. Every GA track has
+  slot 0 with Transpose 0; Prologue 01 also has slot 1 with **Transpose 24**,
+  and Cubase's export plays Prologue 24 semitones up, so the slots' transposes
+  are summed and added to note numbers (notes and poly pressure); a note
+  pushed outside 0-127 is skipped with a warning (Cubase's behaviour there
+  is unchecked). The value is kept on `Track.source_transpose` (session
+  schema 5) so it can be shown or undone later. GA's whole-song export now
+  matches on every track. Velocity shift and delay are read and reported
+  when set, not applied. Unchecked: a bypassed modifier slot, negative
+  values and the Inspector's own field (planned fixtures c31/c32 would
+  settle these).
 - **Cubase 14** (Scaler3Test, 14.0.20) walks with the same classes, but has no
   MIDI parts, so it can't validate the reader; Cubase 14 stays unsupported
   until a project with parts is checked.
@@ -530,7 +545,7 @@ export can render some of them, and that MIDI is our ground truth:
 | Material | Stored as | Rendering effort | Without it |
 | --- | --- | --- | --- |
 | Pattern Editor events | Step data in the project | Medium: decode steps, expand to notes | indy loses 644 drum notes |
-| Track transpose / velocity (MIDI modifiers, track parameters) | A few numbers per track | Low | GA Prologue is 24 semitones low |
+| Track transpose / velocity (MIDI modifiers, track parameters) | A few numbers per track | Low | **Transpose done** (2026-11-15, below); velocity shift and delay reported |
 | MIDI inserts (arpeggiator etc.) | Plug-in state | Out of reach: would mean reimplementing each plug-in | Ditty's arpeggiated parts differ |
 | Chord track | Chord events | Out of scope: Cubase voices them at playback | Missing unless already converted to MIDI |
 

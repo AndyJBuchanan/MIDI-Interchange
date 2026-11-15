@@ -27,14 +27,14 @@ from .timing import TempoChange, TempoMap, TimeSigChange
 
 # BUMP for incompatible model/field-meaning/invariant changes, not every release.
 # Update the explicit records, validators and round-trip tests together. See
-# docs/DEVELOPMENT.md. Versions 1-3 have explicit upgrades below;
+# docs/DEVELOPMENT.md. Versions 1-4 have explicit upgrades below;
 # all other unsupported versions are preserved and skipped.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Explicit persisted fields: adding a model field requires a compatibility review.
 RECORDS = {
     Source: 'id name ppq smf_format imported_at raw tempo_map path app track_names warnings song byte_size input_format format_version display_bar_offset',
-    Track: 'id name source_id clips original_name muted soloed color auxiliary channels auto_trim export_channel',
+    Track: 'id name source_id clips original_name muted soloed color auxiliary channels auto_trim export_channel source_transpose',
     Clip: 'id events length offset source_track_index name source_id trim_start trim_end muted',
     Range: 'start end name id excluded track_locked',
     TempoMap: 'tempos timesigs',
@@ -133,7 +133,7 @@ def encode(session: Session) -> dict:
 def decode(data: dict) -> Session:
     require(type(data) is dict, 'Invalid session document')
     version = data.get('schema_version')
-    require(type(version) is int and version in (1, 2, 3, SCHEMA_VERSION),
+    require(type(version) is int and version in (1, 2, 3, 4, SCHEMA_VERSION),
             'This session uses an unsupported schema version')
     string(data['app_version'], True)  # provenance only; schema decides compatibility
     classes = {cls.__name__: cls for cls in RECORDS}
@@ -183,6 +183,8 @@ def decode(data: dict) -> Session:
                 fields.remove('byte_size')
         if cls is Clip and version < 3:
             fields.remove('muted')
+        if cls is Track and version < 5:
+            fields.remove('source_transpose')
         require(type(value) is dict and set(value) == fields, 'Invalid record fields')
         args = {k: unpack(v) for k, v in value.items()}
         if 'id' in args:
@@ -210,6 +212,8 @@ def decode(data: dict) -> Session:
             for key in ('track_names', 'warnings'):
                 args[key] = tuple(sequence(args[key]))
         if cls is Track:
+            if version < 5:
+                args['source_transpose'] = 0
             args['channels'] = tuple(sequence(args['channels']))
         if cls is TempoMap:
             # Validate before __post_init__ sorts/deduplicates the lists.
@@ -296,6 +300,7 @@ def validate_workspace(ws):
         track_ids.add(track.id)
         for key in ('name', 'original_name', 'source_id', 'color'):
             string(getattr(track, key))
+        integer(track.source_transpose, -127, 127)
         # A track's original source can have been pruned after clips move; each
         # clip's effective source below is authoritative, as in Track.source_ids.
         require(re.fullmatch(r'#[0-9a-fA-F]{6}', track.color) is not None, 'Invalid track colour')

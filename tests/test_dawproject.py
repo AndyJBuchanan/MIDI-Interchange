@@ -179,6 +179,8 @@ def test_schema_2_upgrades_defaults_and_preserves_exports():
                 del obj['data']['display_bar_offset']   # schema 4
             if obj.get('kind') == 'Clip':
                 del obj['data']['muted']
+            if obj.get('kind') == 'Track':
+                del obj['data']['source_transpose']   # schema 5
             for value in obj.values():
                 remove_new_fields(value)
         elif isinstance(obj, list):

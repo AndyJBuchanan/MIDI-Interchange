@@ -83,6 +83,39 @@ def test_roundtrip_exact_data_relationships_and_every_export_mode(tmp_path):
         assert export_bytes(ws, mode) == export_bytes(restored, mode)
 
 
+
+def test_schema_v4_upgrade_defaults_source_transpose_and_rejects_bad_values():
+    """Schema 5 adds Track.source_transpose (the source DAW's track transpose,
+    already applied to the notes). Schema-4 tracks read as 0."""
+    from midi_interchange.core.import_cubase import import_cubase
+    source, tracks = import_cubase(str(Path(__file__).parents[1] / 'samples/project-sets/GA & Padshop 2-(alt instr 2)-01.cpr'), 'GA.cpr')
+    ws = Workspace()
+    ws.add_import(source, tracks, preserve_track_state=True)
+    current = encode(Session(ws.snapshot(), {}))
+    restored = decode(json.loads(json.dumps(current))).workspace
+    assert {t.name: t.source_transpose for t in restored['tracks'] if t.source_transpose} == {'Prologue 01': 24}
+    legacy = json.loads(json.dumps(current))
+    legacy['schema_version'] = 4
+    for rec in _records(legacy):
+        if rec.get('kind') == 'Track':
+            del rec['data']['source_transpose']
+    assert all(t.source_transpose == 0 for t in decode(legacy).workspace['tracks'])
+    bad = json.loads(json.dumps(current))
+    next(r for r in _records(bad) if r.get('kind') == 'Track')['data']['source_transpose'] = 200
+    with pytest.raises(ValueError):
+        decode(bad)
+
+
+def _records(obj):
+    if isinstance(obj, dict):
+        if 'kind' in obj:
+            yield obj
+        for v in obj.values():
+            yield from _records(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _records(v)
+
 def test_real_cubase_lyric_fixture(tmp_path):
     data = (Path(__file__).parents[1] / 'samples/non-synthetic/verse 1.mid').read_bytes()
     ws = load(data)
@@ -131,7 +164,7 @@ def test_schema_v1_upgrade_preserves_workspace_and_reference_exports(tmp_path):
         assert [[label, data.hex()] for label, data in export_bytes(restored, mode)] == expected[mode.value]
     store.save(session)
     saved = json.loads(store.path.read_text())
-    assert saved['schema_version'] == SCHEMA_VERSION == 4
+    assert saved['schema_version'] == SCHEMA_VERSION == 5
     assert all(s['data']['raw']['data'] == '' for s in saved['workspace']['sources'])
     assert encode(store.load()) == encode(session)
 
@@ -155,7 +188,7 @@ def test_schema_v3_upgrade_preserves_workspace_and_reference_exports(tmp_path):
     for mode in ExportMode:
         assert [[label, data.hex()] for label, data in export_bytes(restored, mode)] == expected[mode.value]
     store.save(session)
-    assert json.loads(store.path.read_text())['schema_version'] == 4
+    assert json.loads(store.path.read_text())['schema_version'] == SCHEMA_VERSION
     assert encode(store.load()) == encode(session)
 
 

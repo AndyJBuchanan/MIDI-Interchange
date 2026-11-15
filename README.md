@@ -67,9 +67,11 @@ Cubase: arrangement MIDI parts with their trims, part and track mute/solo
 changes, tempo changes and time signatures, and markers (a cycle marker
 becomes a start marker plus a closing `name |` marker). Tempo ramps are
 approximated with a step every beat. The project file is only read. Audio,
-Pattern Editor parts, the chord track, instruments, MIDI inserts/modifiers,
+Pattern Editor parts, the chord track, instruments, MIDI inserts, other MIDI modifiers,
 controller curve shapes and linear-time-base tracks are reported as skipped.
-Notes muted in Cubase's editors are left out, as Cubase's own MIDI export does.
+Notes muted in Cubase's editors are left out and the track transpose (MIDI
+Modifiers) is applied, as Cubase's own MIDI export does; the transpose is
+remembered on the track.
 Cubase's display bar offset is recorded in Source Info but not applied. See the
 [Cubase plan](docs/plans/cubase-import.md).
 

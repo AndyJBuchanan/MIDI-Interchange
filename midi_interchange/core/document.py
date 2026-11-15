@@ -147,6 +147,10 @@ class Track:
     channels: tuple[int, ...] = ()
     auto_trim: bool = False
     export_channel: int | None = None  # displayed channel 1–16; None preserves original channels
+    # Semitones the source DAW's track transpose added to this track's notes at
+    # import (Cubase MIDI Modifiers). Already applied to the events, as the
+    # DAW's own MIDI export does; kept so it can be shown or undone later.
+    source_transpose: int = 0
 
     @property
     def start(self) -> Fraction:

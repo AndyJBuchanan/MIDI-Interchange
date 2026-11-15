@@ -629,6 +629,47 @@ def state_flags_offset(b: bytes, cls: str) -> int | None:
     return None
 
 
+MODIFIER_PARAMS = ('Transpose', 'Velocity Shift', 'Delay')
+
+
+def _param_value(blob: bytes, name: str) -> int | None:
+    """An integer parameter in a MIDI Modifiers block: u32 name length (with
+    its NUL) | name | 00 | u16 0x0206 | u32 3 | u32 6 'Value' 00 | u16 1 | i64."""
+    key = len(name.encode()) + 1
+    pat = (struct.pack('>I', key) + name.encode() + b'\x00\x00\x02\x00\x06\x00\x00\x00\x03'
+           + b'\x00\x00\x00\x06Value\x00\x00\x01')
+    i = blob.find(pat)
+    if i < 0 or i + len(pat) + 8 > len(blob):
+        return None
+    return int.from_bytes(blob[i + len(pat):i + len(pat) + 8], 'big', signed=True)
+
+
+def track_midi_modifiers(wk: Walker, track_event: Obj) -> list[dict[str, int]]:
+    """The track's MIDI Modifiers effects, in slot order: {parameter: value}
+    for MODIFIER_PARAMS. Each is a 'TrackParaEffect' named 'MIDI Modifiers'
+    inside the track body, holding a 'PDuplicator' parameter tree. Every GA
+    track has one (slot 0); Prologue 01 has a second (slot 1) with Transpose
+    24, and Cubase's MIDI export plays Prologue 24 semitones up, so the
+    slots chain (their transposes add)."""
+    d = wk.d
+    body = d[track_event.body_at:track_event.end]
+    starts = [m.start() for m in re.finditer(b'TrackParaEffect', body)]
+    out = []
+    for n, m in enumerate(starts):
+        end = starts[n + 1] if n + 1 < len(starts) else len(body)
+        blob = body[m:end]
+        if b'MIDI Modifiers' not in blob[:80]:
+            continue
+        values = {p: _param_value(blob, p) for p in MODIFIER_PARAMS}
+        out.append({p: v for p, v in values.items() if v is not None})
+    return out
+
+
+def track_transpose(wk: Walker, track_event: Obj) -> int:
+    """Semitones the track's MIDI Modifiers add (sum over chained slots)."""
+    return sum(m.get('Transpose', 0) for m in track_midi_modifiers(wk, track_event))
+
+
 def track_state_flags(wk: Walker, track_event: Obj) -> int | None:
     """Channel state flags: bit 0 = solo, bit 2 = mute (tier 2 c14, c17s,
     c17m, c18fm; GA's two muted tracks). See state_flags_offset()."""

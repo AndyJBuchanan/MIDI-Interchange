@@ -93,8 +93,10 @@ def _message(e: cf.CprEvent, warn):
     return None
 
 
-def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter) -> list[Event]:
-    """Events in content time (quarter notes from the part's content zero)."""
+def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter, transpose: int = 0) -> list[Event]:
+    """Events in content time (quarter notes from the part's content zero).
+    transpose: the track's MIDI Modifiers transpose, added to note numbers as
+    Cubase's MIDI export does (GA's Prologue: +24)."""
     raw, problems, info = cf.decode_part_events(wk, part)
     for problem in problems:
         warn(f'{label}: {problem}; later events in this part are not imported')
@@ -113,6 +115,13 @@ def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter) -> list
             warn('Events with out-of-range MIDI values were skipped')
             continue
         at = _ticks(e.position)
+        if transpose and e.status in (0x90, 0xA0):
+            note = e.data[0] + transpose
+            if not 0 <= note <= 127:
+                warn('Notes transposed outside 0-127 by a track transpose were skipped')
+                continue
+            e = cf.CprEvent(e.status, e.position, e.channel, bytes([note]) + e.data[1:], e.props,
+                            e.length, e.tail, e.framed, e.flags)
         if e.status == 0x90:
             if e.length is None or e.length < 0:
                 raise ValueError(f'{label}: invalid note length')
@@ -201,6 +210,12 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
             if flags is None:
                 raise ValueError(f'Track "{name_}": mute/solo state not found')
             muted, soloed = bool(flags & cf.TRACK_MUTE), bool(flags & cf.TRACK_SOLO)
+            modifiers = cf.track_midi_modifiers(wk, te)
+            transpose = sum(m.get('Transpose', 0) for m in modifiers)
+            if not -127 <= transpose <= 127:
+                raise ValueError(f'Track "{name_}": invalid transpose {transpose}')
+            if any(m.get('Velocity Shift') or m.get('Delay') for m in modifiers):
+                warn('MIDI Modifiers velocity shift and delay are not applied')
             for f in folders:
                 if f.body_at <= te.tag_at < f.end:
                     warn('Folder tracks are flattened; folder mute/solo is applied to their tracks')
@@ -213,10 +228,10 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
                     raise ValueError(f'Track "{name_}": part contents not found')
                 if pe.length < 0 or pe.start < 0:
                     raise ValueError(f'Track "{name_}": invalid part extent')
-                key = pe.part.tag_at
+                key = (pe.part.tag_at, transpose)
                 if key not in shared:
                     part_name = cf._pstring(wk.d, pe.part.body_at)[0]
-                    shared[key] = _clip_events(wk, pe.part, f'Part "{part_name}" on "{name_}"', warn, counter)
+                    shared[key] = _clip_events(wk, pe.part, f'Part "{part_name}" on "{name_}"', warn, counter, transpose)
                 events = shared[key]
                 # Clip zero is the content zero, or the visible start when the
                 # part was extended before its content (negative offset; GA).
@@ -235,7 +250,8 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
             if not clips:
                 continue
             tracks.append(Track(new_id(), name_, sid, clips, original_name=name_, muted=muted, soloed=soloed,
-                                channels=track_channels([e for c in clips for e in c.events])))
+                                channels=track_channels([e for c in clips for e in c.events]),
+                                source_transpose=transpose))
         marker_events = _markers(wk)
         if marker_events:
             tracks.append(Track(new_id(), 'Markers', sid,
@@ -248,8 +264,9 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
             warn('Pattern Editor parts are not imported')
         if 'MChordEvent' in present:
             warn('Chord track events are not imported')
-        warn('Instruments, MIDI inserts, MIDI modifiers and track parameters (e.g. transpose) '
-             'are not applied; the stored MIDI is imported')
+        if any(t.source_transpose for t in tracks):
+            warn('Track transpose (MIDI Modifiers) is applied to the notes, as Cubase\'s MIDI export does')
+        warn('Instruments, MIDI inserts and other MIDI modifiers are not applied; the stored MIDI is imported')
         if not any(not t.auxiliary for t in tracks) and not marker_events:
             raise ValueError('The project contains no supported MIDI parts or markers')
         source = Source(sid, name, TICKS, 1, datetime.now(), tempo_map=tempo_map, path=path,

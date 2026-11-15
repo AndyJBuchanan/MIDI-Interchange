@@ -33,7 +33,10 @@ DAWproject exports, which round through seconds and reduce tempo ramps to
 steps. The display bar offset is recorded on `Source` (session schema 4,
 with a schema-3 upgrade) but not applied: imports keep Cubase's absolute
 timeline, as its own MIDI export does. Generated or processed material (pattern
-parts, chord track, inserts, track transpose) is reported, not rendered.
+parts, chord track, inserts) is reported, not rendered. Two exceptions,
+because Cubase's own MIDI export applies them: notes muted in the editors
+are left out, and the track transpose (MIDI Modifiers) is applied, with the
+value kept on `Track.source_transpose` (session schema 5).
 Evidence, decisions and limitations: [Cubase plan](plans/cubase-import.md).
 
 ## DAWproject importer (2026-11-14)

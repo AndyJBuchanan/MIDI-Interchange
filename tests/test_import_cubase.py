@@ -178,8 +178,8 @@ def test_indy_export_matches_cubase_midi_in_reference_window():
 def test_ga_whole_song_matches_cubase_midi_export():
     """GA's whole-song MIDI export (2026-11-15), through the reader and the
     real exporter: every note on every exported track, across the tempo
-    ramp, with the kit's 2,399 muted notes left out as Cubase does. Prologue
-    differs only by its +24 track transpose, not applied yet."""
+    ramp, with the kit's 2,399 muted notes left out and Prologue's +24 track
+    transpose (MIDI Modifiers) applied, as Cubase does."""
     from scripts.compare_project_exports import compare
     stem = 'GA & Padshop 2-(alt instr 2)-01'
     if not (SETS / f'{stem}.mid').exists():
@@ -188,9 +188,9 @@ def test_ga_whole_song_matches_cubase_midi_export():
     assert {k: (v['exact'], v['changed_duration'], v['app_only'], v['cubase_only']) for k, v in rows.items()} == {
         'hbar Sample Pack 1 Kit': (2548, 0, 0, 0), 'HALion Sonic SE 01': (80, 0, 0, 0),
         'Retrologue 01': (14, 0, 0, 0), 'Piano Chords': (499, 0, 0, 0), 'Piano Chords (D)': (748, 0, 0, 0),
-        'Prologue 01': (0, 0, 20, 20)}
-    assert all(b[2] == a[2] + 24 for a, b in zip(rows['Prologue 01']['app_only_examples'],
-                                                rows['Prologue 01']['cubase_only_examples']))
+        'Prologue 01': (20, 0, 0, 0)}
+    tracks = by_name(read(SETS / f'{stem}.cpr')[1])
+    assert {n: t.source_transpose for n, t in tracks.items() if t.source_transpose} == {'Prologue 01': 24}
 
 
 def test_ga_matches_dawproject_before_tempo_ramp_and_stays_on_grid_after():
