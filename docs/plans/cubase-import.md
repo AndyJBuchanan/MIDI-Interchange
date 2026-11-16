@@ -373,6 +373,12 @@ committed; tests skip when absent) exposed decoder assumptions:
   fixtures 5,019 notes carry it, and nothing else ever sets that word.
   Cubase's **DAWproject export keeps muted notes and doesn't mark them**,
   which explains GA's "846 extra kit notes" in the DAWproject comparison.
+- **Articulations in the MIDI export** (BBCSO, noticed 2026-11-16, not acted
+  on). Cubase's MIDI export writes **text events** on each instrument track
+  for expression-map articulations ("Legato", "Spiccato", "StacSs", "Tenuto",
+  "long"...), hundreds in BBCSO. The native reader doesn't import them yet;
+  where Cubase stores them in the project is not investigated. Roadmap entry:
+  "Cubase expression-map articulations as text".
 - **References past 16 MB** (BBCSO markers, user, 2026-11-16). A REF tag is
   0x80000000 | the declaration's offset, so a class declared past 16 MB gives
   REF tags starting 0x81 or higher. The walker only looked for objects at 0x80

@@ -99,7 +99,16 @@ the reference has 1,581.
 The apparent tempo mismatch is also outside the comparable section. The app
 preserves the DAWproject's 93/97 BPM changes; the first actual BPM change is near
 beat **271.834**. Restricting the diagnostic export to **[0, 192)** gives the same
-93 BPM, 4/4 timing map as the MIDI reference. Do not remove those later tempo
+93 BPM, 4/4 timing map as the MIDI reference.
+
+**Verified in Cubase (user, 2026-11-16): the DAWproject export drops tempo
+ramps.** The project has two ramps, 93 → 97 BPM over beats 264-272 and 97 → 93
+over beats 384-432. The DAWproject holds 93 until 264, then a step to 97 at
+271.835 and a step back to 93 at 432.853: each ramp becomes one step at its
+end, and because DAWproject positions are seconds, later positions drift
+(271.835 for 272). The native `.cpr` reader and Cubase's own whole-song MIDI
+export both have the ramps (a step every beat, identical to each other). So
+the discrepancy is Cubase's DAWproject export, not the reader. Do not remove those later tempo
 changes from the reader to imitate a shorter MIDI export.
 
 | Track | App in window | Cubase MIDI | Matching complete notes | Residual difference |
