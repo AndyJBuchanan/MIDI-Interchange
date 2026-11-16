@@ -272,7 +272,7 @@ Use your own Cubase 15/16 projects as well as `samples/project-sets` and `sample
 
 ## 8o. Reason song import (`feature/direct-daw-import-reason`)
 
-Use your own Reason 13/14 songs as well as `samples/reason-probe`. Implementation, evidence and limitations: [the Reason plan](plans/reason-import.md).
+Use your own Reason 13/14 songs as well as `samples/reason-probe` and `samples/reason-check`. Implementation, evidence and limitations: [the Reason plan](plans/reason-import.md).
 
 - [x] Open and drag a `.reason` into an empty workspace, and into one with tracks. Clips land where Reason shows them, one track per sequencer track (lanes merged). Source Info shows "Reason song", the version and the warnings.
 - [x] Muted clips, muted lanes and muted Block placements arrive as muted clips (crossed through); a muted track arrives muted.

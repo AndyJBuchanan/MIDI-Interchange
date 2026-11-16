@@ -11,7 +11,8 @@ import pytest
 from midi_interchange.core import reason_format as rf
 
 PROBE = os.path.join(os.path.dirname(__file__), '..', 'samples', 'reason-probe')
-CHECK = os.path.join(os.path.dirname(__file__), '..', 'samples', 'reason-check')    # songs found in user checks
+CHECK = os.path.join(os.path.dirname(__file__), '..', 'samples', 'reason-check')    # real songs with Reason exports
+LOCAL = os.path.join(os.path.dirname(__file__), '..', 'samples', 'local', 'reason')  # too big to commit; optional
 PAGE = 0x40000
 
 
@@ -285,7 +286,7 @@ def exported(path):
 
 
 KNOWN_GAPS: dict[str, str] = {}
-R_EXPORTS = sorted(m for root in (PROBE, CHECK) for m in glob.glob(os.path.join(root, '**', '*.mid'), recursive=True)
+R_EXPORTS = sorted(m for root in (PROBE, CHECK, LOCAL) for m in glob.glob(os.path.join(root, '**', '*.mid'), recursive=True)
                    if os.path.exists(m[:-4] + '.reason'))
 
 

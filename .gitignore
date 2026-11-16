@@ -21,5 +21,8 @@ samples/project-cubase-phases/Verify/BBCSO_Woodwinds101-App01-MacBook.cpr
 samples/project-cubase-phases/Verify/orchestral-import-test-01.cpr
 samples/project-cubase-phases/Verify/Scaler3Test-001(14).cpr
 
-# Reason probe: the user's original songs, local only
-samples/reason-probe/
+# Samples kept out of git (see samples/README.md):
+# local/   files tests use when present but too big to commit (tests skip when absent)
+# _archive/ material not kept in the repo, gathered for the user to archive elsewhere
+samples/local/
+samples/_archive/

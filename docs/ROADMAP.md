@@ -6,7 +6,6 @@ Updated 2026-11-14.
 
 ## Agreed, not started
 
-- **Tidy up `samples/` before the 0.4.0 release** (agreed 2026-11-16): the sample folders have grown mixed, some files committed and some local only (`project-sets`, `project-cubase-phases/Verify`, `reason-probe`, `reason-check`, plus stray exports and `Auto Saves`/`Track Pictures` folders). Decide one rule per folder (committed fixture, local-only with tests that skip, or delete), make `.gitignore` match it, and write it down in `samples/` READMEs so the next person knows what each folder holds and whether tests need it.
 
 - **Investigate direct DAW project import** (2026-11-14; investigation agreed, implementation not yet scoped):
   - Goal: drag a saved project into MIDI Interchange and extract usable MIDI, tempo/time signatures, markers and lyrics through the ordinary import workflow, without first exporting MIDI from the DAW. Read source projects and any referenced media only; never write to or modify them.

@@ -302,7 +302,11 @@ Reason export, imported and exported by the app, against that export).
 
 Probed 2026-11-15 with 62 `.reason` files (Reason 6, 9, 10, 11, 12, 13 and 14,
 several songs saved in more than one version) plus r01 (empty) and r02 (one
-note), kept locally in the git-ignored `samples/reason-probe/`.
+note). Since the samples tidy-up (2026-11-16) the r-series is committed in
+`samples/reason-probe/`, the real songs with Reason exports in
+`samples/reason-check/` (Oct08, 58 MB, in the local-only `samples/local/`),
+and the other probe songs are archived outside the repo; see
+[samples/README.md](../../samples/README.md).
 
 - **Split by the BODY magic, not by file extension.** The container is plain IFF
   in every version, but the song's `BODY` chunk begins with a 128-byte plain
