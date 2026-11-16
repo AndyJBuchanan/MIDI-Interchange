@@ -36,8 +36,10 @@ import struct
 from dataclasses import dataclass, field
 
 NAME_RE = re.compile(rb'[A-Za-z_][A-Za-z0-9_:]{0,95}\0')
-# Every tag starts 0xFF (NEW/BASE) or 0x80 (REF to a declaration offset).
-TAG_START = re.compile(rb'[\x80\xff]')
+# Every tag starts 0xFF (NEW/BASE) or has the top bit set (REF: 0x80000000 |
+# declaration offset). A REF to a class declared past 16 MB starts 0x81 or
+# higher (BBCSO: markers declared at 23 MB, 7 of its 8 markers were missed).
+TAG_START = re.compile(rb'[\x80-\xff]')
 
 
 # ---------------------------------------------------------------- container

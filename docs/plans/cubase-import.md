@@ -373,6 +373,13 @@ committed; tests skip when absent) exposed decoder assumptions:
   fixtures 5,019 notes carry it, and nothing else ever sets that word.
   Cubase's **DAWproject export keeps muted notes and doesn't mark them**,
   which explains GA's "846 extra kit notes" in the DAWproject comparison.
+- **References past 16 MB** (BBCSO markers, user, 2026-11-16). A REF tag is
+  0x80000000 | the declaration's offset, so a class declared past 16 MB gives
+  REF tags starting 0x81 or higher. The walker only looked for objects at 0x80
+  and 0xFF bytes, so it missed them: BBCSO showed 1 of its 8 markers (declared
+  at 23 MB), the orchestral project 1 of 21. It now looks at any byte from 0x80;
+  notes, tracks and warnings are unchanged on all 52 projects, and BBCSO's
+  markers match its MIDI export.
 - **Track transpose** (user request, 2026-11-15). Each track body holds
   'MIDI Modifiers' effects (`TrackParaEffect`, a `PDuplicator` parameter tree:
   Transpose, Velocity Shift, Delay, Length Compression, Velocity Compression,

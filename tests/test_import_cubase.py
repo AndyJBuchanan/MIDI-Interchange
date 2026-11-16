@@ -290,6 +290,19 @@ def test_verify_bbcso_score_symbols_and_named_flags_tail():
     assert len(music) == 34 and not any(t.muted or t.soloed for t in music)
     assert sum(1 for t in music for c in t.clips for e in c.events if e.msg.type == 'note_on') == 2365
     assert any('Score Editor symbols' in w for w in source.warnings)
+    # Markers are declared past 16 MB, so their references start 0x81: all 8
+    # must be found, as in Cubase's MIDI export (user, 2026-11-16).
+    (markers,) = [t for t in tracks if t.auxiliary]
+    assert [(e.time, e.msg.text) for c in markers.clips for e in c.events] == [
+        (0, 'Pre Roll'), (8, 'Count'), (16, 'Cue Start'), (40, 'A'), (80, 'B'), (120, 'C'), (160, 'D'), (200, 'E')]
+    mid = VERIFY / 'BBCSO_Woodwinds101-App01-MacBook.midi'
+    if mid.exists():
+        exported, t = [], 0
+        for msg in mido.MidiFile(mid).tracks[0]:
+            t += msg.time
+            if msg.type == 'marker':
+                exported.append((F(t, 480), msg.text))
+        assert exported == [(e.time, e.msg.text) for c in markers.clips for e in c.events]
 
 
 def test_verify_beat003_object_properties_and_flags_sentinel():
