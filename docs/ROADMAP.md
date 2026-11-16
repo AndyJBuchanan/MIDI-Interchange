@@ -2,28 +2,21 @@
 
 All outstanding features and fixes, agreed or not, are listed here and only here. Each feature gets its own plan in [plans/](plans/) and its own branch when it is picked up. When something is finished, remove it from this list; its plan records how it was done.
 
-Updated 2026-11-14.
+Updated 2026-11-16.
 
 ## Agreed, not started
 
 
-- **Investigate direct DAW project import** (2026-11-14; investigation agreed, implementation not yet scoped):
-  - Goal: drag a saved project into MIDI Interchange and extract usable MIDI, tempo/time signatures, markers and lyrics through the ordinary import workflow, without first exporting MIDI from the DAW. Read source projects and any referenced media only; never write to or modify them.
-  - Provide a MIDI view of the project's current arrangement, not a recovery view of everything stored in its files. Do not expose hidden material, unused pool contents, inactive alternate takes or abandoned edits, even if they can be found and labelled. Respect the arrangement's clip boundaries and active choices.
-  - Target DAWs: **Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio**. FL Studio support is subject to native-format feasibility investigation. **Studio One is deferred**; there is no current access to it for testing.
-  - **DAWproject and the shared reader registry are provisionally implemented** (accepted 2026-11-14; [implementation and limitations](plans/dawproject-import.md)). This milestone validates the pluggable importer architecture alongside MIDI. **The native Cubase 15/16 reader is implemented** (2026-11-15; [plan, evidence and limitations](plans/cubase-import.md)); manual checks are in TEST_CHECKLIST section 8n. **The native Reason 13/14 reader is implemented** (2026-11-15; [plan, evidence and limitations](plans/reason-import.md)); manual checks are in TEST_CHECKLIST section 8o. Songs saved by Reason 12.6 and earlier are encrypted and are refused with a re-save message. The order for the remaining DAWs is still to be scoped. Assess format feasibility independently; shipping one reader must not depend on completing all seven DAWs.
-  - For each format, establish how its saved files/packages expose events and metadata, which versions can be read, and whether data is embedded or depends on referenced files. Distinguish saved MIDI from data that would require the DAW or an instrument to generate it.
-  - Scope the musical mapping: track/clip names and positions, offsets, trims, loops/repeats, MIDI channels and controllers, tempo/time-signature changes, markers and lyrics. Establish how each format identifies the current arrangement and excludes hidden/inactive material.
-  - **Mute state:** preserve both track and clip mute states on import. Muted arrangement material is included with its mute state, rather than treated as hidden/inactive material to omit. Track mute maps to the existing controls. Clip mute, its context-menu control, export gating, undo and session persistence are implemented with DAWproject; retain these semantics for subsequent readers. Do not flatten clip mute into track mute or discard muted clips.
-  - Use small real projects with known content and matching DAW-exported MIDI as fixtures. Compare recovered events, timing and metadata programmatically, including missing references and unsupported project versions. Establish which marker/lyric data is actually saved and recoverable for each format.
-  - Deliver a feasibility matrix and a separate implementation recommendation for each format: recoverable data, gaps, dependencies, estimated effort and evidence from fixtures. Partial support must report what was skipped; unreadable projects must fail cleanly without altering the workspace.
-  - Design a common importer interface and registry/selection mechanism so MIDI and each supported project format can be selected and slotted into the same import pipeline. Separate format detection/reader selection from parsing. Define a shared import result and diagnostics contract that feeds the existing source/track/clip/tempo model; readers translate format-specific data into that contract. Adding a reader should not require format-specific branches throughout the UI or downstream logic.
-  - Reuse placement, provenance, session persistence and export logic for every reader. Investigate and resolve shared model gaps explicitly, including clip mute, rather than creating separate per-format models or project workflows. Scope this common architecture alongside the first format investigations, using their findings to validate the contract.
-- **Export/drag filename decoration:**
-  - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
-  - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
+- **More direct DAW project readers** (2026-11-16): the investigation and first readers are done: DAWproject, Cubase 15/16 and Reason 13/14 are implemented and checked against each DAW's own MIDI export (see the [DAWproject](plans/dawproject-import.md), [Cubase](plans/cubase-import.md) and [Reason](plans/reason-import.md) plans, TEST_CHECKLIST sections 8n and 8o, and the README). What's left, in the user's order of priority:
+  - **Cubase before 15** (agreed, later): fixtures are in `samples/` (a Cubase 13 file, `argontest003`); older versions are rejected cleanly for now.
+  - **Logic** (secondary) and **Reaper, Bitwig, Ableton, FL Studio** (low priority; the user uses only Reason and Cubase). Feasibility and order are in the [desk research](plans/daw-desk-research.md). **Studio One is deferred**; there is no access to it for testing.
+  - Each reader keeps the shared rules: read only, never modify the project; report what was skipped; fail cleanly on unreadable files; preserve track and clip mute states.
 
 ## Suggested, not agreed
+
+- **Export/drag filename decoration** (speculative, 2026-11-16: not sure it's needed):
+  - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
+  - Possible: decoration, at least bar numbers (range start–end) or other distinguishing details.
 
 - **More sophisticated tempo mapping** (2026-11-14):
   - Today the workspace uses one whole file's tempo map. Possible: take different files' maps for different sections, for example when files are laid End to End or verse and chorus come from different apps.
