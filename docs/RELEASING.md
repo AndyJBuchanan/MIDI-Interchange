@@ -142,6 +142,7 @@ gh pr create -R <owner>/MIDI-Interchange --base main --head release/<ver> --titl
 
 | Tag | Version | Commit | Notes |
 |---|---|---|---|
+| `v0.4.0-pre` | 0.4.0 | `fca8e29` (published 2026-11-16) | Open Cubase, Reason and DAWproject projects directly, clip mute and the M key, Z to zoom to fit. Both platform builds installed and smoke-tested from the tagged commit. |
 | `v0.3.0-pre` | 0.3.0 | `60f9f3b` (published 2026-11-14) | Session persistence and single-instance file handoff, track export-channel overrides, tempo/marker UI, clip splitting and contextual Shift move/copy. Both platform builds installed and smoke-tested. |
 | `v0.2.2-pre` | 0.2.2 | `8a6ddbf` (published 2026-11-12) | Both platforms built from the tagged commit. Clip trims, About box, drag-in auto-scroll, mute/solo with range locks, range file names. 0.2.1 was never released. |
 | `v0.2.0-pre` | 0.2.0 | `7145b12` (published 2026-11-10) | Both platforms built from the tagged commit. The Windows tests were fixed on main first (PR #3, test helper only). |
