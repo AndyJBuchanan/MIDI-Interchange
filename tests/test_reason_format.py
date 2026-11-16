@@ -318,3 +318,11 @@ def test_r_series_transport_tempo_and_signature_clips():
     assert [(p.pos, p.value) for p in tempo.automation.points] == [(0, 120000), (8 * rf.PPQ, 90000)]
     assert (sig.info.start, sig.info.start + sig.info.length) == (16 * rf.PPQ, 73 * rf.PPQ)
     assert sig.automation.kind == 2 and sig.automation.points[0].value == 0x0403      # 3/4
+
+
+def test_controller_resting_values_from_trsc():
+    # mute-tests' OVERLAY WITH MUTE: sustain rests at 79; r16: mod wheel and pitch bend at 0
+    assert rf.controller_rest(bytes.fromhex('00000001 0040 0000004f 01 00000000 0000007f')) == {0x40: 79}
+    assert rf.controller_rest(bytes.fromhex('00000002 0001 00000000 00 00000000 0000007f'
+                                            '00ff 00000000 00 ffffe000 00001fff')) == {0x01: 0, 0xFF: 0}
+    assert rf.controller_rest(b'\0\0\0\0') == {} and rf.controller_rest(b'') == {}

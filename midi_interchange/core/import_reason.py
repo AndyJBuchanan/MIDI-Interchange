@@ -163,7 +163,17 @@ def import_reason(path: str | None, name: str, data: bytes = b'', *, byte_size=N
             for p in ps:
                 if p.start < 0 or p.end > MAX_TIME:
                     raise ValueError(f'Track "{t.name}": clip out of bounds')
-            clips = [_clip(p, t.index, sid, warn, counter) for p in ps]
+            kept = []
+            for p in ps:
+                # A clip that only silences (an empty clip, or Block content
+                # covered by one: mute-tests) carries nothing to import.
+                if not p.notes and all(v == t.rest.get(i, rf.CONTROL_DEFAULT) for _, i, v in p.controls):
+                    warn('Empty clips (no notes) are not imported')
+                    continue
+                kept.append(p)
+            if not kept:
+                continue
+            clips = [_clip(p, t.index, sid, warn, counter) for p in kept]
             tname = t.name or f'Track {t.index}'
             tracks.append(Track(new_id(), tname, sid, clips, original_name=tname, muted=t.info.muted,
                                 channels=track_channels([e for c in clips for e in c.events])))

@@ -517,6 +517,7 @@ class Track:
     name: str
     lanes: list[Lane]
     folder: tuple[str, ...] = ()    # enclosing folder names (Reason 14), outermost first
+    rest: dict[int, int] = field(default_factory=dict)   # controller lane id -> resting value (TRSC)
 
 
 def _clip(song: Song, lcfm: Chunk) -> list[Clip]:
@@ -548,6 +549,26 @@ def _clip(song: Song, lcfm: Chunk) -> list[Clip]:
     return out
 
 
+def controller_rest(b: bytes) -> dict[int, int]:
+    """A note track's TRSC: u32 count, then per performance controller u16
+    lane id, i32 resting value, u8 flag, i32 min, i32 max (15 bytes). The value
+    is where the controller sits outside clips: mute-tests' sustain rests at
+    79 and Reason's export returns it there after each clip; r16's mod wheel
+    and pitch bend rest at 0. (The Transport track's TRSC is laid out
+    differently: see _transport_statics.)"""
+    out: dict[int, int] = {}
+    if len(b) < 4:
+        return out
+    (n,) = struct.unpack_from('>I', b, 0)
+    for k in range(min(n, 64)):
+        p = 4 + 15 * k
+        if p + 15 > len(b):
+            break
+        lane_id, value = struct.unpack_from('>Hi', b, p)
+        out[lane_id] = value
+    return out
+
+
 def _track(song: Song, trfm: Chunk, index: int, names: dict[int, str], folder: tuple[str, ...]) -> Track:
     trdc = next((k for k in trfm.kids if k.id == 'TRDC'), None)
     info = decode_track(song.bytes_of(trdc)) if trdc is not None else TrackInfo(0, False, 0)
@@ -559,7 +580,9 @@ def _track(song: Song, trfm: Chunk, index: int, names: dict[int, str], folder: t
         lcct = lanf.find('CAT:LCCT')
         clips = [c for lcfm in (lcct.kids if lcct else []) for c in _clip(song, lcfm)]
         lanes.append(Lane(linfo, clips))
-    return Track(index, info, names.get(info.device, ''), lanes, folder)
+    trsc = next((k for k in trfm.kids if k.id == 'TRSC'), None)
+    rest = controller_rest(song.bytes_of(trsc)) if trsc is not None and index > 0 else {}
+    return Track(index, info, names.get(info.device, ''), lanes, folder, rest)
 
 
 def folder_name(b: bytes) -> str:
@@ -621,7 +644,7 @@ def _visible(windows, covers=None):
 PlayedNote = tuple[int, int, int, int]      # (song tick, pitch, velocity, length)
 Control = tuple[int, int, int]              # (song tick, controller lane id, value)
 STEP = PPQ // 32                            # Reason renders lines as 1/32-beat steps
-CONTROL_DEFAULT = 0                         # value a controller returns to after a clip
+CONTROL_DEFAULT = 0                         # resting value when the track's TRSC doesn't list the controller
 PITCH_BEND = 0xFF
 RAMPED = {0x01, 0xFF}                       # mod wheel, pitch bend; sustain jumps (Day 15)
 
@@ -698,9 +721,9 @@ class Piece:
     controls: list[Control] = field(default_factory=list)
 
 
-def _render(piece: Piece, origin: int, hard: bool) -> None:
+def _render(piece: Piece, origin: int, hard: bool, rest: dict[int, int] | None = None) -> None:
     """Fill a piece's notes and controllers. origin: song tick of the clip's
-    content zero."""
+    content zero; rest: the track's controller resting values."""
     c, u, v = piece.clip, piece.start, piece.end
     loop = c.info.loop
     shift = c.info.loop_offset if loop else 0
@@ -729,7 +752,13 @@ def _render(piece: Piece, origin: int, hard: bool) -> None:
         sent = [(u, lane.lane_id, held[-1])] if held else []
         sent += [(t, lane.lane_id, x) for t, x in pts if u < t < v]
         if sent:
-            piece.controls += sent + [(v, lane.lane_id, CONTROL_DEFAULT)]   # reset at the end (r16)
+            back = (rest or {}).get(lane.lane_id, CONTROL_DEFAULT)
+            piece.controls += sent + [(v, lane.lane_id, back)]   # back to rest at the end (r16, mute-tests)
+    own = {lane.lane_id for lane in c.controllers}
+    for lane_id, value in sorted((rest or {}).items()):
+        if lane_id not in own and value != CONTROL_DEFAULT:
+            # a clip without this controller plays it at the track's resting value
+            piece.controls.append((u, lane_id, value))
     piece.notes.sort()
     piece.controls.sort(key=lambda x: x[0])
 
@@ -751,7 +780,9 @@ def pieces(song: Song) -> list[tuple[Track, list[Piece]]]:
     - looping clips repeat their first `loop` ticks from start + loop_offset;
     - when the Blocks switch is on, each unmuted Block placement on the
       Transport track plays its Block's clips from the placement's offset into
-      the Block, within the placement; song clips on the same lane cover them
+      the Block, within the placement, and the placement's end cuts notes
+      still sounding; clips inside a Block overlap by the same rule as song
+      clips (mute-tests); song clips on the same lane cover them
       (user: empty clips are used to silence a Block locally);
     - a note lane's Block content can be muted at single placements (SMGC,
       see block_mutes); identical duplicate placements play once, and as with
@@ -759,7 +790,7 @@ def pieces(song: Song) -> list[tuple[Track, list[Piece]]]:
     - controllers: the value in force at a piece's start (points before it
       count, Oct08; else the first point's value, Day01), then its points; mod wheel and pitch bend are lines
       between points (see stepped), others jump. A controller returns to
-      CONTROL_DEFAULT at the end of a piece unless another piece on the track
+      its resting value (Track.rest, else CONTROL_DEFAULT) at the end of a piece unless another piece on the track
       takes it over there. Reason's export also leaves out values equal to
       the current one; pieces keep them so each stands alone.
     """
@@ -791,28 +822,38 @@ def pieces(song: Song) -> list[tuple[Track, list[Piece]]]:
             for c, segs in zip(songs, _visible(windows, covers)):
                 for u, v, hard in segs:
                     p = Piece(ln, c, u, v, ln.info.muted or c.info.muted)
-                    _render(p, c.info.start, hard)
+                    _render(p, c.info.start, hard, t.rest)
                     out.append(p)
+            # Block clips overlap inside their Block by the same rule as song
+            # clips (later start wins, ties: later in the lane; a muted clip
+            # covers nothing): mute-tests, an empty clip silencing another.
+            by_block: dict[int, list[Clip]] = {}
             for c in (c for c in ln.clips if c.kind == 'notes' and c.block):
-                for key, recs in places.items():
-                    pl = first[key]
-                    if pl.placed_block != c.block:
-                        continue
-                    base = pl.info.start + pl.placed_offset      # where the Block's beat 0 falls
-                    s = max(base + c.info.start, pl.info.start)
-                    e = min(base + c.info.start + c.info.length, pl.info.start + pl.info.length)
-                    if s >= e:
-                        continue
-                    muted = (ln.info.muted or c.info.muted or recs[-1] < 0
-                             or (t.index, note_lane, recs[-1]) in mutes)   # a later twin covers
-                    segs = [(s, e, False)]
-                    for (s2, e2), cov in zip(windows, covers):
-                        if cov:
-                            segs = _cut(segs, s2, e2)
-                    for u, v, hard in segs:
-                        p = Piece(ln, c, u, v, muted, pl)
-                        _render(p, base + c.info.start, hard)
-                        out.append(p)
+                by_block.setdefault(c.block, []).append(c)
+            for blk, cs in by_block.items():
+                bwin = [(c.info.start, c.info.start + c.info.length) for c in cs]
+                for c, bsegs in zip(cs, _visible(bwin, [not c.info.muted for c in cs])):
+                    for key, recs in places.items():
+                        pl = first[key]
+                        if pl.placed_block != blk:
+                            continue
+                        base = pl.info.start + pl.placed_offset      # where the Block's beat 0 falls
+                        pl_end = pl.info.start + pl.info.length
+                        muted = (ln.info.muted or c.info.muted or recs[-1] < 0
+                                 or (t.index, note_lane, recs[-1]) in mutes)   # a later twin covers
+                        for bu, bv, bhard in bsegs:
+                            s, e = max(base + bu, pl.info.start), min(base + bv, pl_end)
+                            if s >= e:
+                                continue
+                            # a placement's end cuts its Block's notes (mute-tests), as a cover does
+                            segs = [(s, e, bhard or e == pl_end)]
+                            for (s2, e2), cov in zip(windows, covers):
+                                if cov:
+                                    segs = _cut(segs, s2, e2)
+                            for u, v, hard in segs:
+                                p = Piece(ln, c, u, v, muted, pl)
+                                _render(p, base + c.info.start, hard, t.rest)
+                                out.append(p)
         out.sort(key=lambda p: (p.start, p.end))
         starts = {(p.start, i) for p in out if not p.muted for a, i, _ in p.controls if a == p.start}
         for p in out:       # a piece's only control at its end is its reset

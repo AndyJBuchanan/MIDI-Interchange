@@ -286,10 +286,15 @@ def timeline(midi):
                 timing.append((tick, m.tempo))
             elif m.type == 'time_signature':
                 timing.append((tick, m.numerator, m.denominator))
+        # A controller's state before anything is sent: Reason writes each
+        # track's resting values at tick 0 (mute-tests: sustain 64); start
+        # from those and drop them, as the app sends them from the first clip.
+        start = {k: v for tick, k, v in ctl if tick == 0}
+        ctl = [x for x in ctl if x[0] != 0]
         last = {}
         for tick, k, v in ctl:
             last[(tick, k)] = v                 # the last value at a tick wins
-        cur, eff = {}, []
+        cur, eff = dict(start), []
         for (tick, k), v in sorted(last.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
             if cur.get(k, 0) != v:
                 eff.append((tick, k, v))

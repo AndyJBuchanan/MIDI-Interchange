@@ -139,6 +139,21 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
   trimming a clip leaves hidden notes before its start. A note sounds if it
   starts inside the visible part of its clip.
 - **A clip's own end does not cut a sounding note**; the note keeps its length.
+- **Inside a Block, clips overlap by the song-clip rule** (mute-tests, user's
+  checks, 2026-11-16): later start wins, ties go to the later clip in the
+  lane, a muted clip covers nothing. mute-tests silences a Block's 4-beat clip
+  with an empty 32-beat clip starting at the same beat.
+- **A Block placement's end cuts notes still sounding** in its content, as a
+  covering clip does (mute-tests: notes from beat 24 end at 28, the
+  placement's end; cutting at the song end doesn't fit).
+- **Controllers return to the track's resting value**, not 0: a note track's
+  `TRSC` lists each performance controller (u16 lane id, i32 resting value,
+  u8 flag, i32 min, i32 max). mute-tests' sustain rests at 79 and Reason's
+  export returns it there after each clip; r16's rest at 0. Reason also writes
+  the resting values at beat 0. The reader sends a non-zero resting value at
+  the start of any clip that doesn't set that controller itself.
+- **Empty clips are not imported** (no notes and no controller changes): they
+  only silence, and their effect is already in the rendering.
 - **A restruck pitch ends the note still sounding** (Aug01, found in the
   user's checks, 2026-11-16): a MIDI track can't sound one pitch twice, so a
   note ringing past its clip ends where the same pitch starts again on the
