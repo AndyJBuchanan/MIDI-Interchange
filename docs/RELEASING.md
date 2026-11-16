@@ -20,7 +20,7 @@ From 0.3.0, each release is assembled on its own `release/X.Y.Z` branch. `main` 
 - **Create `release/X.Y.Z` early**, from `main`, before the first feature for that release is started, so features have a branch to start from. Merge further features into it as they're finished, so they're tested together as you go rather than all at the end. The first commit on the branch bumps `__version__` (see below).
 - **Merge a feature only once you mean to ship it in that release.** Taking a feature back out means reverting its merge.
 - **Release work happens on the release branch:** release notes, the build, the tag, then the checksums and the release history row (the checklist below).
-- **After publishing**, merge the release branch into `main` by pull request with a merge commit, not a squash or rebase, so the tagged commit is part of `main`'s history. Then delete the release branch.
+- **After publishing**, merge the release branch into `main` by pull request with a merge commit, not a squash or rebase, so the tagged commit is part of `main`'s history. Keep the release branch: the repository rules don't allow branch deletion, and the branch stays as a record.
 - **Fixes to a published release** go on a new `release/X.Y.Z+1` branch made from that release's tag, and follow the same steps.
 - **Docs go on the release branch too**, not straight to `main`: README fixes, roadmap, interop findings and test checklist changes. A plan for a feature goes on its feature branch. Changing docs on `main` while a release branch is open causes the same conflicts.
 
@@ -132,7 +132,7 @@ gh release upload v<ver>[-label] -R <owner>/MIDI-Interchange --clobber <file>
 
 ### 6. Merge the release into `main`
 
-Commit the release notes with their checksums, and the release history row below, on the release branch and push. Then open a pull request from `release/<ver>` into `main`, merge it with a merge commit, and delete the release branch:
+Commit the release notes with their checksums, and the release history row below, on the release branch and push. Then open a pull request from `release/<ver>` into `main`, and merge it with a merge commit. Don't delete the release branch (the repository rules forbid it):
 
 ```bash
 gh pr create -R <owner>/MIDI-Interchange --base main --head release/<ver> --title "Release <ver>" --body "Published as v<ver>[-label]."
