@@ -66,6 +66,8 @@ Reason and RapidComposer can't drag MIDI out (they only export files), so they h
 - [x] **Merge Into ▸** another track puts all the clips on the target track and removes the source track.
 - [x] The track header shows "N clips · M sources" for a mixed track.
 - [x] **Source Info** is a proper dialog: track summary, a table of clips (position, channels, notes, source), and the sources with their details. Clicking a clip selects its source; Show in Folder opens the file's folder.
+- [x] **Source Info overflow:** use a source with a long path, many original tracks and warnings. Resize the dialog and move both dividers; check every value is readable by scrolling the details, and Show in Folder and Close remain accessible. Check larger system fonts too.
+- [x] **Source Info selection/copy:** copy a wrapped path and confirm it has no added line breaks. Scroll down, then select another source (directly and through a clip); its details should start at the top.
 - [x] Rename, reorder, remove, solo and the export checkbox still work on assembled tracks.
 
 ## 8. Export of assembled tracks
@@ -244,6 +246,42 @@ Use Cmd/Option on macOS; Ctrl/Alt on Windows. Windows checks are done before rel
 - [x] With Shift held, move and copy horizontally on the source track: movement is unsnapped. Cross to another track or below the lanes: the original time is preserved. Return to the source track: unsnapped movement resumes. Release Shift: normal snap returns. Undo reverses the whole gesture.
 
 Automated tests cover exact MIDI boundaries, note ordering, all four export modes, channel overrides, locked exclusions, shared session data, invalid cuts, modifier dispatch and undo/redo. No manual file comparison is needed.
+
+## 8m. DAWproject import (`feature/direct-daw-import-dawproject`)
+
+Partially done; the rest is deferred by agreement (2026-11-14). Steps that were only partly checked stay unticked. Implementation and known limitations: [the DAWproject plan](plans/dawproject-import.md).
+
+- [x] Open and drag each of the three supplied Cubase project sets (`samples/project-sets`) into an empty workspace. Inspect clip positions, Source Info (format, application, size, tempo changes) and the warnings for skipped content.
+- [x] Ditty's disabled clips stay visible and silent, drawn with thin crosses through them. Toggle with the right-click Mute/Unmute Clip and with the M key while the pointer is over a clip; duplicate, split, move and trim a muted clip; check undo/redo.
+- [x] Unmute one of Ditty's clips and export, then undo and repeat with a locked range and with track solo. Export muted clips through every mode, with track solo and locked ranges: clip mute must still exclude them.
+- [x] Save and relaunch after moving the original DAWproject elsewhere. Events, trims, source details, mute and export all survive.
+- [x] Verify GA & Padshop's imported tempo changes in Cubase. Listen to and compare the paired exports in Cubase, and explain the discrepancies recorded in the plan.
+
+## 8n. Cubase project import (`feature/direct-daw-import-cubase`)
+
+Use your own Cubase 15/16 projects as well as `samples/project-sets` and `samples/project-cubase-phases`. Implementation, evidence and limitations: [the Cubase plan](plans/cubase-import.md).
+
+- [x] Open and drag a `.cpr` into an empty workspace, and into one with tracks. Parts land where Cubase shows them (on Cubase's absolute timeline), with their trims, names and channels. Source Info shows "Cubase project", the version and the warnings; a project with blank bars before bar 1 shows a "Display" line and is not shifted.
+- [x] Muted parts stay visible and silent; muted and soloed tracks keep their state; tracks in a muted folder arrive muted.
+- [x] Shared copies: editing behaviour matches other clips (split, trim, duplicate), and Restore Full Clip works on each.
+- [x] A project with tempo changes and a ramp: the tempo map follows Cubase's, with steps through the ramp. Time signatures and markers (including a cycle marker's closing `name |` marker) appear in the marker row.
+- [x] Export the import and drag it into Cubase: notes, controllers, pitch bend and program changes sound as in Cubase, except the reported skips (pattern parts, inserts, controller curve shapes). Track transpose is applied and muted notes are left out, as Cubase's export does.
+- [x] A project still open in Cubase imports without disturbing it; the `.cpr` is unchanged afterwards.
+- [x] A project saved by an older Cubase, or a damaged file, fails with a clear message and leaves the workspace unchanged.
+- [x] Save, quit and relaunch with a Cubase import: parts, mute states, source details and the display offset survive.
+
+## 8o. Reason song import (`feature/direct-daw-import-reason`)
+
+Use your own Reason 13/14 songs as well as `samples/reason-probe` and `samples/reason-check`. Implementation, evidence and limitations: [the Reason plan](plans/reason-import.md).
+
+- [x] Open and drag a `.reason` into an empty workspace, and into one with tracks. Clips land where Reason shows them, one track per sequencer track (lanes merged). Source Info shows "Reason song", the version and the warnings.
+- [x] Muted clips, muted lanes and muted Block placements arrive as muted clips (crossed through); a muted track arrives muted.
+- [x] A song with Blocks (dec2024-27-02): Block content appears as "Block 1" clips at each placement, the hatched spots in Reason's song view arrive muted, and song clips over Blocks win.
+- [x] A song with tempo and time-signature clips on the Transport track (r19, Day 15): the tempo map follows Reason's, with 1/32-beat steps through ramps, and returns to the song tempo outside the clips.
+- [x] Export the import and drag it into Reason: notes, mod wheel, pitch bend and sustain sound as in Reason, except the reported skips (patterns, device automation, Players). Curved mod wheel and pitch bend (r26, r27) follow Reason's curves.
+- [x] A song still open in Reason imports without disturbing it; the `.reason` is unchanged afterwards.
+- [x] A song saved by Reason 12 or earlier fails with the re-save message; a damaged file fails cleanly. The workspace is unchanged either way.
+- [x] Save, quit and relaunch with a Reason import: clips, mute states and source details survive.
 
 ## 9. New document
 

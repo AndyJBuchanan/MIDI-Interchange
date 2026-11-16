@@ -2,33 +2,45 @@
 
 All outstanding features and fixes, agreed or not, are listed here and only here. Each feature gets its own plan in [plans/](plans/) and its own branch when it is picked up. When something is finished, remove it from this list; its plan records how it was done.
 
-Updated 2026-11-14.
+Updated 2026-11-16.
 
 ## Agreed, not started
 
-- **Investigate direct DAW project import** (2026-11-14; investigation agreed, implementation not yet scoped):
-  - Goal: drag a saved project into MIDI Interchange and extract usable MIDI, tempo/time signatures, markers and lyrics through the ordinary import workflow, without first exporting MIDI from the DAW. Read source projects and any referenced media only; never write to or modify them.
-  - Provide a MIDI view of the project's current arrangement, not a recovery view of everything stored in its files. Do not expose hidden material, unused pool contents, inactive alternate takes or abandoned edits, even if they can be found and labelled. Respect the arrangement's clip boundaries and active choices.
-  - First investigate **DAWproject, Reason and Cubase**. Investigate **Reaper and Logic** secondarily. Assess format feasibility independently, within a shared importer architecture; shipping one reader must not depend on completing all five.
-  - For each format, establish how its saved files/packages expose events and metadata, which versions can be read, and whether data is embedded or depends on referenced files. Distinguish saved MIDI from data that would require the DAW or an instrument to generate it.
-  - Scope the musical mapping: track/clip names and positions, offsets, trims, loops/repeats, MIDI channels and controllers, tempo/time-signature changes, markers and lyrics. Establish how each format identifies the current arrangement and excludes hidden/inactive material.
-  - **Mute state:** preserve both track and clip mute states on import. Muted arrangement material is included with its mute state, rather than treated as hidden/inactive material to omit. Track mute maps to the existing controls. Clip-level muting is the likely extension; scope its UI/UX and interaction with track mute/solo, range exclusions, export, undo and session persistence before implementation. Do not flatten clip mute into track mute or discard muted clips.
-  - Use small real projects with known content and matching DAW-exported MIDI as fixtures. Compare recovered events, timing and metadata programmatically, including missing references and unsupported project versions. Establish which marker/lyric data is actually saved and recoverable for each format.
-  - Deliver a feasibility matrix and a separate implementation recommendation for each format: recoverable data, gaps, dependencies, estimated effort and evidence from fixtures. Partial support must report what was skipped; unreadable projects must fail cleanly without altering the workspace.
-  - Design a common importer interface and registry/selection mechanism so MIDI and each supported project format can be selected and slotted into the same import pipeline. Separate format detection/reader selection from parsing. Define a shared import result and diagnostics contract that feeds the existing source/track/clip/tempo model; readers translate format-specific data into that contract. Adding a reader should not require format-specific branches throughout the UI or downstream logic.
-  - Reuse placement, provenance, session persistence and export logic for every reader. Investigate and resolve shared model gaps explicitly, including clip mute, rather than creating separate per-format models or project workflows. Scope this common architecture alongside the first format investigations, using their findings to validate the contract.
-- **Export/drag filename decoration:**
-  - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
-  - Offer decoration, at least bar numbers (range start–end) or other distinguishing details.
+
+- **More direct DAW project readers** (2026-11-16): the investigation and first readers are done: DAWproject, Cubase 15/16 and Reason 13/14 are implemented and checked against each DAW's own MIDI export (see the [DAWproject](plans/dawproject-import.md), [Cubase](plans/cubase-import.md) and [Reason](plans/reason-import.md) plans, TEST_CHECKLIST sections 8n and 8o, and the README). What's left, in the user's order of priority:
+  - **Cubase before 15** (agreed, later): fixtures are in `samples/` (a Cubase 13 file, `argontest003`); older versions are rejected cleanly for now.
+  - **Logic** (secondary) and **Reaper, Bitwig, Ableton, FL Studio** (low priority; the user uses only Reason and Cubase). Feasibility and order are in the [desk research](plans/daw-desk-research.md). **Studio One is deferred**; there is no access to it for testing.
+  - Each reader keeps the shared rules: read only, never modify the project; report what was skipped; fail cleanly on unreadable files; preserve track and clip mute states.
 
 ## Suggested, not agreed
+
+- **Export/drag filename decoration** (speculative, 2026-11-16: not sure it's needed):
+  - Names are mostly fixed today: a range name, a join of range names such as "Verse + Chorus", or `Range N`.
+  - Possible: decoration, at least bar numbers (range start–end) or other distinguishing details.
 
 - **More sophisticated tempo mapping** (2026-11-14):
   - Today the workspace uses one whole file's tempo map. Possible: take different files' maps for different sections, for example when files are laid End to End or verse and chorus come from different apps.
   - Related gaps in the current switch: adopting a file's map doesn't shift it to where the file was placed, and a file's map is lost when its last clip is removed, unless it's the current tempo source.
 - **Scroll bar zoom:** drag the ends of the horizontal scroll bar to zoom, as other apps do (studio, 2026-11-10).
+- **Simplify controller data on export** (2026-11-16, maybe): an export option that drops controller events repeating the previous value and thins the rest to the fewest points staying within one step of the original. DAW exports write curves as a dense stream (Reason's: a value every 1/32 beat), and re-importing it into Reason gives a staircase of points; most DAWs draw straight lines between imported points, so a thinned stream comes back as a few clean points. Off by default: the app aims to be a transparent transport, and this deliberately changes the data; an opt-in fix for a common annoyance.
+- **Show controller data on a track** (2026-11-16, maybe): draw a clip's CC data (mod wheel, sustain, pitch bend, expression...) as a line over or under its notes, so imported curves and resets can be seen. Which controller to show could be chosen per track, for example from the track's colour box menu, alongside the export channel.
+
+- **"Open With" for DAW project files** (2026-11-16, considering, leaning no): the macOS bundle and the Windows installer register only MIDI extensions (`.mid`, `.midi`, `.smf`), so right-click ▸ Open With and Dock-icon drops don't take `.cpr`, `.reason` or `.dawproject`; dragging them onto the window works. Registering them could put the app in the way of double-clicking a project to open the DAW, so the default is to leave it out. If added, offer it only under "Open With" and never as the default handler. `.kar` and `.rmi` are read by the MIDI reader but not registered either.
+- **Hide muted material temporarily** (2026-11-16, maybe): projects with many muted clips (Reason Blocks, Cubase alternates) are hard to work with, because the muted clips sit over or between the ones that sound. A view toggle, in the toolbar and the View menu like Show Markers, would hide muted clips, and possibly muted tracks too, while it's on. It would only affect display and hit-testing: the clips stay in the workspace and keep their mute state, hidden clips are still skipped on export exactly as muted clips are now, and un-hiding brings them back unchanged. Open questions: whether muted tracks hide as well or only muted clips, whether a hidden clip can be selected by a range or drag, and how to show that something is hidden (a count on the toggle).
+- **Mirror mode: watch one file** (2026-11-16, under consideration, **not agreed**): a separate mode of operation, entered by an explicit "Open & Mirror MIDI/Project File" command, not a toggle on a normal open. One MIDI or project file is locked to the timeline at bar 1 and the app watches it; whenever the file changes on disk it is re-imported automatically. The aim is to mirror a Cubase (or Reason) project while still working in it, so whatever was last saved is ready to drag out.
+  - **Read-only view:** no edits and no drops while mirroring. Allowed: range selections, track locks and probably track mute/solo, carried across reimports (the readers already have `preserve_track_state`; ranges would be kept by time).
+  - **Leaving the mode:** the user must unmirror to resume normal operation. It should look and feel different (clear banner, edit tools unavailable).
+  - **Only saved files count:** a project changes on disk only when the user saves, which is acceptable.
+  - **Open questions:** how to detect a finished save (DAWs write in stages; wait until size and modification time settle, and keep the last good import if a read fails); watch mechanism (`QFileSystemWatcher` loses its watch when a file is replaced by rename; polling the modification time is the simple alternative; undecided); how Cubase and Reason actually write on save (check, don't assume).
 
 ## Later, after more real-world use
+
+- **Cubase chord track as chord names** (agreed 2026-11-15, after the Cubase reader): show a Cubase project's chord-track chords as names on a new proxy marker track, rather than rendering chords as notes. Needs investigation of how chord events are stored (`MChordTrackEvent`, `MChordEvent`, `ChordData`) and a design for a marker-style track. See [the Cubase plan](plans/cubase-import.md#decisions-2026-11-15).
+
+- **Cubase expression-map articulations as text** (noted 2026-11-16, maybe): Cubase's own MIDI export writes each articulation of an expression map as a text event on its track (BBCSO: "Legato", "Spiccato", "StacSs"...). The native reader could import them the same way, so articulations survive to other DAWs. Needs finding where they're stored in the project. See [the Cubase plan](plans/cubase-import.md).
+- **Reason pattern devices as notes** (agreed 2026-11-15, maybe): render unconverted pattern clips (Redrum, Matrix and similar) from the pattern data stored in the rack device, as Cubase decision 8 does for Pattern Editor parts. Reason's own MIDI export leaves them out, so the first reader reports them as skipped. See [the Reason plan](plans/reason-import.md).
+
+- **Imported note tails beyond part ends** (deferred by agreement, 2026-11-14): keep current clip-edge cutting for now. Consider a tail-preservation policy later, including its interaction with user trims, loops and ranges. This does not block provisional DAWproject completion. See the [Ditty](DAWPROJECT_DITTY_FINDINGS.md) and [other-pair](DAWPROJECT_OTHER_PAIRS_FINDINGS.md) evidence; no Cubase-export repair is planned.
 
 - **Intermittent cursor switching** (reported during clip-splitting verification, 2026-11-14): cursors occasionally stop switching. The user has observed this throughout the app's development, before clip splitting; the cause is unknown. Investigate later when a reproducible case is available. Clip-splitting manual checks otherwise passed.
 - **Reason Controller #254 automation lane** (known issue, deferred by agreement, 2026-11-13): channel-override export worked, but Reason added an unwanted automation lane. Zeroing release velocities did not remove it. Users can delete the lane; further investigation is deferred. See [the findings](INTEROP_FINDINGS.md#reason-unexpected-automation-lane-after-channel-override-2026-11-13).
@@ -52,20 +64,3 @@ Not planned yet. These options exist, or are planned, in code but have no UI. Th
 - **Session persistence:** internal enable/disable setting, default on. Gate session restoration and saving; expose a switch here later if needed. See [the plan](plans/session-persistence.md).
 - **Notes that started before an edge** (`ExportOptions.partial_notes`, default on): they sound from a range or clip-trim edge, or are dropped.
 - **What a drop replaces** (`Placement.compare_full_extent`, default visible edges): a dropped clip replaces one whose trimmed start and end match, or one whose full extent matches.
-
-## Known gaps, not planned
-
-The details of each are in [DESIGN_NOTES, Risks and known gaps](DESIGN_NOTES.md#risks-and-known-gaps).
-
-- **Native drag formats** (risks 1 and 2): macOS file promises and Windows virtual files, for apps that drag that way.
-- **Testing with other apps** (risk 3):
-  - Synthesizer V hasn't been tried.
-  - Drag-out to RapidComposer isn't confirmed.
-  - Drag and drop with DAWs hasn't been tried on Windows.
-- **Per-track auto-trim** (risk 4): it's in the model, but the export ignores it.
-- **Per-range drag handles** (risk 5).
-- **Packaging** (risk 7):
-  - An Intel or universal Mac build.
-  - Stapling the app inside the DMG.
-  - Trimming the app size (about 100 MB).
-  - Windows code signing.

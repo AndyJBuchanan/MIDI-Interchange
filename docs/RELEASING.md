@@ -20,7 +20,7 @@ From 0.3.0, each release is assembled on its own `release/X.Y.Z` branch. `main` 
 - **Create `release/X.Y.Z` early**, from `main`, before the first feature for that release is started, so features have a branch to start from. Merge further features into it as they're finished, so they're tested together as you go rather than all at the end. The first commit on the branch bumps `__version__` (see below).
 - **Merge a feature only once you mean to ship it in that release.** Taking a feature back out means reverting its merge.
 - **Release work happens on the release branch:** release notes, the build, the tag, then the checksums and the release history row (the checklist below).
-- **After publishing**, merge the release branch into `main` by pull request with a merge commit, not a squash or rebase, so the tagged commit is part of `main`'s history. Then delete the release branch.
+- **After publishing**, merge the release branch into `main` by pull request with a merge commit, not a squash or rebase, so the tagged commit is part of `main`'s history. Keep the release branch: the repository rules don't allow branch deletion, and the branch stays as a record.
 - **Fixes to a published release** go on a new `release/X.Y.Z+1` branch made from that release's tag, and follow the same steps.
 - **Docs go on the release branch too**, not straight to `main`: README fixes, roadmap, interop findings and test checklist changes. A plan for a feature goes on its feature branch. Changing docs on `main` while a release branch is open causes the same conflicts.
 
@@ -132,7 +132,7 @@ gh release upload v<ver>[-label] -R <owner>/MIDI-Interchange --clobber <file>
 
 ### 6. Merge the release into `main`
 
-Commit the release notes with their checksums, and the release history row below, on the release branch and push. Then open a pull request from `release/<ver>` into `main`, merge it with a merge commit, and delete the release branch:
+Commit the release notes with their checksums, and the release history row below, on the release branch and push. Then open a pull request from `release/<ver>` into `main`, and merge it with a merge commit. Don't delete the release branch (the repository rules forbid it):
 
 ```bash
 gh pr create -R <owner>/MIDI-Interchange --base main --head release/<ver> --title "Release <ver>" --body "Published as v<ver>[-label]."
@@ -142,6 +142,7 @@ gh pr create -R <owner>/MIDI-Interchange --base main --head release/<ver> --titl
 
 | Tag | Version | Commit | Notes |
 |---|---|---|---|
+| `v0.4.0-pre` | 0.4.0 | `fca8e29` (published 2026-11-16) | Open Cubase, Reason and DAWproject projects directly, clip mute and the M key, Z to zoom to fit. Both platform builds installed and smoke-tested from the tagged commit. |
 | `v0.3.0-pre` | 0.3.0 | `60f9f3b` (published 2026-11-14) | Session persistence and single-instance file handoff, track export-channel overrides, tempo/marker UI, clip splitting and contextual Shift move/copy. Both platform builds installed and smoke-tested. |
 | `v0.2.2-pre` | 0.2.2 | `8a6ddbf` (published 2026-11-12) | Both platforms built from the tagged commit. Clip trims, About box, drag-in auto-scroll, mute/solo with range locks, range file names. 0.2.1 was never released. |
 | `v0.2.0-pre` | 0.2.0 | `7145b12` (published 2026-11-10) | Both platforms built from the tagged commit. The Windows tests were fixed on main first (PR #3, test helper only). |

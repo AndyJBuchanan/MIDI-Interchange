@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import os
+from math import ceil
 
-from PySide6.QtCore import QUrl, Qt
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QSize, QUrl, Qt
+from PySide6.QtGui import QDesktopServices, QTextOption
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QFormLayout, QGroupBox,
-                               QHBoxLayout, QHeaderView, QLabel, QListWidget, QListWidgetItem,
-                               QPushButton, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
+                               QHBoxLayout, QHeaderView, QLabel, QLayout, QListWidget, QListWidgetItem,
+                               QPushButton, QScrollArea, QSizePolicy, QSplitter, QTableWidget,
+                               QTableWidgetItem, QTextEdit, QVBoxLayout,
                                QWidget)
 
 from ..core.document import Source, Track, Workspace
@@ -20,11 +22,72 @@ def _channels(chs) -> str:
     return ", ".join(str(c + 1) for c in sorted(chs)) or "—"
 
 
-def _value(text: str) -> QLabel:
-    lab = QLabel(text)
-    lab.setTextInteractionFlags(Qt.TextSelectableByMouse)
-    lab.setWordWrap(True)
-    return lab
+class _ValueText(QTextEdit):
+    """Selectable plain text that wraps long tokens and takes its full height.
+
+    Only the enclosing details pane scrolls; individual values never hide lines.
+    """
+    def __init__(self, text: str) -> None:
+        super().__init__()
+        self.setReadOnly(True)
+        self.setStyleSheet("QTextEdit { background: transparent; border: none; }")
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setMinimumWidth(0)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+        self.document().setDocumentMargin(0)
+        self.document().documentLayout().documentSizeChanged.connect(self._fit_height)
+        self.setPlainText(text)
+        self._fit_height()
+
+    def _fit_height(self, *_args) -> None:
+        self.setFixedHeight(ceil(self.document().size().height()) + 2 * self.frameWidth())
+
+    def minimumSizeHint(self) -> QSize:
+        # QTextEdit's own size hints impose a fixed width floor that
+        # setMinimumWidth(0) does not override, since QFormLayout sizes
+        # "AllNonFixedFieldsGrow" fields from sizeHint()/minimumSizeHint(),
+        # not the widget's minimumSize(). Without this, the details pane
+        # grows a horizontal scrollbar whenever that floor exceeds the
+        # viewport (font- and platform-dependent).
+        return QSize(0, super().minimumSizeHint().height())
+
+    def sizeHint(self) -> QSize:
+        return QSize(0, super().sizeHint().height())
+
+
+def _value(text: str) -> _ValueText:
+    return _ValueText(text)
+
+
+class _Label(QLabel):
+    """A wrapping label whose column width is capped.
+
+    QFormLayout gives the label column its full one-line sizeHint whenever
+    the dialog is wide enough to fit that *plus* the field column's own
+    (here: zero) minimum — it only shrinks labels once space runs out
+    entirely. That starves the field column on narrow dialogs/large fonts,
+    since "enough room" for a one-line label still leaves little left over.
+    Capping the width here forces every label to wrap at the same column
+    width regardless of how much space is technically available.
+    """
+    MAX_WIDTH = 150
+
+    def __init__(self, text: str) -> None:
+        super().__init__(text)
+        self.setWordWrap(True)
+
+    def sizeHint(self) -> QSize:
+        width = min(super().sizeHint().width(), self.MAX_WIDTH)
+        return QSize(width, self.heightForWidth(width))
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+
+def _label(text: str) -> QLabel:
+    return _Label(text)
 
 
 class SourceInfoDialog(QDialog):
@@ -76,7 +139,7 @@ class SourceInfoDialog(QDialog):
                 self.table.setItem(row, col, it)
             self._clip_source.append(self.sources.index(src) if src in self.sources else -1)
         self.table.setMinimumHeight(self.table.horizontalHeader().height()
-                                    + 6 * self.table.verticalHeader().defaultSectionSize())
+                                    + 2 * self.table.verticalHeader().defaultSectionSize())
         self.table.itemSelectionChanged.connect(self._clip_selected)
         cl.addWidget(self.table)
 
@@ -84,6 +147,7 @@ class SourceInfoDialog(QDialog):
         src_box = QGroupBox("Sources")
         sl = QHBoxLayout(src_box)
         split = QSplitter(Qt.Horizontal)
+        split.setChildrenCollapsible(False)
         self.src_list = QListWidget()
         for s in self.sources:
             QListWidgetItem(s.name, self.src_list)
@@ -91,10 +155,25 @@ class SourceInfoDialog(QDialog):
         split.addWidget(self.src_list)
         self.detail_host = QWidget()
         self.detail = QFormLayout(self.detail_host)
-        self.detail.setLabelAlignment(Qt.AlignRight)
-        split.addWidget(self.detail_host)
+        self.detail.setLabelAlignment(Qt.AlignRight | Qt.AlignTop)
+        self.detail.setFormAlignment(Qt.AlignTop)
+        self.detail.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        self.detail.setContentsMargins(4, 4, 4, 4)
+        self.detail_scroll = QScrollArea()
+        self.detail_scroll.setWidgetResizable(True)
+        self.detail_scroll.setFrameShape(QScrollArea.NoFrame)
+        self.detail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.detail_scroll.setWidget(self.detail_host)
+        split.addWidget(self.detail_scroll)
+        split.setStretchFactor(1, 1)
         split.setSizes([220, 620])
         sl.addWidget(split)
+
+        self.sections = QSplitter(Qt.Vertical)
+        self.sections.setChildrenCollapsible(False)
+        self.sections.addWidget(clips_box)
+        self.sections.addWidget(src_box)
+        self.sections.setSizes([180, 300])
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         buttons.rejected.connect(self.reject)
@@ -102,8 +181,7 @@ class SourceInfoDialog(QDialog):
 
         lay = QVBoxLayout(self)
         lay.addWidget(summary)
-        lay.addWidget(clips_box, 1)
-        lay.addWidget(src_box, 1)
+        lay.addWidget(self.sections, 1)
         lay.addWidget(buttons)
         if self.sources:
             self.src_list.setCurrentRow(0)
@@ -116,28 +194,34 @@ class SourceInfoDialog(QDialog):
                 self.src_list.setCurrentRow(idx)
 
     def _show_source(self, row: int) -> None:
+        self.detail_scroll.verticalScrollBar().setValue(0)
         while self.detail.rowCount():
             self.detail.removeRow(0)
         if not 0 <= row < len(self.sources):
             return
         s = self.sources[row]
-        self.detail.addRow("Name:", _value(s.name))
+        self.detail.addRow(_label("Name:"), _value(s.name))
         if s.path:
-            path_row = QHBoxLayout()
-            path_row.addWidget(_value(s.path), 1)
+            self.detail.addRow(_label("Path:"), _value(s.path))
+            # A spanning row (not a field alongside the path text) so the
+            # button's own intrinsic width never becomes the shared field
+            # column's minimum width — that forced a horizontal scrollbar on
+            # fonts/platforms where "Show in Folder" is wider than the path
+            # column would otherwise need to be.
             reveal = QPushButton("Show in Folder")
             folder = os.path.dirname(s.path)
             reveal.setEnabled(os.path.isdir(folder))
             reveal.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(folder)))
-            path_row.addWidget(reveal)
-            self.detail.addRow("Path:", path_row)
+            self.detail.addRow(reveal)
         else:
-            self.detail.addRow("Path:", _value("— (dropped data, no file)"))
-        self.detail.addRow("Application:", _value(s.app or "unknown"))
-        self.detail.addRow("File:", _value(f"SMF format {s.smf_format} · {s.ppq} PPQ · {len(s.raw):,} bytes"))
-        self.detail.addRow("Imported:", _value(f"{s.imported_at:%Y-%m-%d %H:%M:%S}"))
+            self.detail.addRow(_label("Path:"), _value("— (dropped data, no file)"))
+        self.detail.addRow(_label("Application:"), _value(s.app or "unknown"))
+        self.detail.addRow(_label("File:"), _value(s.file_summary))
+        self.detail.addRow(_label("Imported:"), _value(f"{s.imported_at:%Y-%m-%d %H:%M:%S}"))
+        if s.display_offset_note:
+            self.detail.addRow(_label("Display:"), _value(s.display_offset_note))
         if s.track_names:
-            self.detail.addRow("Original tracks:", _value("\n".join(
+            self.detail.addRow(_label("Original tracks:"), _value("\n".join(
                 f"{i + 1}. {n or '(unnamed)'}" for i, n in enumerate(s.track_names))))
         if not s.tempo_map.is_empty:
             t = s.tempo_map.effective_tempos()[0]
@@ -146,6 +230,6 @@ class SourceInfoDialog(QDialog):
                      f"({len(s.tempo_map.tempos)} tempo, {len(s.tempo_map.timesigs)} time-signature events)")
             if self.ws.tempo_source_id == s.id:
                 tempo += "\nThis is the workspace tempo map."
-            self.detail.addRow("Tempo:", _value(tempo))
+            self.detail.addRow(_label("Tempo:"), _value(tempo))
         if s.warnings:
-            self.detail.addRow("Warnings:", _value("\n".join(f"⚠ {w}" for w in s.warnings)))
+            self.detail.addRow(_label("Warnings:"), _value("\n".join(f"⚠ {w}" for w in s.warnings)))

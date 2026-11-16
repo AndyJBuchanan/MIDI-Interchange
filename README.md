@@ -4,11 +4,13 @@ A palette for MIDI on its way between music apps. Drop in bits of MIDI from the 
 
 Moving MIDI between apps is full of friction: each app drags MIDI in a different, often one-way, way. Cubase drags out one clip at a time with no position, Logic can't drag MIDI out at all, and there's no shared MIDI clipboard. MIDI Interchange sits in the middle. It takes whatever each app can give, lets you collect, trim and choose, and hands it on as plain MIDI files, the one format that works with almost every app.
 
+**New in 0.4: open DAW projects directly.** Drop a saved Cubase (`.cpr`) or Reason (`.reason`) project onto the window and its whole arrangement arrives as MIDI: every track and clip in place, with tempo, mutes and controllers, and no export step in the DAW. DAWproject files work too. See [Open DAW projects directly](#open-daw-projects-directly).
+
 It isn't a DAW or an arranger: there's no playback, no instruments and no note editing. Your source files are never changed.
 
 ## Download
 
-The current release is **[v0.3.0-pre](https://github.com/AndyJBuchanan/MIDI-Interchange/releases/tag/v0.3.0-pre)** (2026-11-14), a pre-release. All releases are on the [Releases page](https://github.com/AndyJBuchanan/MIDI-Interchange/releases); you don't need to build anything.
+The current release is **[v0.4.0-pre](https://github.com/AndyJBuchanan/MIDI-Interchange/releases/tag/v0.4.0-pre)** (2026-11-16), a pre-release. All releases are on the [Releases page](https://github.com/AndyJBuchanan/MIDI-Interchange/releases); you don't need to build anything.
 
 | Your computer | Download |
 |---|---|
@@ -17,6 +19,7 @@ The current release is **[v0.3.0-pre](https://github.com/AndyJBuchanan/MIDI-Inte
 
 ## What it's for
 
+- **Skip the export step with supported DAW project versions.** Open a Cubase or Reason project straight from its file and take the arrangement from there.
 - **Collect from apps that give MIDI out a clip at a time.** Drag Cubase parts in one by one and drop each on its track at the bar it belongs to.
 - **Round trips.** Send tracks to another app (Staccato.ai, for example), then drop what comes back on one of its tracks: every part lands back on its own track, even when the app has renamed the song.
 - **Hand on exactly what the next app needs.** Mark ranges, choose which tracks each range sends, and drag the result straight into the next app, or into a folder.
@@ -47,11 +50,37 @@ Ranges are optional, but they're what make this a palette rather than a file shu
 5. **Lanes:** one per track, showing its clips with their notes, lyrics and text. The timeline is this whole area.
 6. **Bottom panel:** the selected range's name and exact positions, then the export controls: the mode, the **Drag MIDI out** tile and **Save MIDI…**.
 
-Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 to fit everything. The **Snap** list (off, bar, beat, 1/8, 1/16, 1/32, 1/8T, 1/16T) controls how drags line up with the grid; hold **Shift** while dragging to ignore it.
+Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 or **Z** to fit everything. The **Snap** list (off, bar, beat, 1/8, 1/16, 1/32, 1/8T, 1/16T) controls how drags line up with the grid; hold **Shift** while dragging to ignore it.
 
 ### Step 1: Bring MIDI in
 
-Drag MIDI from another app, or `.mid` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
+Drag MIDI from another app, or `.mid` / `.dawproject` / `.cpr` / `.reason` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
+
+A project file arrives as a whole song: see the next section.
+
+#### Open DAW projects directly
+
+Drop a saved **Cubase** or **Reason** project (or open it) and MIDI Interchange reads the arrangement straight out of the project file: each track with its clips at their real positions, the tempo map, mutes, and the controller data. It's the song as the DAW plays it, ready to range and hand on, without exporting anything from the DAW first. The project file is only ever read, so it's safe to do with a project that's open in the DAW.
+
+| Format | What comes across |
+|---|---|
+| **Cubase 15 and 16** (`.cpr`) | MIDI parts with their trims and names, part and track mute and solo, shared copies, notes, controllers, pitch bend and program changes, tempo and time signatures, and markers. Notes muted in Cubase's editors are left out and the track transpose (MIDI Modifiers) is applied, as Cubase's own MIDI export does. |
+| **Reason 13 and 14** (`.reason`) | Each track's note lanes as one track, each clip holding exactly what Reason plays there: loops written out, overlapped parts left out, **Blocks** written out at each placement. Notes, mod wheel, pitch bend (curves too), sustain, expression and aftertouch, tempo and time signatures. Muted clips, lanes and Block placements arrive as muted clips. |
+| **DAWproject 1.0** (`.dawproject`) | Arrangement MIDI, clip positions and mute states, loops, stepped tempo changes, time signatures and markers, from Bitwig, Studio One, Cubase and others that export it. |
+
+The Cubase and Reason readers are checked against each DAW's own MIDI export of the same projects. On the real projects checked, they reproduce that export note for note, tempo map included; the few known differences are listed in the plans below.
+
+**Muted clips** from a project stay on the timeline, drawn with thin crosses, and are left out of exports. Right-click a clip ▸ **Mute Clip** / **Unmute Clip**, or press **M** with the pointer over it, to change that. This works on any clip, not just imported ones.
+
+**Source Info** (right-click a track) shows the format and version, and lists anything the import left out.
+
+**Experimental: what to expect.** The project formats aren't published, so these readers were built by studying projects saved for the purpose:
+
+- **Versions:** Cubase 15 and 16, and Reason 13 and 14. Other Cubase versions are refused with a clear message. Songs saved by Reason 12 and earlier are encrypted: open them in Reason 13 or later and save them again first. A future DAW update could change the format; if a project won't open, or something looks wrong, a copy of the project helps a lot in a bug report.
+- **MIDI only:** audio, instruments, plug-ins and device automation aren't imported, nor is anything a DAW generates at playback: Cubase Pattern Editor parts, the chord track and MIDI inserts, and Reason pattern devices and Player devices. They're listed in Source Info.
+- **Approximations:** Cubase tempo ramps become a tempo step every beat, as Cubase's own MIDI export does. Folders are flattened, Reason's mixer mute and solo aren't read, and a Reason clip's hidden notes and loop structure can't be brought back once written out.
+
+Details, evidence and decisions: the [Cubase](docs/plans/cubase-import.md), [Reason](docs/plans/reason-import.md) and [DAWproject](docs/plans/dawproject-import.md) plans.
 
 ![Dragging a clip in, with the landing preview](docs/images/02-drag-in.png)
 
@@ -99,10 +128,11 @@ The rest of the rules, in one place:
 - **Splitting:** each half must retain at least one snap step (one source tick with snap off or bypassed); a cut at an edge or too close to it does nothing. Already trimmed clips can be split too. Both halves keep their name and can be moved, copied or trimmed independently. Either half can be extended back into the original MIDI; right-click ▸ **Restore Full Clip** restores its full original extent, which may overlap the other half. Notes crossing the split are released and restarted there on export.
 - **Cursors:** ⌥/Alt shows a move arrow (resize at a trimmable edge); ⌥⌘/Alt+Ctrl shows a move arrow with a plus and copies, including at edges.
 - **Butt Against Previous Clip** (right-click) closes the gap before a clip, using its trimmed start.
+- **Muting a clip:** right-click ▸ **Mute Clip**, or press **M** with the pointer over it (again to unmute). A muted clip stays visible, crossed through, and can still be moved, trimmed, split and copied, but isn't exported, whatever the track mute, solo or range settings say.
 
 ![The clip and track right-click menus](docs/images/07-menus.png)
 
-The **clip menu** (left) has Duplicate, Butt Against Previous Clip, Restore Full Clip (on a trimmed clip), Move Clip to Track (or New Track) and Delete Clip. Its **Track:** submenu, and a right-click on a track header, give the **track menu** (right): Mute/Unmute, Rename, Move Up/Down, **Merge Into** another track, **Save This Track…** (exports just that track, even if it's muted), Source Info… and Remove Track.
+The **clip menu** (left) has Duplicate, Mute/Unmute Clip, Butt Against Previous Clip, Restore Full Clip (on a trimmed clip), Move Clip to Track (or New Track) and Delete Clip. Its **Track:** submenu, and a right-click on a track header, give the **track menu** (right): Mute/Unmute, Rename, Move Up/Down, **Merge Into** another track, **Save This Track…** (exports just that track, even if it's muted), Source Info… and Remove Track.
 
 Tracks: click a name to rename it, drag ⋮⋮ to reorder, ✕ to remove. File ▸ New (⌘N, also on the toolbar) clears the workspace, and Undo brings it back (see [Returning to your workspace](#returning-to-your-workspace) for what happens if you then quit). **Undo / redo** (⌘Z / ⇧⌘Z) cover everything.
 
@@ -170,6 +200,7 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | To… | Do this |
 |---|---|
 | Bring MIDI in | Drag MIDI or `.mid` files/folders onto the window; File ▸ Open (⌘O); Open with… from the Finder/Explorer; command-line paths |
+| Open a DAW project | Drop or open a Cubase `.cpr`, Reason `.reason` or `.dawproject` file: the whole arrangement comes in |
 | Place a drop | Drop over a lane (joins a same-named track at that time), a header (bar 1), or empty space (new tracks) |
 | Place several files | Choose End to End or All at Cursor when asked |
 | Move a clip | ⌥-drag it. Shift bypasses snap on the source track and keeps its original time on another track; drag below the last track for a new track |
@@ -178,6 +209,7 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Butt a clip against the previous one | Right-click ▸ Butt Against Previous Clip |
 | Move a clip to another track | Right-click ▸ Move Clip to Track (or New Track) |
 | Delete a clip | Right-click ▸ Delete Clip |
+| Mute a clip | **M** with the pointer over it, or right-click ▸ Mute / Unmute Clip. Muted clips are crossed through and never exported |
 | Set a track's colour or export channel | Click its colour box ▸ a colour, **More colours…**, or **Export MIDI channel** ▸ Original channels or 1–16 |
 | Rename a track | Click its name |
 | Reorder tracks | Drag ⋮⋮, or right-click ▸ Move Up / Move Down |
@@ -192,7 +224,7 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Delete / cycle / deselect ranges | Backspace or Delete (or the panel's Delete, Edit ▸ Delete Range) / Tab / Escape. Clear All Ranges is on the toolbar and the Edit menu |
 | Choose tracks per range | Padlock in the range header, then tick or untick its checkboxes; right-click ▸ Include All / Exclude All / Unlock |
 | Snap | Snap list on the toolbar, or Timing ▸ Snap. Hold Shift while dragging to bypass it |
-| Zoom | ⌘ + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit), or the toolbar |
+| Zoom | ⌘ + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 or **Z** (fit everything, however long), or the toolbar |
 | Lane height | ⌥ + wheel, or ⌘⇧= / ⌘⇧- (View ▸ Taller / Shorter Lanes) |
 | Choose an export mode | The Export list: whole workspace, keep positions, rebase & concatenate, separate files |
 | Trim silence | Tick Trim leading/trailing silence |
@@ -216,7 +248,7 @@ Only one instance runs at a time. Opening MIDI files from Finder/Explorer or ano
 
 ## Works with
 
-Tested by hand on macOS (2026-11-09 and 2026-11-10). Drag and drop works as far as each app allows. On Windows the app builds and its tests pass, but drag and drop with DAWs hasn't been tried yet. Details, the clipboard investigation and open issues are in [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md).
+Tested by hand on macOS (2026-11-09 and 2026-11-10). Drag and drop works as far as each app allows. Opening Cubase 15/16 and Reason 13/14 projects directly was checked by hand on macOS on 2026-11-16 (see [Open DAW projects directly](#open-daw-projects-directly)). On Windows the app builds and its tests pass, but drag and drop with DAWs hasn't been tried yet. Details, the clipboard investigation and open issues are in [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md).
 
 Key: ✓ works · ◐ works within limits (see notes) · — the app doesn't support it · ☐ not tested or not yet confirmed
 

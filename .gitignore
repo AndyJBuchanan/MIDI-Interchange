@@ -12,3 +12,17 @@ scripts/signing.local.env
 
 # User's transient test notes (never commit)
 *delete-me*
+
+# Cubase auto-save backups inside fixture folders (never commit)
+samples/**/Auto Saves/
+
+# Large local Cubase verify projects (kept out of git by agreement; tests skip when absent)
+samples/project-cubase-phases/Verify/BBCSO_Woodwinds101-App01-MacBook.cpr
+samples/project-cubase-phases/Verify/orchestral-import-test-01.cpr
+samples/project-cubase-phases/Verify/Scaler3Test-001(14).cpr
+
+# Samples kept out of git (see samples/README.md):
+# local/   files tests use when present but too big to commit (tests skip when absent)
+# _archive/ material not kept in the repo, gathered for the user to archive elsewhere
+samples/local/
+samples/_archive/
