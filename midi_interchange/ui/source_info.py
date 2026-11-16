@@ -4,10 +4,10 @@ from __future__ import annotations
 import os
 from math import ceil
 
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import QSize, QUrl, Qt
 from PySide6.QtGui import QDesktopServices, QTextOption
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QFormLayout, QGroupBox,
-                               QHBoxLayout, QHeaderView, QLayout, QListWidget, QListWidgetItem,
+                               QHBoxLayout, QHeaderView, QLabel, QLayout, QListWidget, QListWidgetItem,
                                QPushButton, QScrollArea, QSizePolicy, QSplitter, QTableWidget,
                                QTableWidgetItem, QTextEdit, QVBoxLayout,
                                QWidget)
@@ -44,9 +44,50 @@ class _ValueText(QTextEdit):
     def _fit_height(self, *_args) -> None:
         self.setFixedHeight(ceil(self.document().size().height()) + 2 * self.frameWidth())
 
+    def minimumSizeHint(self) -> QSize:
+        # QTextEdit's own size hints impose a fixed width floor that
+        # setMinimumWidth(0) does not override, since QFormLayout sizes
+        # "AllNonFixedFieldsGrow" fields from sizeHint()/minimumSizeHint(),
+        # not the widget's minimumSize(). Without this, the details pane
+        # grows a horizontal scrollbar whenever that floor exceeds the
+        # viewport (font- and platform-dependent).
+        return QSize(0, super().minimumSizeHint().height())
+
+    def sizeHint(self) -> QSize:
+        return QSize(0, super().sizeHint().height())
+
 
 def _value(text: str) -> _ValueText:
     return _ValueText(text)
+
+
+class _Label(QLabel):
+    """A wrapping label whose column width is capped.
+
+    QFormLayout gives the label column its full one-line sizeHint whenever
+    the dialog is wide enough to fit that *plus* the field column's own
+    (here: zero) minimum — it only shrinks labels once space runs out
+    entirely. That starves the field column on narrow dialogs/large fonts,
+    since "enough room" for a one-line label still leaves little left over.
+    Capping the width here forces every label to wrap at the same column
+    width regardless of how much space is technically available.
+    """
+    MAX_WIDTH = 150
+
+    def __init__(self, text: str) -> None:
+        super().__init__(text)
+        self.setWordWrap(True)
+
+    def sizeHint(self) -> QSize:
+        width = min(super().sizeHint().width(), self.MAX_WIDTH)
+        return QSize(width, self.heightForWidth(width))
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+
+def _label(text: str) -> QLabel:
+    return _Label(text)
 
 
 class SourceInfoDialog(QDialog):
@@ -117,7 +158,7 @@ class SourceInfoDialog(QDialog):
         self.detail.setLabelAlignment(Qt.AlignRight | Qt.AlignTop)
         self.detail.setFormAlignment(Qt.AlignTop)
         self.detail.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        self.detail.setSizeConstraint(QLayout.SetMinAndMaxSize)
+        self.detail.setContentsMargins(4, 4, 4, 4)
         self.detail_scroll = QScrollArea()
         self.detail_scroll.setWidgetResizable(True)
         self.detail_scroll.setFrameShape(QScrollArea.NoFrame)
@@ -159,25 +200,28 @@ class SourceInfoDialog(QDialog):
         if not 0 <= row < len(self.sources):
             return
         s = self.sources[row]
-        self.detail.addRow("Name:", _value(s.name))
+        self.detail.addRow(_label("Name:"), _value(s.name))
         if s.path:
-            path_row = QVBoxLayout()
-            path_row.addWidget(_value(s.path))
+            self.detail.addRow(_label("Path:"), _value(s.path))
+            # A spanning row (not a field alongside the path text) so the
+            # button's own intrinsic width never becomes the shared field
+            # column's minimum width — that forced a horizontal scrollbar on
+            # fonts/platforms where "Show in Folder" is wider than the path
+            # column would otherwise need to be.
             reveal = QPushButton("Show in Folder")
             folder = os.path.dirname(s.path)
             reveal.setEnabled(os.path.isdir(folder))
             reveal.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(folder)))
-            path_row.addWidget(reveal, 0, Qt.AlignLeft)
-            self.detail.addRow("Path:", path_row)
+            self.detail.addRow(reveal)
         else:
-            self.detail.addRow("Path:", _value("— (dropped data, no file)"))
-        self.detail.addRow("Application:", _value(s.app or "unknown"))
-        self.detail.addRow("File:", _value(s.file_summary))
-        self.detail.addRow("Imported:", _value(f"{s.imported_at:%Y-%m-%d %H:%M:%S}"))
+            self.detail.addRow(_label("Path:"), _value("— (dropped data, no file)"))
+        self.detail.addRow(_label("Application:"), _value(s.app or "unknown"))
+        self.detail.addRow(_label("File:"), _value(s.file_summary))
+        self.detail.addRow(_label("Imported:"), _value(f"{s.imported_at:%Y-%m-%d %H:%M:%S}"))
         if s.display_offset_note:
-            self.detail.addRow("Display:", _value(s.display_offset_note))
+            self.detail.addRow(_label("Display:"), _value(s.display_offset_note))
         if s.track_names:
-            self.detail.addRow("Original tracks:", _value("\n".join(
+            self.detail.addRow(_label("Original tracks:"), _value("\n".join(
                 f"{i + 1}. {n or '(unnamed)'}" for i, n in enumerate(s.track_names))))
         if not s.tempo_map.is_empty:
             t = s.tempo_map.effective_tempos()[0]
@@ -186,6 +230,6 @@ class SourceInfoDialog(QDialog):
                      f"({len(s.tempo_map.tempos)} tempo, {len(s.tempo_map.timesigs)} time-signature events)")
             if self.ws.tempo_source_id == s.id:
                 tempo += "\nThis is the workspace tempo map."
-            self.detail.addRow("Tempo:", _value(tempo))
+            self.detail.addRow(_label("Tempo:"), _value(tempo))
         if s.warnings:
-            self.detail.addRow("Warnings:", _value("\n".join(f"⚠ {w}" for w in s.warnings)))
+            self.detail.addRow(_label("Warnings:"), _value("\n".join(f"⚠ {w}" for w in s.warnings)))

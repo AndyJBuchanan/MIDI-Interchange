@@ -1,6 +1,7 @@
 """DAWproject timing, arrangement semantics and shared import boundary."""
 import io
 import json
+import os
 import zipfile
 from collections import Counter
 from fractions import Fraction as F
@@ -115,7 +116,8 @@ def test_registry_file_drop_uses_path_and_handles_large_media(tmp_path, app):
     assert not errors and ps[0].data == b'' and ps[0].byte_size == path.stat().st_size
     ctl = Controller()
     assert ctl.import_payloads(ps) == []
-    assert ctl.ws.sources[0].path == str(path)
+    # QUrl.toLocalFile() returns "/" separators on Windows; str(path) is native.
+    assert os.path.normpath(ctl.ws.sources[0].path) == os.path.normpath(str(path))
     assert '*.dawproject' in FILE_FILTER
     ctl.undo()
     assert not ctl.ws.tracks
