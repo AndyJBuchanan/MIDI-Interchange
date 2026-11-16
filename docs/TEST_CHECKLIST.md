@@ -66,8 +66,8 @@ Reason and RapidComposer can't drag MIDI out (they only export files), so they h
 - [x] **Merge Into ▸** another track puts all the clips on the target track and removes the source track.
 - [x] The track header shows "N clips · M sources" for a mixed track.
 - [x] **Source Info** is a proper dialog: track summary, a table of clips (position, channels, notes, source), and the sources with their details. Clicking a clip selects its source; Show in Folder opens the file's folder.
-- [ ] **Source Info overflow:** use a source with a long path, many original tracks and warnings. Resize the dialog and move both dividers; check every value is readable by scrolling the details, and Show in Folder and Close remain accessible. Check larger system fonts too.
-- [ ] **Source Info selection/copy:** copy a wrapped path and confirm it has no added line breaks. Scroll down, then select another source (directly and through a clip); its details should start at the top.
+- [x] **Source Info overflow:** use a source with a long path, many original tracks and warnings. Resize the dialog and move both dividers; check every value is readable by scrolling the details, and Show in Folder and Close remain accessible. Check larger system fonts too.
+- [x] **Source Info selection/copy:** copy a wrapped path and confirm it has no added line breaks. Scroll down, then select another source (directly and through a clip); its details should start at the top.
 - [x] Rename, reorder, remove, solo and the export checkbox still work on assembled tracks.
 
 ## 8. Export of assembled tracks
@@ -251,24 +251,24 @@ Automated tests cover exact MIDI boundaries, note ordering, all four export mode
 
 Partially done; the rest is deferred by agreement (2026-11-14). Steps that were only partly checked stay unticked. Implementation and known limitations: [the DAWproject plan](plans/dawproject-import.md).
 
-- [ ] Open and drag each of the three supplied Cubase project sets (`samples/project-sets`) into an empty workspace. Inspect clip positions, Source Info (format, application, size, tempo changes) and the warnings for skipped content.
-- [ ] Ditty's disabled clips stay visible and silent, drawn with thin crosses through them. Toggle with the right-click Mute/Unmute Clip and with the M key while the pointer is over a clip; duplicate, split, move and trim a muted clip; check undo/redo.
-- [ ] Unmute one of Ditty's clips and export, then undo and repeat with a locked range and with track solo. Export muted clips through every mode, with track solo and locked ranges: clip mute must still exclude them.
-- [ ] Save and relaunch after moving the original DAWproject elsewhere. Events, trims, source details, mute and export all survive.
-- [ ] Verify GA & Padshop's imported tempo changes in Cubase. Listen to and compare the paired exports in Cubase, and explain the discrepancies recorded in the plan.
+- [x] Open and drag each of the three supplied Cubase project sets (`samples/project-sets`) into an empty workspace. Inspect clip positions, Source Info (format, application, size, tempo changes) and the warnings for skipped content.
+- [x] Ditty's disabled clips stay visible and silent, drawn with thin crosses through them. Toggle with the right-click Mute/Unmute Clip and with the M key while the pointer is over a clip; duplicate, split, move and trim a muted clip; check undo/redo.
+- [x] Unmute one of Ditty's clips and export, then undo and repeat with a locked range and with track solo. Export muted clips through every mode, with track solo and locked ranges: clip mute must still exclude them.
+- [x] Save and relaunch after moving the original DAWproject elsewhere. Events, trims, source details, mute and export all survive.
+- [x] Verify GA & Padshop's imported tempo changes in Cubase. Listen to and compare the paired exports in Cubase, and explain the discrepancies recorded in the plan.
 
 ## 8n. Cubase project import (`feature/direct-daw-import-cubase`)
 
 Use your own Cubase 15/16 projects as well as `samples/project-sets` and `samples/project-cubase-phases`. Implementation, evidence and limitations: [the Cubase plan](plans/cubase-import.md).
 
-- [ ] Open and drag a `.cpr` into an empty workspace, and into one with tracks. Parts land where Cubase shows them (on Cubase's absolute timeline), with their trims, names and channels. Source Info shows "Cubase project", the version and the warnings; a project with blank bars before bar 1 shows a "Display" line and is not shifted.
-- [ ] Muted parts stay visible and silent; muted and soloed tracks keep their state; tracks in a muted folder arrive muted.
-- [ ] Shared copies: editing behaviour matches other clips (split, trim, duplicate), and Restore Full Clip works on each.
-- [ ] A project with tempo changes and a ramp: the tempo map follows Cubase's, with steps through the ramp. Time signatures and markers (including a cycle marker's closing `name |` marker) appear in the marker row.
-- [ ] Export the import and drag it into Cubase: notes, controllers, pitch bend and program changes sound as in Cubase, except the reported skips (pattern parts, inserts, track transpose, controller curve shapes).
-- [ ] A project still open in Cubase imports without disturbing it; the `.cpr` is unchanged afterwards.
-- [ ] A project saved by an older Cubase, or a damaged file, fails with a clear message and leaves the workspace unchanged.
-- [ ] Save, quit and relaunch with a Cubase import: parts, mute states, source details and the display offset survive.
+- [x] Open and drag a `.cpr` into an empty workspace, and into one with tracks. Parts land where Cubase shows them (on Cubase's absolute timeline), with their trims, names and channels. Source Info shows "Cubase project", the version and the warnings; a project with blank bars before bar 1 shows a "Display" line and is not shifted.
+- [x] Muted parts stay visible and silent; muted and soloed tracks keep their state; tracks in a muted folder arrive muted.
+- [x] Shared copies: editing behaviour matches other clips (split, trim, duplicate), and Restore Full Clip works on each.
+- [x] A project with tempo changes and a ramp: the tempo map follows Cubase's, with steps through the ramp. Time signatures and markers (including a cycle marker's closing `name |` marker) appear in the marker row.
+- [x] Export the import and drag it into Cubase: notes, controllers, pitch bend and program changes sound as in Cubase, except the reported skips (pattern parts, inserts, controller curve shapes). Track transpose is applied and muted notes are left out, as Cubase's export does.
+- [x] A project still open in Cubase imports without disturbing it; the `.cpr` is unchanged afterwards.
+- [x] A project saved by an older Cubase, or a damaged file, fails with a clear message and leaves the workspace unchanged.
+- [x] Save, quit and relaunch with a Cubase import: parts, mute states, source details and the display offset survive.
 
 ## 8o. Reason song import (`feature/direct-daw-import-reason`)
 
