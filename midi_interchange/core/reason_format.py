@@ -33,6 +33,7 @@ Note positions and lengths use MSB-first 7-bit varints (as in MIDI files).
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import math
 import struct
@@ -745,6 +746,8 @@ def pieces(song: Song) -> list[tuple[Track, list[Piece]]]:
       before the clip start (offsets left negative by splits and trims);
     - a covering clip cuts notes still sounding where it starts; a clip's own
       end does not cut them; a muted clip covers nothing;
+    - a note still sounding when its pitch starts again on the track ends
+      there (see _end_at_retrigger);
     - looping clips repeat their first `loop` ticks from start + loop_offset;
     - when the Blocks switch is on, each unmuted Block placement on the
       Transport track plays its Block's clips from the placement's offset into
@@ -814,8 +817,38 @@ def pieces(song: Song) -> list[tuple[Track, list[Piece]]]:
         starts = {(p.start, i) for p in out if not p.muted for a, i, _ in p.controls if a == p.start}
         for p in out:       # a piece's only control at its end is its reset
             p.controls = [x for x in p.controls if not (x[0] == p.end and (p.end, x[1]) in starts)]
+        _end_at_retrigger(out)
         result.append((t, out))
     return result
+
+
+def _end_at_retrigger(track_pieces: list[Piece]) -> None:
+    """A note still sounding when the same pitch starts again on the track
+    (any lane, any clip) ends there: a MIDI track can't sound one pitch twice
+    (Aug01: a clip's 8-beat notes end at beat 4, where the next clip restrikes
+    them; notes ringing into a clip without that pitch keep their length, Day 15,
+    SelfDef000). Unmuted notes restrike everything; muted pieces' notes are
+    also cut by their own restrikes, so unmuting them plays the same way."""
+    live: dict[int, list[int]] = {}
+    for p in track_pieces:
+        if not p.muted:
+            for at, pitch, _, _ in p.notes:
+                live.setdefault(pitch, []).append(at)
+    for starts in live.values():
+        starts.sort()
+    for p in track_pieces:
+        own: dict[int, list[int]] = {}
+        if p.muted:
+            for at, pitch, _, _ in p.notes:
+                own.setdefault(pitch, []).append(at)
+        notes = []
+        for at, pitch, vel, length in p.notes:
+            for starts in (live.get(pitch, []), sorted(own.get(pitch, []))):
+                i = bisect.bisect_right(starts, at)
+                if i < len(starts) and starts[i] < at + length:
+                    length = starts[i] - at
+            notes.append((at, pitch, vel, length))
+        p.notes = notes
 
 
 def played_notes(song: Song) -> list[tuple[Track, list[PlayedNote]]]:

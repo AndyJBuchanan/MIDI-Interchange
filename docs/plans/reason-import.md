@@ -139,6 +139,13 @@ look like a float curve factor (to decode later; Cubase decision 6 applies).
   trimming a clip leaves hidden notes before its start. A note sounds if it
   starts inside the visible part of its clip.
 - **A clip's own end does not cut a sounding note**; the note keeps its length.
+- **A restruck pitch ends the note still sounding** (Aug01, found in the
+  user's checks, 2026-11-16): a MIDI track can't sound one pitch twice, so a
+  note ringing past its clip ends where the same pitch starts again on the
+  track, in any lane or clip. Aug01's first Pianoteq clip has 8-beat notes
+  that end at beat 4, where the next clip strikes the same pitches; a note of
+  another pitch rings on into that clip (as in Day 15 and SelfDef000). All 27
+  songs with exports match with this rule.
 - **Overlapping clips on a lane: the later start wins** (ties: later in the
   lane) and cuts notes still sounding where it starts.
 - **Looping clips** repeat their first `loop` ticks, starting `loop offset`

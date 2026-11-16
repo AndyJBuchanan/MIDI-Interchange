@@ -11,6 +11,7 @@ import pytest
 from midi_interchange.core import reason_format as rf
 
 PROBE = os.path.join(os.path.dirname(__file__), '..', 'samples', 'reason-probe')
+CHECK = os.path.join(os.path.dirname(__file__), '..', 'samples', 'reason-check')    # songs found in user checks
 PAGE = 0x40000
 
 
@@ -191,6 +192,14 @@ def test_clip_end_does_not_cut_and_hidden_or_muted_notes_are_silent():
     assert played == [(4 * B, 60, 100, 4 * B)]     # -1 beat hidden, 61 muted, 62 past the clip end
 
 
+def test_a_restruck_pitch_ends_the_note_still_sounding():
+    # Aug01: a 4-beat clip's 8-beat note ends where the next clip strikes the
+    # same pitch; a note of another pitch rings on into the next clip.
+    played = lane_song([(0, 4 * B, [(0, 60, 8 * B), (3 * B, 64, 3 * B)], False, 0, 0, None),
+                        (4 * B, 4 * B, [(0, 60, B)], False, 0, 0, None)])
+    assert played == [(0, 60, 100, 4 * B), (3 * B, 64, 100, 3 * B), (4 * B, 60, 100, B)]
+
+
 def test_looping_clip_repeats_from_its_loop_offset():
     played = lane_song([(B, 7 * B, [(0, 60, B // 2), (B, 62, B // 2)], False, 2 * B, -B, None)])
     # passes start at 0, 2, 4, 6 beats; the note at pass start 0 falls before the clip
@@ -276,7 +285,7 @@ def exported(path):
 
 
 KNOWN_GAPS: dict[str, str] = {}
-R_EXPORTS = sorted(m for m in glob.glob(os.path.join(PROBE, '**', '*.mid'), recursive=True)
+R_EXPORTS = sorted(m for root in (PROBE, CHECK) for m in glob.glob(os.path.join(root, '**', '*.mid'), recursive=True)
                    if os.path.exists(m[:-4] + '.reason'))
 
 

@@ -22,7 +22,7 @@ from midi_interchange.core.import_reason import import_reason
 from midi_interchange.core.import_smf import ImportError_
 from midi_interchange.core.session import Session, decode, encode
 from midi_interchange.interchange.readers import FILE_FILTER, payload_from_path, read_payload
-from test_reason_format import PAGE, PROBE, B, chunk, clip_rec, container, group, rec, s32, vlq
+from test_reason_format import CHECK, PAGE, PROBE, B, chunk, clip_rec, container, group, rec, s32, vlq
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -235,7 +235,7 @@ def test_session_roundtrip_keeps_reason_source_and_exports():
 
 # ---------------------------------------------- probe songs through the app's exporter
 
-PAIRS = sorted(m for m in glob.glob(os.path.join(PROBE, '**', '*.mid'), recursive=True)
+PAIRS = sorted(m for root in (PROBE, CHECK) for m in glob.glob(os.path.join(root, '**', '*.mid'), recursive=True)
                if os.path.exists(m[:-4] + '.reason'))
 # Differences that are not decoding errors (see the plan):
 EXPECTED_NOTE_GAPS = {
