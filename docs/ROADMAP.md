@@ -30,6 +30,8 @@ Updated 2026-11-14.
   - Today the workspace uses one whole file's tempo map. Possible: take different files' maps for different sections, for example when files are laid End to End or verse and chorus come from different apps.
   - Related gaps in the current switch: adopting a file's map doesn't shift it to where the file was placed, and a file's map is lost when its last clip is removed, unless it's the current tempo source.
 - **Scroll bar zoom:** drag the ends of the horizontal scroll bar to zoom, as other apps do (studio, 2026-11-10).
+- **Simplify controller data on export** (2026-11-16, maybe): an export option that drops controller events repeating the previous value and thins the rest to the fewest points staying within one step of the original. DAW exports write curves as a dense stream (Reason's: a value every 1/32 beat), and re-importing it into Reason gives a staircase of points; most DAWs draw straight lines between imported points, so a thinned stream comes back as a few clean points. Off by default: the app aims to be a transparent transport, and this deliberately changes the data; an opt-in fix for a common annoyance.
+- **Show controller data on a track** (2026-11-16, maybe): draw a clip's CC data (mod wheel, sustain, pitch bend, expression...) as a line over or under its notes, so imported curves and resets can be seen. Which controller to show could be chosen per track, for example from the track's colour box menu, alongside the export channel.
 
 ## Later, after more real-world use
 
