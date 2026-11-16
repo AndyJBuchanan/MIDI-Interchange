@@ -19,7 +19,7 @@ The current release is **[v0.3.0-pre](https://github.com/AndyJBuchanan/MIDI-Inte
 
 ## What it's for
 
-- **Skip the export step.** Open a Cubase or Reason project straight from its file and take the arrangement from there.
+- **Skip the export step with supported DAW project versions.** Open a Cubase or Reason project straight from its file and take the arrangement from there.
 - **Collect from apps that give MIDI out a clip at a time.** Drag Cubase parts in one by one and drop each on its track at the bar it belongs to.
 - **Round trips.** Send tracks to another app (Staccato.ai, for example), then drop what comes back on one of its tracks: every part lands back on its own track, even when the app has renamed the song.
 - **Hand on exactly what the next app needs.** Mark ranges, choose which tracks each range sends, and drag the result straight into the next app, or into a folder.
