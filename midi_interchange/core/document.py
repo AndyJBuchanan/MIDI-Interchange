@@ -32,24 +32,48 @@ class Source:
     ppq: int
     smf_format: int
     imported_at: datetime
-    raw: bytes = field(repr=False)
+    raw: bytes = field(default=b"", repr=False)  # reserved; imports do not retain originals
     tempo_map: TempoMap = field(default_factory=TempoMap)
     path: str | None = None
     app: str | None = None       # source application, when known
     track_names: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     song: str = ""              # song title, when known (see names.song_title)
+    byte_size: int | None = None  # original input size, independent of retained bytes
+
+    input_format: str = 'smf'   # 'smf', 'dawproject', 'cubase' or 'reason'
+    format_version: str | None = None
+    # Bars the source DAW displays before its bar 1 (Cubase: -1 = one blank bar).
+    # Recorded only; imports keep the absolute timeline (Cubase plan, decision 7).
+    display_bar_offset: int | None = None
+
+    @property
+    def file_summary(self) -> str:
+        size = f"{self.byte_size:,} bytes" if self.byte_size is not None else "size unknown"
+        version = self.format_version or '—'
+        format_ = {'smf': f"SMF format {self.smf_format}", 'dawproject': f"DAWproject {version}",
+                   'cubase': f"Cubase project {version}", 'reason': f"Reason song {version}"}.get(self.input_format, self.input_format)
+        return f"{format_} · {self.ppq} PPQ · {size}"
+
+    @property
+    def display_offset_note(self) -> str | None:
+        if not self.display_bar_offset:
+            return None
+        return (f"{self.app or 'The source'} shows bar 1 at bar {1 - self.display_bar_offset} of this import "
+                f"(display offset {self.display_bar_offset} bars; recorded, not applied)")
 
     def describe(self) -> str:
         lines = [
             f"Source: {self.name}",
             f"Path: {self.path or '—'}",
             f"Application: {self.app or 'unknown'}",
-            f"SMF format {self.smf_format}, {self.ppq} PPQ, {len(self.raw)} bytes",
+            self.file_summary,
             f"Imported: {self.imported_at:%Y-%m-%d %H:%M:%S}",
         ]
         if self.song:
             lines.append(f"Song: {self.song}")
+        if self.display_offset_note:
+            lines.append(f"Display: {self.display_offset_note}")
         if self.track_names:
             lines.append("Original tracks: " + ", ".join(n or "(unnamed)" for n in self.track_names))
         if not self.tempo_map.is_empty:
@@ -74,6 +98,8 @@ class Clip:
     # the trims only choose what shows and exports (cutting rules: export_smf).
     trim_start: Fraction = ZERO
     trim_end: Fraction | None = None     # None = not trimmed: the full length
+
+    muted: bool = False         # disabled project clips remain editable but do not export
 
     def __post_init__(self) -> None:
         if self.trim_end is None:
@@ -121,6 +147,10 @@ class Track:
     channels: tuple[int, ...] = ()
     auto_trim: bool = False
     export_channel: int | None = None  # displayed channel 1–16; None preserves original channels
+    # Semitones the source DAW's track transpose added to this track's notes at
+    # import (Cubase MIDI Modifiers). Already applied to the events, as the
+    # DAW's own MIDI export does; kept so it can be shown or undone later.
+    source_transpose: int = 0
 
     @property
     def start(self) -> Fraction:
@@ -219,7 +249,8 @@ class Workspace:
             r.set_included(track.id, True)
         self.sync_ranges()
 
-    def add_import(self, source: Source, tracks: list[Track]) -> list[str]:
+    def add_import(self, source: Source, tracks: list[Track], *,
+                   preserve_track_state: bool = False) -> list[str]:
         """Add an imported source and its tracks. Returns informational notes.
 
         Tempo policy: the first source carrying a tempo map becomes the
@@ -229,7 +260,11 @@ class Workspace:
         notes: list[str] = []
         self.sources.append(source)
         for t in tracks:
+            muted, soloed = t.muted, t.soloed
             self._add_track(t)
+            if preserve_track_state:
+                t.muted, t.soloed = muted, soloed
+        self.sync_ranges()
         if not source.tempo_map.is_empty:
             if self.tempo_source_id is None:
                 self.adopt_tempo_map(source.id)

@@ -26,6 +26,7 @@ Interaction
   (a plain drag on a range edge always moves the range edge; Option picks the clip edge)
   Cmd/Ctrl + wheel, pinch                  zoom around the cursor
   wheel / trackpad                         scroll (Shift+wheel = horizontal)
+  M (pointer over a clip)                  mute / unmute that clip (also in its right-click menu)
   Delete / Backspace                       delete selected range
   double-click a range in the strip        edit its name/position
   click a range's track toggle             include/exclude that track in that range
@@ -62,7 +63,7 @@ LANE_PX_PER_NOTCH = 3    # Alt+wheel lane height change per wheel notch (was 6 p
 EDGE_PX = 5
 TOGGLE_PX = 13        # range track toggle: size, and gap from the range's left edge
 TOGGLE_GAP = 6
-MIN_PPB, MAX_PPB = 1.5, 1600.0
+MIN_PPB, MAX_PPB = 0.1, 1600.0   # 0.1: about 10,000 beats fit 1,000 px (long songs, end-to-end drops)
 
 
 def clip_cursor(copy: bool = False) -> QCursor:
@@ -490,7 +491,7 @@ class Timeline(QAbstractScrollArea):
             if x1 < -2 or x0 > w + 2:
                 continue
             cr = QRectF(x0, top + 2, max(x1 - x0, 3), lane_h - 5)
-            fill = QColor(base)
+            fill = QColor(theme.DISABLED if clip.muted else base)
             fill.setAlpha(46 if enabled else 28)
             border = QColor(base)
             border.setAlpha(150 if enabled else 70)
@@ -502,7 +503,7 @@ class Timeline(QAbstractScrollArea):
                 p.setPen(theme.TEXT if enabled else theme.TEXT_DIM)
                 lx = max(cr.left(), 0) + 5
                 fm = QFontMetrics(self.font_small)
-                label = fm.elidedText(clip.name or track.name, Qt.ElideRight, int(cr.right() - lx - 4))
+                label = fm.elidedText(((clip.name or track.name) + (" [muted]" if clip.muted else "")), Qt.ElideRight, int(cr.right() - lx - 4))
                 p.drawText(QPointF(lx, top + 2 + fm.ascent() + 1), label)
 
             render = self.render_for(clip)
@@ -534,6 +535,8 @@ class Timeline(QAbstractScrollArea):
 
             if render.texts:
                 self._paint_texts(p, render, off, top, lane_h, t0, t1, base, enabled)
+            if clip.muted:
+                self._paint_mute_cross(p, cr, enabled)
 
         if len(track.clips) > 1:
             for lo, hi in track.overlaps():
@@ -625,6 +628,26 @@ class Timeline(QAbstractScrollArea):
         # per-range track toggles; the selected range is drawn last (on top)
         for r in sorted(self.ctl.ws.ranges, key=lambda r: r.id == sel):
             self._paint_range_toggles(p, r, r.id == sel, y0, y1)
+
+    @staticmethod
+    def _paint_mute_cross(p: QPainter, cr: QRectF, enabled: bool) -> None:
+        """Thin diagonal crosses over a muted clip: one X per clip-height of
+        width, so a long clip reads as muted wherever it is scrolled to."""
+        h = cr.height()
+        col = QColor(theme.TEXT_DIM)
+        col.setAlpha(150 if enabled else 80)
+        p.save()
+        p.setClipRect(cr.adjusted(1, 1, -1, -1), Qt.IntersectClip)
+        p.setPen(QPen(col, 1))
+        n = max(1, int(cr.width() // max(h * 1.5, 24)))
+        cell = cr.width() / n
+        for i in range(n):
+            x = cr.left() + i * cell
+            w = min(cell, h * 1.5)
+            x += (cell - w) / 2
+            p.drawLine(QPointF(x, cr.top()), QPointF(x + w, cr.bottom()))
+            p.drawLine(QPointF(x, cr.bottom()), QPointF(x + w, cr.top()))
+        p.restore()
 
     def _paint_range_toggles(self, p: QPainter, r, selected: bool, y0: int, y1: int) -> None:
         x0, x1 = self.x_of(float(r.start)), self.x_of(float(r.end))
@@ -1244,7 +1267,11 @@ class Timeline(QAbstractScrollArea):
         return super().viewportEvent(e)
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
-        if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+        if e.key() == Qt.Key_M and not e.modifiers() & ~Qt.KeypadModifier:
+            hit = self._lane_hit(self._pointer) if self._pointer is not None else ("empty",)
+            if hit[0] == "clip":
+                self.ctl.toggle_clip_mute(hit[2])
+        elif e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             self.ctl.delete_range()
         elif e.key() == Qt.Key_Escape:
             self.ctl.select_range(None)

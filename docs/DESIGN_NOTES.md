@@ -2,6 +2,55 @@
 
 Companion to [DESIGN_BRIEF.md](DESIGN_BRIEF.md), the original spec, kept verbatim. This file records how the brief was interpreted: decisions, deviations, known gaps and risks. Update it whenever direction changes.
 
+## Native Reason reader (2026-11-15)
+
+The second native reader reads Reason 13/14 `.reason` songs through the same
+registry (path-backed through a memory map, so self-contained songs' samples
+are never loaded; read-only). Decoding and Reason's playback rules live in
+`core/reason_format.py` (research CLI `tools/reason_inspect.py`); the mapping
+is `core/import_reason.py`. Unlike the Cubase reader, clips are imported
+*as Reason plays them*: Reason's overlap, loop, hidden-note and Block rules
+differ from the workspace's trim semantics (a Reason clip's own end does not
+cut its notes; a covering clip does), so each visible stretch of a clip
+becomes a workspace clip holding the rendered notes and controller values.
+Every rule was checked against Reason's own MIDI export of the same song.
+Muted clips, lanes and Block placements are kept as muted clips. Songs saved
+by Reason 12.6 and earlier are encrypted and refused with a re-save message;
+we do not break the encryption. No session schema change: `reason` is a new
+input format value. Evidence, decisions and limitations:
+[Reason plan](plans/reason-import.md).
+
+## Native Cubase reader (2026-11-15)
+
+The first native project reader reads Cubase 15/16 `.cpr` files through the
+shared registry (path-backed, read-only). The format was reverse-engineered
+from project files we saved ourselves (progressive fixture tiers plus three
+real projects); decoding lives in `core/cpr_format.py`, shared with the
+research inspector `tools/cpr_inspect.py`, and the mapping in
+`core/import_cubase.py`. Positions are Cubase's own ticks, kept as exact
+fractions, so native imports match Cubase's MIDI exports more closely than its
+DAWproject exports, which round through seconds and reduce tempo ramps to
+steps. The display bar offset is recorded on `Source` (session schema 4,
+with a schema-3 upgrade) but not applied: imports keep Cubase's absolute
+timeline, as its own MIDI export does. Generated or processed material (pattern
+parts, chord track, inserts) is reported, not rendered. Two exceptions,
+because Cubase's own MIDI export applies them: notes muted in the editors
+are left out, and the track transpose (MIDI Modifiers) is applied, with the
+value kept on `Track.source_transpose` (session schema 5).
+Evidence, decisions and limitations: [Cubase plan](plans/cubase-import.md).
+
+## DAWproject importer (2026-11-14)
+
+The first project reader shares a registry and `(Source, tracks)` contract with
+MIDI, used by Open and drag/drop. Projects are path-backed to avoid reading
+embedded media. DAWproject 1.0 arrangement notes, stepped tempo/meter, markers,
+trims, content references and loops map into the existing model. Explicit source
+format/version fields and clip mute are persisted in session schema 3, with
+schema-1/2 upgrades. Clip mute is a separate export gate, independent of track
+solo and range inclusion, with an undoable context-menu toggle. Unsupported media
+and automation are diagnosed; tempo ramps fail explicitly. Supported scope,
+fixture comparisons and manual checks: [DAWproject importer](plans/dawproject-import.md).
+
 ## Why MIDI Interchange
 
 The brief's aim is to remove the friction of moving MIDI between applications. Hand testing on macOS keeps confirming that the friction is real: each app supports a different, often one-way, subset of MIDI drag-and-drop, and there is no shared MIDI clipboard. Detail is in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md).
@@ -24,6 +73,16 @@ Plain MIDI files via file URLs are the one route that works almost everywhere. M
 | M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, Developer ID signed, hardened runtime). They're notarised and stapled, and Gatekeeper accepts them. On Windows, the one-folder build, zip and Inno Setup installer build and launch (x64, 2026-11-09), but aren't code-signed. Workspace persistence and single-instance file handoff are implemented; studio verification is pending. See [the plan](plans/session-persistence.md). |
 
 User priority, given with the brief: the timeline is the primary UI element and must work early and well. It was built in M1, not deferred.
+
+## Direct DAW import direction (2026-11-14)
+
+Target DAWs are Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio. FL Studio support is subject to native-format feasibility investigation. Studio One is deferred because it is not currently available for testing. DAWproject is the first new reader, primarily to validate a pluggable importer model alongside the existing MIDI reader, while also supporting received DAWproject files. Native-reader order and implementation details remain open. See [the investigation plan](plans/direct-daw-import.md).
+
+**Source storage policy (pre-importer consolidation implemented):** persist provenance fields and any other metadata derived from an input that is not represented directly in the musical model. `Source` retains its explicit metadata fields (names, app/path, import time, SMF format, PPQ, song, warnings and tempo map) and now stores `byte_size` independently. The reserved `raw` bytes field defaults to empty; new MIDI imports do not populate it. Source Info and tooltips use one source summary, including an unknown-size fallback. Wrapped drops carry their original input size through the payload rather than measuring the extracted MIDI. The musical model remains self-contained.
+
+Sessions now write schema 2. The loader explicitly accepts schema 1 and derives each source's byte count from its previously retained MIDI bytes, then leaves `raw` empty. This upgrade occurs in memory without reparsing MIDI, reopening source files or rewriting the session on load; the next normal save writes schema 2. Other unsupported schemas still follow the existing rejection/recovery path. A captured schema-1 workspace and all four reference exports verify compatibility. New readers and the shared registry are still pending.
+
+**Source Info layout fix:** source details scroll independently, with selectable plain-text values that wrap even unbroken path segments and expand to fit every line. Field labels align to the top; Show in Folder sits below the path. A vertical splitter lets users redistribute space between Clips and Sources, while the source list and Close button remain outside the details scroll area. Selecting another source resets details to the top. Geometry checks cover long paths, track lists and warnings at narrow widths and larger fonts.
 
 ## Stack (as installed)
 
@@ -178,3 +237,30 @@ All outstanding work, agreed or not, is listed in [ROADMAP.md](ROADMAP.md).
 - `midi_interchange/core` must stay Qt-free and testable without a GUI.
 - GUI tests run on Qt's offscreen platform (`tests/conftest.py`). `samples/` is generated by `tools/make_demo_midi.py` and committed, because the GUI tests load it.
 - The developer is an experienced engineer. Prefer runnable code to prose, and make reasonable decisions without asking.
+
+## Ditty paired-export investigation
+
+Comparing serialized/reparsed MIDI rather than the pre-export model confirms
+that Ditty's significant differences mostly originate in the input exports:
+unrendered versus processed notes, absent controllers/bends, and duplicate/extra
+notes already in the DAWproject. Our clip-window policy also shortens note tails
+that Cubase MIDI allows beyond part ends; preserve that explicit policy until
+its interaction with user trims, loops and ranges is agreed. Do not infer MIDI
+insert output or silently deduplicate source notes to match one reference.
+Evidence and follow-up: [Ditty findings](DAWPROJECT_DITTY_FINDINGS.md).
+
+The [indy and GA comparison](DAWPROJECT_OTHER_PAIRS_FINDINGS.md) confirms that
+export scope explains much of the apparent offset/tempo discrepancy. Cubase MIDI
+is the ground truth for performed output; XML fidelity checks only localize
+errors. Missing drums, extra kit notes, Prologue's two-octave pitch difference
+and imported note tails remain explicit gaps, not an invitation to repair Cubase
+exports or invent processing. Comparison windows are diagnostic and opt-in.
+
+## DAWproject provisional completion (2026-11-14)
+
+DAWproject and the shared reader registry are provisionally implemented, accepted
+after investigation of all three supplied Cubase export pairs. Known differences
+in Cubase's DAWproject data remain documented limitations; Cubase MIDI is the
+performed reference. Note-tail preservation beyond imported part ends is deferred
+for possible later consideration. Keep current clip-edge cutting and do not
+block this milestone on a new tail policy or repair Cubase's exported data.

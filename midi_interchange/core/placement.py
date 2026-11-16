@@ -195,7 +195,8 @@ def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
     cursor = max(placement.time, ZERO)
     run: list[Track] = []               # end-to-end: the new track for each track position
 
-    for (source, tracks), dests in zip(parsed, plan.dests):
+    for result, dests in zip(parsed, plan.dests):
+        source, tracks = result
         length = source_length(tracks)
         for t in tracks:
             for c in t.clips:
@@ -222,7 +223,7 @@ def place_imports(ws: Workspace, parsed: list[tuple[Source, list[Track]]],
             dest.clips.extend(t.clips)
             dest.refresh_channels()
             dest.sort_clips()
-        notes += ws.add_import(source, fresh)
+        notes += ws.add_import(source, fresh, preserve_track_state=getattr(result, 'preserve_track_state', False))
         stats["new_tracks"] += len(fresh)
         if placement.end_to_end:
             cursor += length

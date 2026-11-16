@@ -47,11 +47,44 @@ Ranges are optional, but they're what make this a palette rather than a file shu
 5. **Lanes:** one per track, showing its clips with their notes, lyrics and text. The timeline is this whole area.
 6. **Bottom panel:** the selected range's name and exact positions, then the export controls: the mode, the **Drag MIDI out** tile and **Save MIDI…**.
 
-Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 to fit everything. The **Snap** list (off, bar, beat, 1/8, 1/16, 1/32, 1/8T, 1/16T) controls how drags line up with the grid; hold **Shift** while dragging to ignore it.
+Zoom with ⌘ + wheel, a trackpad pinch, ⌘= / ⌘- (or the toolbar), and ⌘0 or **Z** to fit everything. The **Snap** list (off, bar, beat, 1/8, 1/16, 1/32, 1/8T, 1/16T) controls how drags line up with the grid; hold **Shift** while dragging to ignore it.
 
 ### Step 1: Bring MIDI in
 
-Drag MIDI from another app, or `.mid` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
+Drag MIDI from another app, or `.mid` / `.dawproject` / `.cpr` / `.reason` files and folders, onto the window. You can also use File ▸ Open (⌘O), open a file with the app from the Finder or Explorer, or pass paths on the command line. Each import **adds** to what you already hold, including files opened from the Finder or Explorer while the app is running: only one copy of the app runs, and it takes them into its open window.
+
+DAWproject 1.0 imports arrangement MIDI, clip positions and mute states, stepped
+tempo changes, time signatures and markers. Audio, plug-ins and automation
+(including MIDI CC/expression automation) are reported as skipped. Tempo ramps
+are currently unsupported. Right-click a clip to **Mute Clip** or **Unmute Clip**;
+muted clips remain visible and are excluded from exports. Cubase 15/16 fixtures
+are covered by automated tests; studio verification is pending. See the
+[supported scope and comparison results](docs/plans/dawproject-import.md).
+
+Cubase 15 and 16 projects (`.cpr`) import directly, without exporting from
+Cubase: arrangement MIDI parts with their trims, part and track mute/solo
+(folders flattened), shared copies, notes, controllers, pitch bend and program
+changes, tempo changes and time signatures, and markers (a cycle marker
+becomes a start marker plus a closing `name |` marker). Tempo ramps are
+approximated with a step every beat. The project file is only read. Audio,
+Pattern Editor parts, the chord track, instruments, MIDI inserts, other MIDI modifiers,
+controller curve shapes and linear-time-base tracks are reported as skipped.
+Notes muted in Cubase's editors are left out and the track transpose (MIDI
+Modifiers) is applied, as Cubase's own MIDI export does; the transpose is
+remembered on the track.
+Cubase's display bar offset is recorded in Source Info but not applied. See the
+[Cubase plan](docs/plans/cubase-import.md).
+
+Reason songs (`.reason`) saved by Reason 13 or 14 import directly too. Each
+track's note lanes become one track. Each clip becomes a clip holding what
+Reason plays there: loops are written out, overlapped parts are left out, and
+Blocks are written out at each placement. Notes, mod wheel, pitch bend,
+sustain, expression and aftertouch come across, with tempo and time
+signatures. Muted clips, lanes and Block placements arrive as muted clips, and
+track mute is kept; mixer mute and solo (part of Reason's rack) are not read. The song file is only read. Pattern clips, audio, device
+automation and Player devices are reported as skipped; controller curves
+are drawn the way Reason draws them. Older songs are encrypted: open them in Reason 13 or later and save
+them again first. See the [Reason plan](docs/plans/reason-import.md).
 
 ![Dragging a clip in, with the landing preview](docs/images/02-drag-in.png)
 
@@ -192,7 +225,7 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Delete / cycle / deselect ranges | Backspace or Delete (or the panel's Delete, Edit ▸ Delete Range) / Tab / Escape. Clear All Ranges is on the toolbar and the Edit menu |
 | Choose tracks per range | Padlock in the range header, then tick or untick its checkboxes; right-click ▸ Include All / Exclude All / Unlock |
 | Snap | Snap list on the toolbar, or Timing ▸ Snap. Hold Shift while dragging to bypass it |
-| Zoom | ⌘ + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 (fit), or the toolbar |
+| Zoom | ⌘ + wheel, trackpad pinch, ⌘= / ⌘- / ⌘0 or Z (fit), or the toolbar |
 | Lane height | ⌥ + wheel, or ⌘⇧= / ⌘⇧- (View ▸ Taller / Shorter Lanes) |
 | Choose an export mode | The Export list: whole workspace, keep positions, rebase & concatenate, separate files |
 | Trim silence | Tick Trim leading/trailing silence |

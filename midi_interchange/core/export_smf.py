@@ -225,6 +225,8 @@ def content_bounds(tracks: Iterable[Track], s: Fraction, e: Fraction | None) -> 
     hi: Fraction | None = None
     for track in tracks:
         for clip in track.clips:
+            if clip.muted:
+                continue
             w0, w1 = clip_window(clip, s, e)
             for _n, ns, ne in _sounding(clip, w0, w1):
                 a = max(ns, w0)
@@ -250,6 +252,12 @@ def visible_msgs(clip: Clip) -> list[Msg]:
         return [ev.msg for ev in clip.events]
     items = _extract_clips([clip], _Segment(ZERO, None, ZERO), 0, True)
     return [it.msg for it in items]
+
+
+def audible_events(clip: Clip) -> list[Event]:
+    """Audible events at workspace positions, with notes cut to clip edges."""
+    items = _extract_clips([clip], _Segment(ZERO, None, ZERO), 0, True)
+    return [Event(item.time, item.msg, i) for i, item in enumerate(items)]
 
 
 def choose_ppq(source_ppqs: Iterable[int], times: Iterable[Fraction]) -> int:
@@ -303,7 +311,7 @@ def _whole(ws: Workspace, tracks: list[Track], partial_notes: bool = True) -> mi
     for track in tracks:
         items = []
         for ci, clip in enumerate(track.clips):
-            if clip.is_trimmed:
+            if clip.is_trimmed or clip.muted:
                 continue
             for ev in clip.events:
                 items.append(_Item(clip.offset + ev.time, (0, ci, ev.seq), ev.msg))
@@ -359,6 +367,8 @@ def _extract_clips(clips: list[Clip], seg: _Segment, si: int, partial_notes: boo
     items: list[_Item] = []
     state: dict[tuple, tuple[Fraction, int, Event]] = {}     # (window start, key) -> latest event before it
     for clip in clips:
+        if clip.muted:
+            continue
         off = clip.offset
         lo, hi = clip_window(clip, s, seg.end)
         if seg.end is not None and lo >= seg.end:
