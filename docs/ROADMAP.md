@@ -2,7 +2,7 @@
 
 All outstanding features and fixes, agreed or not, are listed here and only here. Each feature gets its own plan in [plans/](plans/) and its own branch when it is picked up. When something is finished, remove it from this list; its plan records how it was done.
 
-Updated 2026-11-16.
+Updated 2026-11-18.
 
 ## Agreed, not started
 
@@ -11,6 +11,7 @@ Updated 2026-11-16.
   - **Cubase before 15** (agreed, later): fixtures are in `samples/` (a Cubase 13 file, `argontest003`); older versions are rejected cleanly for now.
   - **Logic** (secondary) and **Reaper, Bitwig, Ableton, FL Studio** (low priority; the user uses only Reason and Cubase). Feasibility and order are in the [desk research](plans/daw-desk-research.md). **Studio One is deferred**; there is no access to it for testing.
   - Each reader keeps the shared rules: read only, never modify the project; report what was skipped; fail cleanly on unreadable files; preserve track and clip mute states.
+- **Simplify controller data on export** (2026-11-16, agreed 2026-11-18; plan: [simplify-controller-data](plans/simplify-controller-data.md)): an export option that drops controller events repeating the previous value and thins the rest to the fewest points staying within one step of the original. DAW exports write curves as a dense stream (Reason's: a value every 1/32 beat), and re-importing it into Reason gives a staircase of points; most DAWs draw straight lines between imported points, so a thinned stream comes back as a few clean points. Off by default: the app aims to be a transparent transport, and this deliberately changes the data; an opt-in fix for a common annoyance.
 
 ## Suggested, not agreed
 
@@ -22,7 +23,6 @@ Updated 2026-11-16.
   - Today the workspace uses one whole file's tempo map. Possible: take different files' maps for different sections, for example when files are laid End to End or verse and chorus come from different apps.
   - Related gaps in the current switch: adopting a file's map doesn't shift it to where the file was placed, and a file's map is lost when its last clip is removed, unless it's the current tempo source.
 - **Scroll bar zoom:** drag the ends of the horizontal scroll bar to zoom, as other apps do (studio, 2026-11-10).
-- **Simplify controller data on export** (2026-11-16, maybe): an export option that drops controller events repeating the previous value and thins the rest to the fewest points staying within one step of the original. DAW exports write curves as a dense stream (Reason's: a value every 1/32 beat), and re-importing it into Reason gives a staircase of points; most DAWs draw straight lines between imported points, so a thinned stream comes back as a few clean points. Off by default: the app aims to be a transparent transport, and this deliberately changes the data; an opt-in fix for a common annoyance.
 - **Show controller data on a track** (2026-11-16, maybe): draw a clip's CC data (mod wheel, sustain, pitch bend, expression...) as a line over or under its notes, so imported curves and resets can be seen. Which controller to show could be chosen per track, for example from the track's colour box menu, alongside the export channel.
 
 - **"Open With" for DAW project files** (2026-11-16, considering, leaning no): the macOS bundle and the Windows installer register only MIDI extensions (`.mid`, `.midi`, `.smf`), so right-click ▸ Open With and Dock-icon drops don't take `.cpr`, `.reason` or `.dawproject`; dragging them onto the window works. Registering them could put the app in the way of double-clicking a project to open the DAW, so the default is to leave it out. If added, offer it only under "Open With" and never as the default handler. `.kar` and `.rmi` are read by the MIDI reader but not registered either.
