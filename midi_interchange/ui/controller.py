@@ -42,6 +42,7 @@ class Controller(QObject):
         self.snap: SnapSetting = "beat"
         self.export_mode = ExportMode.REBASE   # default (2026-11-10); with no ranges, export is whole
         self.trim = False
+        self.simplify_controllers = False
         self.file_drag_active = False  # transient native drag-out; never checkpoint mid-drag
         self._undo: list[tuple[dict, str | None]] = []
         self._redo: list[tuple[dict, str | None]] = []
@@ -476,10 +477,16 @@ class Controller(QObject):
             self.trim = trim
             self.exportSettingsChanged.emit()
 
+    def set_simplify_controllers(self, on: bool) -> None:
+        if on != self.simplify_controllers:
+            self.simplify_controllers = on
+            self.exportSettingsChanged.emit()
+
     def export_options(self, track_ids: list[str] | None = None,
                        range_ids: list[str] | None = None) -> ExportOptions:
         ranges = None if range_ids is None else [r for r in self.ws.ranges if r.id in set(range_ids)]
-        return ExportOptions(mode=self.export_mode, track_ids=track_ids, ranges=ranges, trim=self.trim)
+        return ExportOptions(mode=self.export_mode, track_ids=track_ids, ranges=ranges, trim=self.trim,
+                             simplify_controllers=self.simplify_controllers)
 
     def build_exports(self, track_ids: list[str] | None = None,
                       range_ids: list[str] | None = None) -> list[ExportResult]:

@@ -57,6 +57,7 @@ from .document import Clip, Track, Workspace
 from .events import MODE_CCS, Event, Msg, display_text, is_note_off, is_note_on, pair_notes
 from .names import range_label, safe_filename
 from .ranges import Range, merge_ranges
+from .simplify import simplify_midi
 from .timing import TempoMap, ZERO
 
 MAX_PPQ = 32767
@@ -76,6 +77,7 @@ class ExportOptions:
     ranges: list[Range] | None = None       # None -> workspace ranges
     trim: bool = False
     partial_notes: bool = True
+    simplify_controllers: bool = False      # thin dense controller streams (core/simplify.py)
 
 
 @dataclass
@@ -103,6 +105,13 @@ class _Segment:
 
 def build_exports(ws: Workspace, opts: ExportOptions | None = None) -> list[ExportResult]:
     opts = opts or ExportOptions()
+    results = _build_exports(ws, opts)
+    if opts.simplify_controllers:
+        results = [ExportResult(r.label, simplify_midi(r.midi)) for r in results]
+    return results
+
+
+def _build_exports(ws: Workspace, opts: ExportOptions) -> list[ExportResult]:
     ranges = [r for r in (ws.ranges if opts.ranges is None else opts.ranges) if not r.is_empty]
     mode = opts.mode if ranges else ExportMode.WHOLE
     tracks = export_tracks(ws, opts.track_ids, None if mode is ExportMode.WHOLE else ranges)

@@ -186,6 +186,8 @@ Each track's **Export MIDI channel** (Step 2) is applied to the output in every 
 
 Tick **Trim leading/trailing silence** to cut the output down to its first and last note (or lyric); every track moves by the same amount, so they stay aligned.
 
+Tick **Simplify controller data** to thin dense controller streams (mod wheel, expression, pitch bend, aftertouch and other continuous controllers) to the fewest points that stay within one step of the original. DAW exports write curves as a value every 1/32 beat, which importing back into a DAW turns into a staircase of points; thinned, the same curve comes back as a few clean points. It's off by default because it changes the data. Notes, program changes, bank select and RPN/NRPN controllers are never touched, and large jumps are kept. It applies to dragging out as well as saving.
+
 Then either:
 
 - **Save MIDI…** (⌘S) to write files. For separate files, the name you choose gets each range's name added.
@@ -228,6 +230,7 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Lane height | ⌥ + wheel, or ⌘⇧= / ⌘⇧- (View ▸ Taller / Shorter Lanes) |
 | Choose an export mode | The Export list: whole workspace, keep positions, rebase & concatenate, separate files |
 | Trim silence | Tick Trim leading/trailing silence |
+| Thin controller curves | Tick Simplify controller data |
 | Export | **Save MIDI…** (⌘S), or drag the **Drag MIDI out** tile into another app or a folder |
 | Start again | File ▸ New (⌘N, also on the toolbar). Export settings are kept; Undo brings your work back until you quit |
 | Return to your work | Just reopen the app: the workspace is restored. Opening files while it runs adds them to the open window. See [Returning to your workspace](#returning-to-your-workspace) |

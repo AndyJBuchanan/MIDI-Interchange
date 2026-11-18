@@ -11,7 +11,6 @@ Updated 2026-11-18.
   - **Cubase before 15** (agreed, later): fixtures are in `samples/` (a Cubase 13 file, `argontest003`); older versions are rejected cleanly for now.
   - **Logic** (secondary) and **Reaper, Bitwig, Ableton, FL Studio** (low priority; the user uses only Reason and Cubase). Feasibility and order are in the [desk research](plans/daw-desk-research.md). **Studio One is deferred**; there is no access to it for testing.
   - Each reader keeps the shared rules: read only, never modify the project; report what was skipped; fail cleanly on unreadable files; preserve track and clip mute states.
-- **Simplify controller data on export** (2026-11-16, agreed 2026-11-18; plan: [simplify-controller-data](plans/simplify-controller-data.md)): an export option that drops controller events repeating the previous value and thins the rest to the fewest points staying within one step of the original. DAW exports write curves as a dense stream (Reason's: a value every 1/32 beat), and re-importing it into Reason gives a staircase of points; most DAWs draw straight lines between imported points, so a thinned stream comes back as a few clean points. Off by default: the app aims to be a transparent transport, and this deliberately changes the data; an opt-in fix for a common annoyance.
 
 ## Suggested, not agreed
 
