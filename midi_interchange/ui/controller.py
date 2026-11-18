@@ -308,6 +308,16 @@ class Controller(QObject):
         track.soloed = on
         self._ms_changed()
 
+    def solo_source_tracks(self, source_id: str) -> None:
+        """Exclusively solo the tracks holding clips from a source (one undo step; none if already so)."""
+        targets = {t.id for t in self.ws.tracks if any(c.source_id == source_id for c in t.clips)}
+        if not targets or targets == {t.id for t in self.ws.tracks if t.soloed}:
+            return
+        self.checkpoint()
+        for t in self.ws.tracks:
+            t.soloed = t.id in targets
+        self._ms_changed()
+
     def clear_mutes(self) -> None:
         if any(t.muted for t in self.ws.tracks):
             self.checkpoint()
