@@ -328,6 +328,7 @@ midi_interchange.spec          PyInstaller spec (bundle metadata, version, signi
 docs/                          brief, design notes, this guide, RELEASING.md, releases/ (release notes)
 ```
 
+- Working process (pick, plan, implement, manual test, commit, push), git hygiene and test rules: [CLAUDE.md](../CLAUDE.md) at the repo root. Read it first.
 - Branches: one feature per `feature/…` branch, merged by pull request into the current `release/X.Y.Z` branch, never straight into `main`. The full rules are in [RELEASING.md, Branches](RELEASING.md#branches).
 - Keep `midi_interchange/core` free of Qt so it can be tested without a GUI.
 - Widgets change the workspace only through `ui/controller.py`. Call `checkpoint()` before a change you want to be undoable.
