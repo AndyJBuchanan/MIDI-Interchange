@@ -162,6 +162,10 @@ class ExportPanel(QFrame):
         self.trim_cb = QCheckBox("Trim leading/trailing silence")
         self.trim_cb.setToolTip("Trims the assembled output as a whole; track alignment is kept")
         self.trim_cb.toggled.connect(ctl.set_trim)
+        self.simplify_cb = QCheckBox("Simplify controller data")
+        self.simplify_cb.setToolTip("Drops repeated controller values and thins curves to the fewest points "
+                                    "within one step of the original. Changes the data.")
+        self.simplify_cb.toggled.connect(ctl.set_simplify_controllers)
         self.summary = QLabel()
         self.summary.setStyleSheet(f"color: {theme.TEXT_DIM.name()};")
         self.drag_tile = DragTile(ctl)
@@ -177,6 +181,7 @@ class ExportPanel(QFrame):
         r2.addWidget(QLabel("Export"))
         r2.addWidget(self.mode_combo)
         r2.addWidget(self.trim_cb)
+        r2.addWidget(self.simplify_cb)
         r2.addWidget(self.summary, 1)
         r2.addWidget(self.drag_tile)
         r2.addWidget(self.save_btn)
@@ -240,6 +245,9 @@ class ExportPanel(QFrame):
         self.trim_cb.blockSignals(True)
         self.trim_cb.setChecked(self.ctl.trim)
         self.trim_cb.blockSignals(False)
+        self.simplify_cb.blockSignals(True)
+        self.simplify_cb.setChecked(self.ctl.simplify_controllers)
+        self.simplify_cb.blockSignals(False)
 
         n_en, n = len(self.ctl.export_tracks()), len(ws.tracks)
         mode = self.ctl.export_mode if ws.ranges else ExportMode.WHOLE

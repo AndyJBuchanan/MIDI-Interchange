@@ -1,6 +1,6 @@
 # Plan: simplify controller data on export
 
-Status: **agreed (2026-11-18).** Not built. Branch, when built: `feature/simplify-controller-data` from the release branch (`release/0.5.0`), as all features are.
+Status: **built and manually tested (2026-11-18).** Branch, when built: `feature/simplify-controller-data` from the release branch (`release/0.5.0`), as all features are.
 
 An export option, **off by default**, that thins dense controller streams to the few points a DAW needs to draw the same curve.
 
@@ -13,7 +13,7 @@ The app aims to be a transparent transport, and this deliberately changes the da
 ## Behaviour
 
 - A checkbox **Simplify controller data** in the export panel, beside **Trim leading/trailing silence**. Off by default. Tooltip: "Drops repeated controller values and thins curves to the fewest points within one step of the original. Changes the data."
-- It's an export setting, like trim: it applies to Save MIDI and to drag-out alike (the app treats drags and file operations as equivalent), and to all four export modes. It's held on the controller, not saved with the session (as trim isn't).
+- It's an export setting, like trim: it applies to Save MIDI and to drag-out alike (the app treats drags and file operations as equivalent), and to all four export modes. It's held on the controller and **not** saved with the session, so it is off again after a restart: it changes the data, so it shouldn't stay on unnoticed. (Trim and the export mode are saved; this one deliberately is not.)
 - Source events and clip event lists are never modified. Turning it off restores the original output at once.
 
 ### What is simplified
@@ -36,16 +36,17 @@ The CC tolerance may become selectable later. It's one named constant per messag
 
 ### The two steps, per stream, in time order
 
-1. **Drop repeats.** An event whose value equals the previous event's in the same stream is dropped. Two events on the same tick: the later wins and the earlier is dropped.
-2. **Thin.** Keep the first and last point. Between them keep the fewest points such that, when the DAW joins the kept points with straight lines, the line is within tolerance of **every original point** (the value rounded to a whole step).
-   - Method: from an anchor point, extend the segment to the farthest point such that all points between stay within tolerance of the line; keep that point and make it the new anchor. This is near-minimal and linear in practice, but not proven to give the absolute fewest points. Fine for this purpose.
+1. **Tidy.** Of several events on the same tick, the later wins. Events at the very end of a stream that repeat the value before them are dropped, because the value holds after the last point anyway.
+   - A repeat in the middle of a stream is **not** dropped on its own. A DAW that draws straight lines would turn "50, 50, then 100" (hold, then ramp) into a ramp from the first 50. Repeats are left to step 2, which collapses a run of equal values to its two ends and keeps the corner.
+2. **Thin.** Keep the first and last point. Between them keep the fewest points such that, when the DAW joins the kept points with straight lines, the line is within tolerance of **every original point**.
+   - Method: from an anchor point, extend the segment to the farthest point such that all points between stay within tolerance of the line; keep the point before the first failure and make it the new anchor. Done in one pass by tracking the range of slopes still allowed. This is near-minimal, not proven to give the absolute fewest points. Fine for this purpose.
    - The first event of a stream in an export is always kept. It's usually the carried start value the range rules emit, and no earlier value is known.
 
 ### Where it happens
 
 Last, on the final stream, after the clip cutting, state-carry, rebasing and channel override have run. Range cuts and rebases are therefore unaffected, and a channel override that merges two channels onto one is thinned as the one stream the DAW will see.
 
-It runs on the output track, on the tick-quantised events, so "within tolerance" is measured at the ticks that are actually written, at the export's PPQ. Event order, track names, range names and filenames are unchanged.
+It runs as one post-pass over each finished MIDI file (`simplify_midi`), on the tick-quantised events, so "within tolerance" is measured at the ticks that are actually written, at the export's PPQ. Event order, track names, range names and filenames are unchanged.
 
 ## Code
 
@@ -58,7 +59,7 @@ It runs on the output track, on the tick-quantised events, so "within tolerance"
 ## Tests (headless)
 
 - **Unit, `simplify`:**
-  - Repeats dropped; same-tick later-wins.
+  - Same-tick later-wins; trailing repeats dropped; hold-then-ramp keeps its corner; a flat run collapses to its ends.
   - A straight ramp collapses to its two ends.
   - A step stays a step.
   - First and last points are kept.
@@ -95,3 +96,5 @@ It runs on the output track, on the tick-quantised events, so "within tolerance"
 - **Polyphonic key pressure:** included, with channel aftertouch.
 - **Branch:** features branch off the release branch.
 - **Stepped data:** large jumps are already "simple". A jump bigger than the tolerance is never removed, so a deliberate step stays a step. Only a staircase of tiny steps, which is what a dense curve looks like, is flattened into a ramp. No extra filtering is needed.
+- **Manual test (2026-11-18):** works in Reason and Cubase. Cubase also imports controller data in step mode at first; switched to ramp mode, the thinned data matches the original curves very well. The option assumes the DAW draws straight lines between points, as planned.
+- **Reason (user's observation, 2026-11-18):** Reason imports controller changes as steps, and has no known way to turn the stepped events into curves. The thinned data gives far fewer points there. (An earlier version of this note said Reason joins points with straight lines; the user corrected it.) Reason's own **Automation Cleanup** (Preferences, "Heavy"/"Maximum") also removes points, but the manual doesn't say whether it applies to controller data imported from MIDI; untested.
