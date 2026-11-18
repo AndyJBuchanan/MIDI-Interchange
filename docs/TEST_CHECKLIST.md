@@ -1,6 +1,6 @@
 # Manual Test Checklist
 
-Hand tests for the clip-assembly feature (`feature/clip-assembly`), plus a short regression pass. Reuse it for later features: add a section, keep the regression pass.
+Hand tests: sections 1–8 cover the core workflow, and each feature adds its own section (8a, 8b, …) before section 9, headed with its branch. Section 9 checks New, section 10 is a quick regression pass, and section 11 is the Windows pass at release time.
 
 Wherever a step changes something, also check that one ⌘Z undoes the whole step.
 

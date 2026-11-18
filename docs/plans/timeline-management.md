@@ -1,6 +1,6 @@
 # Plan: Timeline management
 
-Status: **agreed** (2026-11-14). Not built. Branch, when built: `feature/timeline-management` from `main`, merged by PR into the current release branch (see [RELEASING.md, Branches](../RELEASING.md#branches)).
+Status: **built** (2026-11-14). Merged by PR #13 and released in v0.3.0-pre; manual checks are in TEST_CHECKLIST section 8k. Branch: `feature/timeline-management`, started from `main` and merged with `release/0.3.0` by hand, which led to the rule that feature branches start from the release branch (see [RELEASING.md, Branches](../RELEASING.md#branches)).
 
 This is a fix, not the larger tempo work: per-section tempo maps are a separate, unagreed roadmap item. It does three things:
 

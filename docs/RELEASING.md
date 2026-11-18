@@ -15,14 +15,14 @@ Users download the app; they don't build it. You can build everything on your ow
 From 0.3.0, each release is assembled on its own `release/X.Y.Z` branch. `main` only moves when a release has been published, so `main` and its README always describe the app people can download.
 
 - **`main` is the latest published release.** Code reaches it only by merging a published release branch.
-- **Feature branches** (`feature/…`, one feature each) start from the current release branch, not `main`. Pull it first. A branch started from `main` misses the docs the release branch has changed since (README, ROADMAP, TEST_CHECKLIST) and its PR conflicts. This was agreed 2026-11-14, after `feature/timeline-management` was started from `main` and had to be merged with `release/0.3.0` by hand.
+- **Feature branches** (`feature/<name>`, one feature each; a large feature's parts as `feature/<name>-<part>`; small fixes as `fix/<name>`) start from the current release branch, not `main`. Pull it first. A branch started from `main` misses the docs the release branch has changed since (README, ROADMAP, TEST_CHECKLIST) and its PR conflicts. This was agreed 2026-11-14, after `feature/timeline-management` was started from `main` and had to be merged with `release/0.3.0` by hand.
 - **Features merge by pull request** into the release branch, not by a straight merge. The PR's base is `release/X.Y.Z`, not `main`.
 - **Create `release/X.Y.Z` early**, from `main`, before the first feature for that release is started, so features have a branch to start from. Merge further features into it as they're finished, so they're tested together as you go rather than all at the end. The first commit on the branch bumps `__version__` (see below).
 - **Merge a feature only once you mean to ship it in that release.** Taking a feature back out means reverting its merge.
 - **Release work happens on the release branch:** release notes, the build, the tag, then the checksums and the release history row (the checklist below).
 - **After publishing**, merge the release branch into `main` by pull request with a merge commit, not a squash or rebase, so the tagged commit is part of `main`'s history. Keep the release branch: the repository rules don't allow branch deletion, and the branch stays as a record.
 - **Fixes to a published release** go on a new `release/X.Y.Z+1` branch made from that release's tag, and follow the same steps.
-- **Docs go on the release branch too**, not straight to `main`: README fixes, roadmap, interop findings and test checklist changes. A plan for a feature goes on its feature branch. Changing docs on `main` while a release branch is open causes the same conflicts.
+- **Docs go on the release branch too**, not straight to `main`: README fixes, roadmap, interop findings and test checklist changes. Feature plans go there as well: a plan is written and agreed on the release branch, and the feature branch is made from it when building starts (agreed 2026-11-18). Changing docs on `main` while a release branch is open causes the same conflicts.
 
 `main` was ahead of the published release when this started: it already held the track export channel (PR #11) and a bump to 0.2.3, neither published. Both went into `release/0.3.0`.
 
@@ -63,7 +63,7 @@ Rules:
 1. Switch to the release branch (`git switch release/<ver>`) and pull. Make sure every feature PR for the release is merged into it, the tree is clean and the tests pass: `.venv/bin/python -m pytest -q`
 2. Check `__version__` in `midi_interchange/__init__.py` is `<ver>`. It's set when the release branch is created; if it isn't, set it, commit with a message like `Bump version to 0.3.0`, and push.
 3. Write the release notes in `docs/releases/v<ver>[-label].md` (copy the previous one), then commit and push.
-4. Note the commit hash (`git rev-parse --short HEAD`). Both platforms must build **this exact commit**.
+4. Note the commit hash (`git rev-parse --short HEAD`). Both platforms must build **this exact commit**. From now until the release is published, commit nothing to the release branch: moving it after naming a build commit once broke a Windows build. The checksums wait in the notes on disk until step 6.
 
 ### 2. Build on macOS
 

@@ -328,14 +328,13 @@ midi_interchange.spec          PyInstaller spec (bundle metadata, version, signi
 docs/                          brief, design notes, this guide, RELEASING.md, releases/ (release notes)
 ```
 
-- Working process (pick, plan, implement, manual test, commit, push), git hygiene and test rules: [CLAUDE.md](../CLAUDE.md) at the repo root. Read it first.
-- Branches: one feature per `feature/…` branch, merged by pull request into the current `release/X.Y.Z` branch, never straight into `main`. The full rules are in [RELEASING.md, Branches](RELEASING.md#branches).
+- Working process (pick, plan, implement, manual test, commit, push), branches, git hygiene, test rules and how to describe the app: [CLAUDE.md](../CLAUDE.md) at the repo root. Read it first. The full branch rules are in [RELEASING.md, Branches](RELEASING.md#branches).
 - Keep `midi_interchange/core` free of Qt so it can be tested without a GUI.
 - Widgets change the workspace only through `ui/controller.py`. Call `checkpoint()` before a change you want to be undoable.
-- Add a regression test for any change to import or export behaviour. Round-trip and boundary tests are in `tests/test_roundtrip.py` and `tests/test_export.py`.
+- Round-trip and boundary tests, where import and export regression tests usually go, are in `tests/test_roundtrip.py` and `tests/test_export.py`.
 - Record decisions or changes of direction in `docs/DESIGN_NOTES.md`. Don't edit `docs/DESIGN_BRIEF.md`.
 - Record DAW interop results in the README checklist. Only tick a box once that drag has actually been tested.
-- Manual (hand) checks for a feature go in [TEST_CHECKLIST.md](TEST_CHECKLIST.md), as a new numbered section (8a, 8b, …) placed before section 9 and headed with the feature's branch. The feature's plan links to that section and doesn't keep its own copy of the checklist.
+- A feature's plan links to its section of [TEST_CHECKLIST.md](TEST_CHECKLIST.md) (see CLAUDE.md, step 4) and doesn't keep its own copy of the checklist.
 
 ## Session persistence and compatibility
 
