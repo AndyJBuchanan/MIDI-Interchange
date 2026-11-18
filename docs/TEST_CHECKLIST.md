@@ -287,14 +287,14 @@ Use your own Reason 13/14 songs as well as `samples/reason-probe` and `samples/r
 
 Plan: [simplify-controller-data](plans/simplify-controller-data.md). Use a Reason project with dense mod wheel or pitch bend curves.
 
-- [ ] The **Simplify controller data** box sits beside Trim in the export panel, is off by default, and its tooltip says it changes the data.
-- [ ] Export with it off, then on, and open both in Reason: off gives the staircase of points, on gives a few clean points, and the curve looks and sounds the same.
-- [ ] Same into Cubase: the curve is the same, with far fewer points.
-- [ ] Drag out with it on, and compare with **Save MIDI…**: the same data.
-- [ ] Notes, sustain, program changes and tempo are unchanged by the option, in every export mode, with and without ranges.
-- [ ] With ranges, the controller value at the start of each range is still carried in.
-- [ ] A deliberate big jump in a controller (a switch-like change) is still a jump.
-- [ ] Untick it: the export is the same as before it was ever on.
+- [x] The **Simplify controller data** box sits beside Trim in the export panel, is off by default, and its tooltip says it changes the data.
+- [x] Export with it off, then on, and open both in Reason: off gives the staircase of points, on gives a few clean points, and the curve looks and sounds the same.
+- [x] Same into Cubase: the curve is the same, with far fewer points.
+- [x] Drag out with it on, and compare with **Save MIDI…**: the same data.
+- [x] Notes, sustain, program changes and tempo are unchanged by the option, in every export mode, with and without ranges.
+- [x] With ranges, the controller value at the start of each range is still carried in.
+- [x] A deliberate big jump in a controller (a switch-like change) is still a jump.
+- [x] Untick it: the export is the same as before it was ever on.
 
 ## 9. New document
 

@@ -96,3 +96,4 @@ It runs as one post-pass over each finished MIDI file (`simplify_midi`), on the 
 - **Polyphonic key pressure:** included, with channel aftertouch.
 - **Branch:** features branch off the release branch.
 - **Stepped data:** large jumps are already "simple". A jump bigger than the tolerance is never removed, so a deliberate step stays a step. Only a staircase of tiny steps, which is what a dense curve looks like, is flattened into a ramp. No extra filtering is needed.
+- **Manual test (2026-11-18):** works in Reason and Cubase. Cubase also imports controller data in step mode at first; switched to ramp mode, the thinned data matches the original curves very well. The option assumes the DAW draws straight lines between points, as planned.
