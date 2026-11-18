@@ -72,7 +72,7 @@ The Cubase and Reason readers are checked against each DAW's own MIDI export of 
 
 **Muted clips** from a project stay on the timeline, drawn with thin crosses, and are left out of exports. Right-click a clip ▸ **Mute Clip** / **Unmute Clip**, or press **M** with the pointer over it, to change that. This works on any clip, not just imported ones.
 
-**Source Info** (right-click a track) shows the format and version, and lists anything the import left out.
+**Source Info** (right-click a track) shows the format and version, and lists anything the import left out. The **(i)** beside the track count, top left, opens a list of every source in the session with the same details, and the tracks each one feeds; **Solo all source tracks** there solos exactly those tracks.
 
 **Experimental: what to expect.** The project formats aren't published, so these readers were built by studying projects saved for the purpose:
 
@@ -219,6 +219,8 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Remove a track | ✕, or right-click ▸ Remove Track |
 | Save just one track | Right-click ▸ Save This Track… |
 | See where a track came from | Right-click ▸ Source Info… |
+| See every source in the session | The **(i)** beside the track count, top left |
+| Solo the tracks one source feeds | (i) ▸ select the source ▸ Solo all source tracks |
 | Mute / solo | **M** / **S** on a track. ⌥-click S for exclusive solo, ⌥-click M for all mutes. Boxed M / S above the tracks clear them |
 | Make a range | Drag across empty timeline space (ruler or lanes) |
 | Resize / move a range | Drag an edge (in any row) / drag the body in the range strip |
