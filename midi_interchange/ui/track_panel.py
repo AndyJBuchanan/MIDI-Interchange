@@ -213,7 +213,7 @@ class TrackHeader(QFrame):
 
 class InfoButton(QToolButton):
     """A clickable bright white "i" in a circle (opens the session Sources dialog)."""
-    SIZE = 18
+    SIZE = 14
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -229,13 +229,13 @@ class InfoButton(QToolButton):
         color = QColor(theme.WHITE)
         if not self.underMouse():
             color.setAlpha(225)
-        p.setPen(QPen(color, 1.5))
+        p.setPen(QPen(color, 1.2))
         p.setBrush(QColor(255, 255, 255, 40) if self.underMouse() else Qt.NoBrush)
         r = self.rect().adjusted(1, 1, -1, -1)
         p.drawEllipse(r)
         f = QFont(self.font())
         f.setBold(True)
-        f.setPixelSize(self.SIZE - 7)
+        f.setPixelSize(self.SIZE - 4)
         p.setFont(f)
         p.drawText(self.rect(), Qt.AlignCenter, "i")
 
@@ -327,7 +327,7 @@ class TrackPanel(QWidget):
         self.clear_s.setGeometry(w - CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
         m_x = w - 2 * CONTROL_SIZE - CONTROL_GAP
         info_x = min(10 + self.title.sizeHint().width() + 6, m_x - CONTROL_GAP - InfoButton.SIZE - 2)
-        self.info_btn.setGeometry(info_x, 16 + (CONTROL_SIZE - InfoButton.SIZE) // 2,
+        self.info_btn.setGeometry(info_x, (self.timeline.header_h() - InfoButton.SIZE) // 2,
                                   InfoButton.SIZE, InfoButton.SIZE)
         self.title.raise_()
         self.info_btn.raise_()
