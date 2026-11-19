@@ -11,7 +11,6 @@ Updated 2026-11-18.
   - **Cubase before 15** (agreed, later): fixtures are in `samples/` (a Cubase 13 file, `argontest003`); older versions are rejected cleanly for now.
   - **Logic** (secondary) and **Reaper, Bitwig, Ableton, FL Studio** (low priority; the user uses only Reason and Cubase). Feasibility and order are in the [desk research](plans/daw-desk-research.md). **Studio One is deferred**; there is no access to it for testing.
   - Each reader keeps the shared rules: read only, never modify the project; report what was skipped; fail cleanly on unreadable files; preserve track and clip mute states.
-- **Session sources dialog** (2026-11-16, agreed 2026-11-18; plan: [session-sources](plans/session-sources.md)): a small (i) button in the top-left panel, beside the track count, opens a modal dialog listing every source in the workspace: file name, path with Show in Folder, format and version, import time, tempo summary, import warnings, and which tracks its clips are on (with clip counts). **Solo all source tracks** solos exactly those tracks and closes the dialog; **Close** closes it. The per-track Source Info dialog stays as it is.
 
 ## Suggested, not agreed
 

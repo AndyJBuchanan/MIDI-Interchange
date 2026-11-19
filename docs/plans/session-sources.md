@@ -1,6 +1,6 @@
 # Plan: session sources dialog
 
-Status: **built, awaiting manual test (2026-11-18).** Branch: `feature/session-sources` from `release/0.5.0`.
+Status: **built and manually tested (2026-11-19), merged in PR #23.** Branch: `feature/session-sources` from `release/0.5.0`.
 
 A small **(i)** button in the top-left panel opens a dialog listing every source in the workspace, with the details Source Info shows for a single track. From it, one button solos exactly the tracks a source feeds.
 
