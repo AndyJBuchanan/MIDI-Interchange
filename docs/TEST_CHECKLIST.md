@@ -300,15 +300,15 @@ Plan: [simplify-controller-data](plans/simplify-controller-data.md). Use a Reaso
 
 Plan: [session-sources](plans/session-sources.md). Use two or three imports, including a Cubase or Reason project.
 
-- [ ] A bright white **(i)** in a circle sits beside the track count, top left, clear of the M and S boxes. It has the tooltip "Sources in this session". Make the track panel as narrow as it goes, and check it with a three-digit track count, if you have one.
-- [ ] Click it: a modal dialog lists every source in import order. Each shows its path (Show in Folder works), format and version, import time, tempo and any import warnings.
-- [ ] **Used by** shows the right tracks with clip counts. Move a clip onto another source's track, and reopen: the counts follow.
-- [ ] Select a source and press **Solo all source tracks**: the dialog closes and exactly the tracks that source feeds are soloed, all others unsoloed. Undo brings the previous solo state back.
-- [ ] **Close** and Esc leave everything unchanged.
-- [ ] A source with no clips (kept as the tempo source) says "No clips (kept for its tempo map)" and its solo button is greyed out.
-- [ ] With nothing imported, the dialog says "Nothing imported yet."
-- [ ] Right-click a track ▸ Source Info… still works exactly as before.
-- [ ] No menu or toolbar entry for Sources: the (i) is the only way in.
+- [x] A bright white **(i)** in a circle sits beside the track count, top left, clear of the M and S boxes. It has the tooltip "Sources in this session". Make the track panel as narrow as it goes, and check it with a three-digit track count, if you have one.
+- [x] Click it: a modal dialog lists every source in import order. Each shows its path (Show in Folder works), format and version, import time, tempo and any import warnings.
+- [x] **Used by** shows the right tracks with clip counts. Move a clip onto another source's track, and reopen: the counts follow.
+- [x] Select a source and press **Solo all source tracks**: the dialog closes and exactly the tracks that source feeds are soloed, all others unsoloed. Undo brings the previous solo state back.
+- [x] **Close** and Esc leave everything unchanged.
+- [x] A source with no clips (kept as the tempo source) says "No clips (kept for its tempo map)" and its solo button is greyed out.
+- [x] With nothing imported, the dialog says "Nothing imported yet."
+- [x] Right-click a track ▸ Source Info… still works exactly as before.
+- [x] No menu or toolbar entry for Sources: the (i) is the only way in.
 
 ## 9. New document
 

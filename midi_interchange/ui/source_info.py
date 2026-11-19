@@ -146,11 +146,51 @@ class SourceInfoDialog(QDialog):
         # -- sources: list + details
         src_box = QGroupBox("Sources")
         sl = QHBoxLayout(src_box)
+        self.pane = SourcesPane(ws, self.sources)
+        self.src_list = self.pane.src_list
+        self.detail_host = self.pane.detail_host
+        self.detail_scroll = self.pane.detail_scroll
+        sl.addWidget(self.pane)
+
+        self.sections = QSplitter(Qt.Vertical)
+        self.sections.setChildrenCollapsible(False)
+        self.sections.addWidget(clips_box)
+        self.sections.addWidget(src_box)
+        self.sections.setSizes([180, 300])
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self.accept)
+
+        lay = QVBoxLayout(self)
+        lay.addWidget(summary)
+        lay.addWidget(self.sections, 1)
+        lay.addWidget(buttons)
+
+    def _clip_selected(self) -> None:
+        rows = {i.row() for i in self.table.selectedItems()}
+        if rows:
+            idx = self._clip_source[rows.pop()]
+            if idx >= 0:
+                self.src_list.setCurrentRow(idx)
+
+
+class SourcesPane(QWidget):
+    """A list of sources beside the details of the selected one.
+
+    Shared by the per-track Source Info dialog and the session Sources dialog.
+    With `show_usage`, each source's details also say which tracks its clips are on.
+    """
+    def __init__(self, ws: Workspace, sources: list[Source], show_usage: bool = False, parent=None) -> None:
+        super().__init__(parent)
+        self.ws = ws
+        self.sources = sources
+        self.show_usage = show_usage
         split = QSplitter(Qt.Horizontal)
         split.setChildrenCollapsible(False)
         self.src_list = QListWidget()
-        for s in self.sources:
-            QListWidgetItem(s.name, self.src_list)
+        for src in sources:
+            QListWidgetItem(src.name, self.src_list)
         self.src_list.currentRowChanged.connect(self._show_source)
         split.addWidget(self.src_list)
         self.detail_host = QWidget()
@@ -167,31 +207,30 @@ class SourceInfoDialog(QDialog):
         split.addWidget(self.detail_scroll)
         split.setStretchFactor(1, 1)
         split.setSizes([220, 620])
-        sl.addWidget(split)
-
-        self.sections = QSplitter(Qt.Vertical)
-        self.sections.setChildrenCollapsible(False)
-        self.sections.addWidget(clips_box)
-        self.sections.addWidget(src_box)
-        self.sections.setSizes([180, 300])
-
-        buttons = QDialogButtonBox(QDialogButtonBox.Close)
-        buttons.rejected.connect(self.reject)
-        buttons.accepted.connect(self.accept)
-
         lay = QVBoxLayout(self)
-        lay.addWidget(summary)
-        lay.addWidget(self.sections, 1)
-        lay.addWidget(buttons)
-        if self.sources:
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(split)
+        if sources:
             self.src_list.setCurrentRow(0)
 
-    def _clip_selected(self) -> None:
-        rows = {i.row() for i in self.table.selectedItems()}
+    def current_source(self) -> Source | None:
+        row = self.src_list.currentRow()
+        return self.sources[row] if 0 <= row < len(self.sources) else None
+
+    def source_tracks(self, source_id: str) -> list[tuple[Track, int]]:
+        """The tracks holding clips from the source, with how many clips each."""
+        out = []
+        for t in self.ws.tracks:
+            n = sum(1 for c in t.clips if c.source_id == source_id)
+            if n:
+                out.append((t, n))
+        return out
+
+    def usage(self, source_id: str) -> str:
+        rows = [f"{t.name}: {n} clip{'s' if n != 1 else ''}" for t, n in self.source_tracks(source_id)]
         if rows:
-            idx = self._clip_source[rows.pop()]
-            if idx >= 0:
-                self.src_list.setCurrentRow(idx)
+            return "\n".join(rows)
+        return "No clips" + (" (kept for its tempo map)" if self.ws.tempo_source_id == source_id else "")
 
     def _show_source(self, row: int) -> None:
         self.detail_scroll.verticalScrollBar().setValue(0)
@@ -218,6 +257,8 @@ class SourceInfoDialog(QDialog):
         self.detail.addRow(_label("Application:"), _value(s.app or "unknown"))
         self.detail.addRow(_label("File:"), _value(s.file_summary))
         self.detail.addRow(_label("Imported:"), _value(f"{s.imported_at:%Y-%m-%d %H:%M:%S}"))
+        if self.show_usage:
+            self.detail.addRow(_label("Used by:"), _value(self.usage(s.id)))
         if s.display_offset_note:
             self.detail.addRow(_label("Display:"), _value(s.display_offset_note))
         if s.track_names:
@@ -233,3 +274,50 @@ class SourceInfoDialog(QDialog):
             self.detail.addRow(_label("Tempo:"), _value(tempo))
         if s.warnings:
             self.detail.addRow(_label("Warnings:"), _value("\n".join(f"⚠ {w}" for w in s.warnings)))
+
+
+class SourcesDialog(QDialog):
+    """Every source in the workspace, with the details Source Info shows per track.
+
+    **Solo all source tracks** solos exactly the tracks the selected source feeds and
+    closes the dialog; Close (or Esc) changes nothing.
+    """
+    def __init__(self, ws: Workspace, ctl, parent=None) -> None:
+        super().__init__(parent)
+        self.ctl = ctl
+        self.setModal(True)
+        self.setWindowTitle(f"Sources — {len(ws.sources)} in this session")
+        self.resize(860, 520)
+        self.pane = SourcesPane(ws, list(ws.sources), show_usage=True)
+        self.src_list = self.pane.src_list
+        self.detail_scroll = self.pane.detail_scroll
+        self.detail_host = self.pane.detail_host
+
+        self.buttons = QDialogButtonBox()
+        self.solo_btn = self.buttons.addButton("Solo all source tracks", QDialogButtonBox.ActionRole)
+        self.solo_btn.setToolTip("Solo exactly the tracks this source's clips are on, and close")
+        self.solo_btn.clicked.connect(self._solo)
+        self.close_btn = self.buttons.addButton(QDialogButtonBox.Close)
+        self.close_btn.setDefault(True)
+        self.buttons.rejected.connect(self.reject)
+
+        lay = QVBoxLayout(self)
+        if ws.sources:
+            lay.addWidget(self.pane, 1)
+        else:
+            self.empty_label = QLabel("Nothing imported yet.")
+            self.empty_label.setAlignment(Qt.AlignCenter)
+            lay.addWidget(self.empty_label, 1)
+        lay.addWidget(self.buttons)
+        self.src_list.currentRowChanged.connect(self._update_solo)
+        self._update_solo()
+
+    def _update_solo(self, *_args) -> None:
+        src = self.pane.current_source()
+        self.solo_btn.setEnabled(src is not None and bool(self.pane.source_tracks(src.id)))
+
+    def _solo(self) -> None:
+        src = self.pane.current_source()
+        if src is not None:
+            self.ctl.solo_source_tracks(src.id)
+        self.accept()

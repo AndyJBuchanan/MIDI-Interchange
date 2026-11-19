@@ -94,6 +94,7 @@ class MainWindow(QMainWindow):
         self.timeline.rangeEditRequested.connect(lambda _rid: self.export_panel.focus_range_name())
         self.timeline.externalDragMoved.connect(self._external_drag_moved)
         self.track_panel.trackContextMenuRequested.connect(self.track_menu)
+        self.track_panel.sourcesRequested.connect(self.show_sources)
         self._update_undo_actions()
         self._update_tempo_label()
         self._had_tracks = False
@@ -143,6 +144,10 @@ class MainWindow(QMainWindow):
     def _markers_toggled(self, on: bool) -> None:
         self.settings.setValue("show_markers", on)
         self.timeline.set_show_markers(on)
+
+    def show_sources(self) -> None:
+        from .source_info import SourcesDialog
+        SourcesDialog(self.ctl.ws, self.ctl, self).exec()
 
     def show_about(self) -> None:
         AboutDialog(self).exec()

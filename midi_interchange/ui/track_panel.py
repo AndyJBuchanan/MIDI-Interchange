@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QMouseEvent, QPainter, QPen, QWheelEvent
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QMouseEvent, QPainter, QPen, QWheelEvent
 from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QWidgetAction,
                                QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
@@ -211,8 +211,38 @@ class TrackHeader(QFrame):
         self.name_edit.selectAll()
 
 
+class InfoButton(QToolButton):
+    """A clickable bright white "i" in a circle (opens the session Sources dialog)."""
+    SIZE = 14
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(self.SIZE, self.SIZE)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setAutoRaise(True)
+        self.setToolTip("Sources in this session")
+        self.setAccessibleName("Sources in this session")
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        color = QColor(theme.WHITE)
+        if not self.underMouse():
+            color.setAlpha(225)
+        p.setPen(QPen(color, 1.2))
+        p.setBrush(QColor(255, 255, 255, 40) if self.underMouse() else Qt.NoBrush)
+        r = self.rect().adjusted(1, 1, -1, -1)
+        p.drawEllipse(r)
+        f = QFont(self.font())
+        f.setBold(True)
+        f.setPixelSize(self.SIZE - 4)
+        p.setFont(f)
+        p.drawText(self.rect(), Qt.AlignCenter, "i")
+
+
 class TrackPanel(QWidget):
     trackContextMenuRequested = Signal(str, QPoint)
+    sourcesRequested = Signal()
 
     def __init__(self, ctl: Controller, timeline: Timeline, parent=None) -> None:
         super().__init__(parent)
@@ -222,7 +252,7 @@ class TrackPanel(QWidget):
         self._voffset = 0
         self._drag_tid: str | None = None
         self._drop_index: int | None = None
-        self.setMinimumWidth(170)
+        self.setMinimumWidth(215)       # the title band fits "TRACKS  120/120", the (i) and M/S
         self.setAcceptDrops(False)
 
         # headers live in a container below the title band, which clips them
@@ -231,6 +261,8 @@ class TrackPanel(QWidget):
         self.title = QLabel("TRACKS", self)
         self.title.setStyleSheet(f"color: {theme.TEXT_DIM.name()}; font-weight: 600; letter-spacing: 1px;")
 
+        self.info_btn = InfoButton(self)
+        self.info_btn.clicked.connect(self.sourcesRequested)
         self.clear_m = QToolButton(self)
         self.clear_s = QToolButton(self)
         for button, label, slot, tip in ((self.clear_m, "M", ctl.clear_mutes, "Clear all mutes"),
@@ -293,7 +325,12 @@ class TrackPanel(QWidget):
         self.title.setGeometry(10, 0, w - 70, self.timeline.header_h())
         self.clear_m.setGeometry(w - 2 * CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
         self.clear_s.setGeometry(w - CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
+        m_x = w - 2 * CONTROL_SIZE - CONTROL_GAP
+        info_x = min(10 + self.title.sizeHint().width() + 6, m_x - CONTROL_GAP - InfoButton.SIZE - 2)
+        self.info_btn.setGeometry(info_x, (self.timeline.header_h() - InfoButton.SIZE) // 2,
+                                  InfoButton.SIZE, InfoButton.SIZE)
         self.title.raise_()
+        self.info_btn.raise_()
         self.update()
 
     def resizeEvent(self, e) -> None:
