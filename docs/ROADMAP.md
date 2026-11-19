@@ -2,7 +2,7 @@
 
 All outstanding features and fixes, agreed or not, are listed here and only here. Each feature gets its own plan in [plans/](plans/) and its own branch when it is picked up. When something is finished, remove it from this list; its plan records how it was done.
 
-Updated 2026-11-18.
+Updated 2026-11-19.
 
 ## Agreed, not started
 
@@ -11,6 +11,12 @@ Updated 2026-11-18.
   - **Cubase before 15** (agreed, later): fixtures are in `samples/` (a Cubase 13 file, `argontest003`); older versions are rejected cleanly for now.
   - **Logic** (secondary) and **Reaper, Bitwig, Ableton, FL Studio** (low priority; the user uses only Reason and Cubase). Feasibility and order are in the [desk research](plans/daw-desk-research.md). **Studio One is deferred**; there is no access to it for testing.
   - Each reader keeps the shared rules: read only, never modify the project; report what was skipped; fail cleanly on unreadable files; preserve track and clip mute states.
+
+- **Show controller data on a track** (2026-11-16, agreed 2026-11-19; plan: [controller-display](plans/controller-display.md), to be written): draw a clip's CC, pitch bend or aftertouch data as a line so imported curves and resets can be seen. Display only: controller data stays part of the clip, and nothing about import, export or Simplify changes.
+  - **One global picker** (view controls, on top), listing every controller type found in the union of all tracks and clips. Next to it, an icon toggles between a lane under the notes and an overlay on them.
+  - **Per-track override:** a track can follow the global choice, show nothing, or show its own controller. Only an overriding track is signposted, perhaps by naming the controller beside the channel occupancy in its header.
+  - A track or clip without the picked controller shows nothing. The choice is saved with the session. Default: off.
+  - Later enhancement, not now: several controllers shown at once.
 
 ## Suggested, not agreed
 
@@ -22,7 +28,6 @@ Updated 2026-11-18.
   - Today the workspace uses one whole file's tempo map. Possible: take different files' maps for different sections, for example when files are laid End to End or verse and chorus come from different apps.
   - Related gaps in the current switch: adopting a file's map doesn't shift it to where the file was placed, and a file's map is lost when its last clip is removed, unless it's the current tempo source.
 - **Scroll bar zoom:** drag the ends of the horizontal scroll bar to zoom, as other apps do (studio, 2026-11-10).
-- **Show controller data on a track** (2026-11-16, maybe): draw a clip's CC data (mod wheel, sustain, pitch bend, expression...) as a line over or under its notes, so imported curves and resets can be seen. Which controller to show could be chosen per track, for example from the track's colour box menu, alongside the export channel.
 
 - **"Open With" for DAW project files** (2026-11-16, considering, leaning no): the macOS bundle and the Windows installer register only MIDI extensions (`.mid`, `.midi`, `.smf`), so right-click ▸ Open With and Dock-icon drops don't take `.cpr`, `.reason` or `.dawproject`; dragging them onto the window works. Registering them could put the app in the way of double-clicking a project to open the DAW, so the default is to leave it out. If added, offer it only under "Open With" and never as the default handler. `.kar` and `.rmi` are read by the MIDI reader but not registered either.
 - **Hide muted material temporarily** (2026-11-16, maybe): projects with many muted clips (Reason Blocks, Cubase alternates) are hard to work with, because the muted clips sit over or between the ones that sound. A view toggle, in the toolbar and the View menu like Show Markers, would hide muted clips, and possibly muted tracks too, while it's on. It would only affect display and hit-testing: the clips stay in the workspace and keep their mute state, hidden clips are still skipped on export exactly as muted clips are now, and un-hiding brings them back unchanged. Open questions: whether muted tracks hide as well or only muted clips, whether a hidden clip can be selected by a range or drag, and how to show that something is hidden (a count on the toggle).
