@@ -20,7 +20,7 @@ Read this at the start of every session. The project owner set these rules. Foll
 5. **Commit**, only when the owner says to.
 6. **Push**, only when the owner asks, then open the PR. "Commit" alone doesn't mean push.
 
-When a feature is finished, remove it from the roadmap and set the plan's status to built. Record what the owner observes of a DAW in the plan.
+When a feature is finished, remove it from the roadmap and set the plan's status to built (on the feature branch, so they merge with the code). Record what the owner observes of a DAW in the plan.
 
 ## Instructions and test feedback
 
@@ -43,7 +43,7 @@ Full rules: [docs/RELEASING.md, Branches](docs/RELEASING.md#branches). In short:
 
 - A feature branch, `feature/<name>`, starts from the **current release branch** (`release/X.Y.Z`), never from `main`. Pull the release branch first. A large feature can be split into parts, each on its own branch, `feature/<name>-<part>`. A small fix uses `fix/<name>`, with the same rules.
 - Features merge by **pull request into the release branch**, with a merge commit. Never straight into `main`, and never into a release branch by a plain merge.
-- Plans and other docs (README, roadmap, test checklist, interop notes) go on the release branch.
+- **Where docs go depends on when.** Before the feature branch exists, the roadmap entry and the plan go on the release branch: they're written and agreed there, and the feature branch is made from it. Once the feature branch exists, **that feature's docs go on the feature branch** with the code and merge into the release branch with it: README lines, its test checklist section, DEVELOPMENT.md notes, interop findings, and finally the roadmap removal and the plan's "built" status. The feature's merge carries all of them into the release branch. Docs changed after the feature has merged go on the release branch. Ask the owner when a change affects other features.
 - **Before pushing a feature branch or opening a PR**, run `git log origin/<release>..<release>`. If the release branch holds unpushed commits, tell the owner. Push the release branch first, when asked, so the PR shows only the feature's own commits. Then check the PR on GitHub: its base, its commit list, and that its description mentions only what the PR contains.
 - **Don't switch branches without asking**, even for a small docs fix. Ask which branch the change belongs on. Never switch branches, reset or commit in a folder another session is using: that session's next commit lands on the wrong branch. If a change needs another branch, suggest a separate worktree.
   - **Expected switches**, which need no asking: after a feature is merged, switch to the release branch it merged into and pull. After a release branch is merged into `main`, switch to `main` and pull.
