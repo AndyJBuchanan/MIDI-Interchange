@@ -367,9 +367,6 @@ class MainWindow(QMainWindow):
             mode = "Controller drawn over the notes. Click to draw it in a lane under the notes."
         else:
             mode = "Controller in a lane under the notes. Click to draw it over the notes."
-        if (active and not ctl.controller_overlay
-                and any(self.timeline.track_layout(t).fallback for t in ctl.ws.tracks)):
-            mode += " Lanes too short for a strip draw it over the notes; make the lanes taller."
         if ctl.controller_joined:
             style = "Controller joined with lines. Click to draw it as steps."
         else:

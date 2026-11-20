@@ -70,13 +70,14 @@ def apply_session(window, session: Session):
     ctl.set_trim(s['trim'])
     window.snap_combo.setCurrentIndex(next(i for i, (_, v) in enumerate(SNAP_CHOICES) if v == s['snap']))
     tl.set_lane_height(s['lane_height'])
-    tl.set_zoom(s['zoom'])
-    tl.horizontalScrollBar().setValue(s['horizontal_scroll'])
-    tl.verticalScrollBar().setValue(s['vertical_scroll'])
+    # the controller view first: it sets the row heights the saved scroll offset belongs to
     view = s.get('controller_view', {'show': None, 'overlay': False, 'joined': False})
     ctl.set_controller_show(view['show'])
     ctl.set_controller_overlay(view['overlay'])
     ctl.set_controller_joined(view['joined'])
+    tl.set_zoom(s['zoom'])
+    tl.horizontalScrollBar().setValue(s['horizontal_scroll'])
+    tl.verticalScrollBar().setValue(s['vertical_scroll'])
 
 
 class SessionLifecycle(QObject):

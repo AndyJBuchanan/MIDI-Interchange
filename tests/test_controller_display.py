@@ -7,7 +7,7 @@ from pathlib import Path
 
 import mido
 import pytest
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QDrag
 from PySide6.QtWidgets import QApplication, QFileDialog
 
@@ -279,14 +279,12 @@ def test_buttons_toggle_and_tooltips_follow_the_setting(cw):
     assert not w.ctl.controller_overlay
 
 
-def test_mode_tooltip_says_when_short_lanes_fall_back_to_overlay(cw):
+def test_mode_tooltip_has_no_short_lane_sentence_at_any_height(cw):
     w, pad, lead = cw
     w.ctl.set_controller_show('cc1')
-    assert 'too short' not in w.controller_mode_btn.toolTip()
-    w.timeline.set_lane_height(40)
-    assert 'too short' in w.controller_mode_btn.toolTip()
-    w.timeline.set_lane_height(100)
-    assert 'too short' not in w.controller_mode_btn.toolTip()
+    for h in (28, 40, 100):
+        w.timeline.set_lane_height(h)
+        assert w.controller_mode_btn.toolTip() == 'Controller in a lane under the notes. Click to draw it over the notes.'
 
 
 def test_the_style_setting_reaches_the_painter(cw, monkeypatch):
@@ -480,48 +478,430 @@ def test_colour_box_menu_has_no_controller_entry(cw):
 
 # ---------------------------------------------------------------- lane layout
 
-def test_lane_mode_gives_a_strip_only_to_tracks_that_have_the_controller(cw):
+LANE_HEIGHTS = (28, 52, 68, 220)
+
+
+def strip_px(lane_h):
+    return max(10, round(0.3 * lane_h))
+
+
+def rows(tl):
+    return [tl.row_h(i) for i in range(len(tl.ctl.ws.tracks))]
+
+
+def test_rows_are_equal_while_the_display_is_off(cw):
+    """Existing tests compute positions as header_h + i * lane_h; this keeps that true."""
     w, pad, lead = cw
     tl = w.timeline
-    off = tl.track_layout(pad)
-    assert off.key is None and not off.strip and not off.overlay
-    w.ctl.set_controller_show('cc7')                                  # only Pad has CC7
-    a, b = tl.track_layout(pad), tl.track_layout(lead)
-    assert a.has_data and a.strip and not a.overlay
-    assert not b.has_data and not b.strip and b.note_h == off.note_h  # a track with none keeps its full note area
-    assert a.strip_h == max(10, round(off.note_h * 0.35))
-    assert a.note_top == off.note_top and a.note_h < off.note_h
-    assert a.note_top + a.note_h <= a.strip_top                       # the notes stay above the strip
-    assert a.strip_top + a.strip_h == off.note_top + off.note_h       # carved out of the note area
-    from midi_interchange.ui.timeline import note_rows
-    y_base, row, _h = note_rows(a.note_top, a.note_h, 59, 61)
-    assert y_base >= a.note_top - 1e-9 and y_base + row * 3 <= a.note_top + a.note_h + 1e-9
-
-
-def test_overlay_leaves_the_note_area_unchanged(cw):
-    w, pad, lead = cw
-    tl = w.timeline
-    base = tl.track_layout(pad)
-    w.ctl.set_controller_show('cc7')
-    w.ctl.set_controller_overlay(True)
-    lay = tl.track_layout(pad)
-    assert lay.overlay and not lay.strip and not lay.fallback
-    assert (lay.note_top, lay.note_h) == (base.note_top, base.note_h)
-
-
-def test_short_lanes_fall_back_to_overlay_and_taller_lanes_bring_the_strip_back(cw):
-    w, pad, lead = cw
-    tl = w.timeline
-    w.ctl.set_controller_show('cc7')
-    for h in (28, 40, 52):
+    for h in LANE_HEIGHTS:
         tl.set_lane_height(h)
-        lay = tl.track_layout(pad)
-        assert lay.overlay and lay.fallback and not lay.strip, h
-    tl.set_lane_height(60)                                            # note area 36 px: the strip returns
-    lay = tl.track_layout(pad)
-    assert lay.strip and not lay.fallback
-    tl.set_lane_height(220)
-    assert tl.track_layout(pad).strip
+        for i in range(2):
+            assert tl.row_h(i) == h and tl.row_y(i) == i * h
+            assert tl.lane_top(i) == tl.header_h() + i * h - tl.verticalScrollBar().value()
+            assert tl.lane_at(tl.lane_top(i)) == i
+        w.ctl.set_controller_show('cc7')
+        w.ctl.set_controller_show(None)
+        assert rows(tl) == [h, h]
+    w.ctl.set_controller_show('cc7')
+    w.ctl.set_controller_show(None)
+    w.ctl.set_controller_overlay(True)
+    assert rows(tl) == [tl.lane_h] * 2           # Off with nothing overridden, whatever the mode
+
+
+def test_lane_mode_grows_only_tracks_that_show_and_have_the_controller(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    for h in LANE_HEIGHTS:                                            # no fallback at any height
+        tl.set_lane_height(h)
+        c.set_controller_show('cc7')                                  # only Pad has CC7
+        assert rows(tl) == [h + strip_px(h), h], h
+        c.set_controller_show('cc1')
+        assert rows(tl) == [h + strip_px(h), h], h
+        c.set_controller_show('cc64')                                 # only Lead
+        assert rows(tl) == [h, h + strip_px(h)], h
+        c.set_controller_show(None)
+
+
+def test_overlay_mode_leaves_every_row_at_the_normal_height(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    c.set_controller_show('cc7')
+    c.set_controller_overlay(True)
+    for h in LANE_HEIGHTS:
+        tl.set_lane_height(h)
+        assert rows(tl) == [h, h]
+        assert tl.track_layout(pad).overlay and not tl.track_layout(pad).strip
+    c.set_controller_overlay(False)
+    assert tl.row_h(0) == tl.lane_h + strip_px(tl.lane_h)
+
+
+def test_overrides_decide_the_row_height(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    h = tl.lane_h
+    c.set_controller_show('cc7')
+    c.set_track_controller(pad.id, 'none')                            # to None: normal height
+    assert rows(tl) == [h, h]
+    c.set_track_controller(pad.id, 'cc20')                            # an override to a controller it lacks
+    assert rows(tl) == [h, h]
+    c.set_controller_show(None)                                       # picker Off, one track overrides
+    c.set_track_controller(pad.id, 'pb')
+    assert rows(tl) == [h + strip_px(h), h]
+    c.set_track_controller(lead.id, 'at')
+    assert rows(tl) == [h + strip_px(h)] * 2
+    c.undo()
+    assert rows(tl) == [h + strip_px(h), h]
+
+
+def test_the_note_area_is_identical_with_the_display_off_in_lane_and_in_overlay(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    for h in LANE_HEIGHTS:
+        tl.set_lane_height(h)
+        c.set_controller_show(None)
+        off = tl.track_layout(pad, 5)
+        for key in ('cc7', 'cc64'):                                    # with data and without
+            c.set_controller_show(key)
+            for overlay in (False, True):
+                c.set_controller_overlay(overlay)
+                lay = tl.track_layout(pad, 5)
+                assert (lay.note_top, lay.note_h) == (off.note_top, off.note_h), (h, key, overlay)
+        c.set_controller_overlay(False)
+    c.set_controller_show('cc7')
+    lay = tl.track_layout(pad, 100)
+    assert lay.strip and lay.strip_top == 100 + tl.lane_h and lay.strip_h == strip_px(tl.lane_h)
+    assert not tl.track_layout(lead).strip
+
+
+def test_the_overlay_fallback_is_gone():
+    assert not hasattr(timeline_module, 'STRIP_MIN_AREA') and not hasattr(timeline_module, 'STRIP_GAP')
+    assert 'fallback' not in timeline_module.TrackLayout.__dataclass_fields__
+
+
+def many_tracks(w, n=12):
+    """Pad and Lead plus n more tracks; every third one has CC1 (like Pad)."""
+    w.ctl.new_document()
+    for i in range(n):
+        events = PAD if i % 3 == 0 else LEAD if i % 3 == 1 else [*note(0, 62, 0, BEAT)]
+        import_parts(w.ctl, **{f'T{i}': events})
+    w.resize(1000, 520)
+    QApplication.processEvents()
+    return w.ctl.ws.tracks
+
+
+def test_row_geometry_agrees_across_unequal_rows(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    tracks = many_tracks(w)
+    c.set_controller_show('cc1')                                      # Pad-like tracks only
+    heights = rows(tl)
+    assert len(set(heights)) == 2
+    for scroll in (0, 70, 200):
+        tl.verticalScrollBar().setValue(scroll)
+        for i in range(len(tracks)):
+            top = tl.lane_top(i)
+            if top >= tl.header_h():                                  # rows under the ruler can't be pointed at
+                assert tl.lane_at(top) == i
+            if top + tl.row_h(i) - 1 >= tl.header_h():
+                assert tl.lane_at(top + tl.row_h(i) - 1) == i
+                assert tl.lane_at(top + tl.row_h(i)) in (i + 1, -1)
+        assert tl.lane_top(len(tracks)) == tl.lane_top(len(tracks) - 1) + tl.row_h(len(tracks) - 1)
+    vp = tl.viewport().height()
+    assert tl.verticalScrollBar().maximum() == max(0, tl.header_h() + sum(heights) + 24 - vp)
+    assert tl.content_rows_h() == sum(heights)
+    assert tl.lane_at(tl.lane_top(len(tracks))) == -1
+
+
+def assert_headers_follow_rows(w):
+    tl, panel = w.timeline, w.track_panel
+    QApplication.processEvents()
+    for i, t in enumerate(w.ctl.ws.tracks):
+        g = panel.header(t.id).geometry()
+        assert (g.y(), g.height()) == (tl.row_y(i) - tl.verticalScrollBar().value(), tl.row_h(i)), i
+
+
+def test_headers_follow_rows_after_every_kind_of_change(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    many_tracks(w)
+    steps = [lambda: c.set_controller_show('cc1'),
+             lambda: c.set_controller_overlay(True),
+             lambda: c.set_controller_overlay(False),
+             lambda: c.set_track_controller(c.ws.tracks[1].id, 'cc64'),
+             lambda: c.undo(),
+             lambda: c.redo(),
+             lambda: tl.set_lane_height(46),
+             lambda: tl.set_lane_height(120),
+             lambda: tl.verticalScrollBar().setValue(97),
+             lambda: c.set_controller_show('pb'),
+             lambda: c.remove_track(c.ws.tracks[0].id)]
+    for step in steps:
+        step()
+        assert_headers_follow_rows(w)
+    tl.verticalScrollBar().setValue(tl.verticalScrollBar().maximum())
+    assert_headers_follow_rows(w)
+
+
+def top_track(tl):
+    return tl.ctl.ws.tracks[tl.lane_at(tl.header_h())]
+
+
+def test_the_track_at_the_top_stays_at_the_top_when_heights_change(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    tracks = many_tracks(w)
+    tl.verticalScrollBar().setValue(3 * tl.lane_h + 20)                # track 3 at the top, 20 px into it
+    tid = tracks[3].id
+
+    def at_top():
+        i = tl.lane_at(tl.header_h())
+        return c.ws.tracks[i].id, tl.header_h() - tl.lane_top(i)
+    assert at_top() == (tid, 20)
+    c.set_controller_show('cc1')                                      # tracks 0, 3, 6, 9 grow
+    assert at_top() == (tid, 20) and tl.row_y(3) == tl.row_h(0) + 2 * tl.lane_h
+    c.set_controller_overlay(True)
+    assert at_top() == (tid, 20) and tl.row_y(3) == 3 * tl.lane_h
+    c.set_controller_overlay(False)
+    c.set_track_controller(tracks[0].id, 'none')                       # a track above shrinks
+    assert at_top() == (tid, 20)
+    c.undo()
+    assert at_top() == (tid, 20)
+    c.set_controller_show('pb')
+    assert at_top()[0] == tid
+    c.set_controller_show(None)
+    assert at_top() == (tid, 20) and tl.verticalScrollBar().value() == 3 * tl.lane_h + 20
+    # the offset is clamped to the new height of the top track
+    c.set_controller_show('cc1')
+    tl.verticalScrollBar().setValue(tl.row_y(3) + tl.row_h(3) - 1)
+    c.set_controller_show(None)
+    assert at_top()[0] == tid and at_top()[1] <= tl.lane_h - 1
+
+
+def test_a_lane_height_change_keeps_the_scroll_value(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    many_tracks(w)
+    c.set_controller_show('cc1')
+    tl.verticalScrollBar().setValue(90)
+    tl.set_lane_height(100)
+    assert tl.verticalScrollBar().value() == 90
+
+
+def test_heights_hold_still_during_a_clip_drag_and_update_on_release(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    tracks = many_tracks(w)
+    c.set_controller_show('cc1')
+    src = next(t for t in tracks if 'cc1' in c.track_controllers(t))
+    dst = next(t for t in tracks if 'cc1' not in c.track_controllers(t) and tracks.index(t) > tracks.index(src))
+    before = rows(tl)
+    clip = src.clips[0]
+    tl.begin_drag()
+    tl._drag = {'kind': 'clip', 'cid': clip.id, 'orig_off': clip.start, 'origin': src.copy(), 'copy': False,
+                'grab': F(0), 'checkpointed': False}
+    y = tl.lane_top(tracks.index(dst)) + 3                            # the destination row, by its frozen position
+    tl._drag_clip(100.0, y, False)
+    assert dst.clips and 'cc1' in c.track_controllers(dst)           # the data moved onto the destination
+    assert tl.gesture_active and rows(tl) == before                   # but no row moved under the pointer
+    assert tl.lane_at(y) == tracks.index(dst)
+    assert_headers_follow_rows(w)
+    tl._drag = None
+    tl.end_drag()
+    after = rows(tl)
+    assert after != before and after[tracks.index(dst)] == tl.lane_h + strip_px(tl.lane_h)
+    assert_headers_follow_rows(w)
+
+
+def test_an_external_drag_holds_heights_and_a_new_track_is_the_normal_height(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    c.set_controller_show('cc1')
+    before = rows(tl)
+    tl.begin_drag(external=True)
+    import_parts(c, Extra=PAD)                                        # a track appears mid-gesture
+    during = rows(tl)
+    assert during[:2] == before and during[2] == tl.lane_h
+    tl.end_drag()
+    assert rows(tl)[2] == tl.lane_h + strip_px(tl.lane_h)
+
+
+def test_a_click_that_changes_nothing_leaves_the_scroll_alone(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    many_tracks(w)
+    c.set_controller_show('cc1')
+    tl.verticalScrollBar().setValue(55)
+    tl.begin_drag()
+    tl.end_drag()
+    assert tl.verticalScrollBar().value() == 55
+
+
+def test_drop_placement_and_the_drop_indicator_pick_the_right_row_below_a_tall_row(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    c.set_controller_show('cc64')                                     # Lead is the tall one (row 1); Pad is plain
+    c.set_controller_show('cc1')                                      # now Pad (row 0) is tall, Lead is below it
+    assert tl.row_h(0) > tl.row_h(1)
+    y_lead = tl.lane_top(1) + 4                                       # in the old uniform geometry this is still Pad
+    assert y_lead < tl.header_h() + 2 * tl.lane_h and tl.lane_at(y_lead) == 1
+    vp_pt = QPointF(300, y_lead)
+    win_pt = w.mapFromGlobal(tl.viewport().mapToGlobal(vp_pt.toPoint()))
+    placement, lane = w.drop_placement(QPointF(win_pt), True)
+    assert lane == 1 and placement.target_track_id == lead.id
+    y_in_strip = tl.lane_top(0) + tl.lane_h + 3                       # inside Pad's strip: still Pad
+    assert tl.lane_at(y_in_strip) == 0
+    tl.set_drop_indicator((0, F(1), 'x'))
+    assert not tl.viewport().grab().isNull()
+    panel_pt = w.track_panel.mapTo(w, QPoint(10, tl.lane_top(1) + 4))
+    placement, lane = w.drop_placement(QPointF(panel_pt), True)       # dropped on the header column
+    assert lane == 1 and placement.target_track_id == lead.id
+    tl.set_drop_indicator(None)
+
+
+def test_a_grip_reorder_below_a_tall_row_gives_the_right_index(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    many_tracks(w, 6)
+    c.set_controller_show('cc1')                                      # rows 0 and 3 are tall
+    panel = w.track_panel
+    n = len(c.ws.tracks)
+
+    def global_at(content_y):
+        return panel.mapToGlobal(QPoint(10, tl.header_h() + content_y - panel._voffset))
+    offs = tl._ensure_rows()
+    assert offs[1] - offs[0] > tl.lane_h
+    assert panel._index_at_global(global_at(offs[1] - 3)) == 1       # near the bottom of the tall row 0
+    assert panel._index_at_global(global_at(offs[0] + 3)) == 0
+    mid = offs[0] + (offs[1] - offs[0]) // 2 + 3
+    assert panel._index_at_global(global_at(mid)) == 1               # the nearer boundary of a tall row
+    assert panel._index_at_global(global_at(offs[n] + 500)) == n
+    assert panel._index_at_global(global_at(-50)) == 0
+    for i in range(n + 1):                                            # every boundary maps to itself
+        assert panel._index_at_global(global_at(offs[i])) == i
+    tid = c.ws.tracks[0].id
+    panel._grip_press(tid, global_at(0))
+    panel._grip_move(global_at(offs[4] + 1))
+    assert panel._drop_index == 4
+    ind = panel._indicator().geometry()
+    assert ind.y() == tl.row_y(4) - panel._voffset - 1
+    panel._grip_release(global_at(offs[4] + 1))
+    assert [t.id for t in c.ws.tracks].index(tid) == 3
+
+
+def test_clicks_and_range_toggles_work_in_and_below_a_strip(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    c.set_controller_show('cc1')
+    r = c.add_range(F(0), F(4))
+    x = tl.x_of(1.0)
+    y_strip = tl.lane_top(0) + tl.lane_h + tl.strip_px() // 2
+    hit = tl._hit(QPointF(x + 40, y_strip))
+    assert hit[:2] == ('clip', pad.id)                                # the strip is part of the clip
+    assert tl._hit(QPointF(x + 40, y_strip), Qt.AltModifier)[:2] == ('clip', pad.id)
+    tr = tl.toggle_rect(r, 1)                                         # a lower row: at its new position
+    assert tr.top() == tl.lane_top(1) + 4 and tl.lane_top(1) == tl.header_h() + tl.row_h(0)
+    assert tl._hit(tr.center())[:2] == ('toggle', r.id)
+    assert tl._hit(tr.center())[2] == lead.id
+
+
+def test_the_strip_is_painted_in_the_row_and_the_notes_do_not_move(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    tl.set_zoom(28.0, 0)
+    tl.horizontalScrollBar().setValue(0)
+    tl.verticalScrollBar().setValue(0)
+    for h in (46, 68):
+        tl.set_lane_height(h)
+        c.set_controller_show(None)
+        plain = tl.viewport().grab().toImage()
+        c.set_controller_show('cc7')
+        lane = tl.viewport().grab().toImage()
+        top = tl.header_h()
+        # the notes region of Pad's lane is pixel-identical; only the strip below it differs
+        x0, x1 = int(tl.x_of(0.5)), int(tl.x_of(3.5))
+        for y in range(top + 3, top + h - 4):
+            for x in range(x0, x1, 7):
+                assert plain.pixelColor(x, y) == lane.pixelColor(x, y), (h, x, y)
+        assert any(plain.pixelColor(x, top + h + 4) != lane.pixelColor(x, top + h + 4) for x in range(x0, x1))
+        # Lead's lane moved down by the strip but is otherwise the same
+        shift = tl.strip_px()
+        assert tl.lane_top(1) == top + h + shift
+
+
+def test_painting_visits_only_the_visible_rows_with_200_tracks(cw, monkeypatch):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    c.new_document()
+    c.import_payloads([Payload(f't{i}.mid', smf([conductor(BEAT), track(PAD if i % 5 == 0 else LEAD, f'T{i}')]))
+                       for i in range(200)])
+    QApplication.processEvents()
+    assert len(c.ws.tracks) == 200
+    c.set_controller_show('cc1')
+    calls = []
+    real = tl._paint_track_regions
+    monkeypatch.setattr(tl, '_paint_track_regions', lambda p, t, top, rh, *a: (calls.append(c.ws.tracks.index(t)), real(p, t, top, rh, *a)))
+    for scroll in (0, 5000, tl.verticalScrollBar().maximum()):
+        tl.verticalScrollBar().setValue(scroll)
+        calls.clear()
+        tl.viewport().grab()
+        first, last = tl.lane_at(tl.header_h()), tl.lane_at(tl.viewport().height() - 1)
+        last = last if last >= 0 else 199
+        assert calls and set(calls) >= set(range(first, last + 1))
+        assert len(calls) <= last - first + 2
+    started = time.perf_counter()
+    for _ in range(20):
+        tl._ensure_rows()
+        tl.lane_at(500)
+        tl.row_y(150)
+    assert time.perf_counter() - started < 0.5                         # prefix sums: no loop per call
+
+
+def test_the_session_applies_the_controller_view_before_the_scroll_offset(cw):
+    from midi_interchange.ui import session
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    many_tracks(w)
+    c.set_controller_show('cc1')
+    tl.verticalScrollBar().setValue(2 * tl.row_h(0))
+    saved = session.capture(w)
+    c.set_controller_show(None)
+    tl.verticalScrollBar().setValue(0)
+    session.apply_session(w, saved)
+    assert c.controller_show == 'cc1'
+    assert tl.verticalScrollBar().value() == saved.settings['vertical_scroll']
+    assert_headers_follow_rows(w)
+
+
+def test_the_box_threshold_is_the_row_height(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    tl.set_lane_height(40)                                            # a normal lane under 45 px
+    c.set_controller_show('cc7')
+    QApplication.processEvents()
+    hp, hl = w.track_panel.header(pad.id), w.track_panel.header(lead.id)
+    assert tl.row_h(0) >= 45 > tl.row_h(1)                            # 40 + 12 = 52 for the tall row
+    assert hp.ctl_box.isVisibleTo(hp) and not hl.ctl_box.isVisibleTo(hl)
+    c.set_controller_overlay(True)
+    QApplication.processEvents()
+    assert not hp.ctl_box.isVisibleTo(hp)
+    c.set_controller_overlay(False)
+    tl.set_lane_height(28)                                            # 28 + 10 = 38: still hidden
+    QApplication.processEvents()
+    assert not hp.ctl_box.isVisibleTo(hp)
+
+
+def test_the_box_stays_under_the_delete_button_in_a_tall_row(cw):
+    w, pad, lead = cw
+    tl, c = w.timeline, w.ctl
+    c.set_controller_show('cc7')
+    QApplication.processEvents()
+    h = w.track_panel.header(pad.id)
+    h.layout().activate()
+    assert h.height() == tl.row_h(0) > tl.lane_h
+    box, rm = h.ctl_box.geometry(), h.remove_btn.geometry()
+    assert h.ctl_box.isVisibleTo(h) and box.top() >= rm.bottom() and box.right() == rm.right()
+    assert box.bottom() < tl.lane_h                                   # anchored to the top, not centred in the row
+    assert h.rect().contains(box)
 
 
 # ---------------------------------------------------------------- painting

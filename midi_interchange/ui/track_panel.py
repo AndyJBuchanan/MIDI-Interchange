@@ -1,6 +1,7 @@
 """Left track panel: one header per timeline lane, vertically locked to the timeline."""
 from __future__ import annotations
 
+import bisect
 import sys
 
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
@@ -348,7 +349,7 @@ class TrackPanel(QWidget):
         ctl.tempoChanged.connect(self.rebuild)
         ctl.controllerViewChanged.connect(self.rebuild)
         timeline.verticalOffsetChanged.connect(self._set_offset)
-        timeline.laneHeightChanged.connect(lambda _h: self._layout())
+        timeline.rowsChanged.connect(self._layout)
         timeline.headerHeightChanged.connect(lambda _h: self._layout())
 
     def _set_offset(self, v: int) -> None:
@@ -383,16 +384,16 @@ class TrackPanel(QWidget):
         self._layout()
 
     def _layout(self) -> None:
-        lane_h = self.timeline.lane_h
         w = self.width()
+        tl = self.timeline
         self.lanes.setGeometry(0, self.timeline.header_h(), w, max(self.height() - self.timeline.header_h(), 0))
         for i, t in enumerate(self.ctl.ws.tracks):
             h = self.headers.get(t.id)
             if h is None:
                 continue
-            y = i * lane_h - self._voffset
-            h.setGeometry(0, y, w, lane_h)
-            h.setVisible(y + lane_h > 0 and y < self.lanes.height())
+            y, rh = tl.row_y(i) - self._voffset, tl.row_h(i)
+            h.setGeometry(0, y, w, rh)
+            h.setVisible(y + rh > 0 and y < self.lanes.height())
         self.title.setGeometry(10, 0, w - 70, self.timeline.header_h())
         self.clear_m.setGeometry(w - 2 * CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
         self.clear_s.setGeometry(w - CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
@@ -413,14 +414,14 @@ class TrackPanel(QWidget):
         p = QPainter(self)
         w, h = self.width(), self.height()
         p.fillRect(0, 0, w, h, theme.PANEL_BG)
-        for i, _t in enumerate(self.ctl.ws.tracks):
-            y = self.timeline.header_h() + i * self.timeline.lane_h - self._voffset
-            p.fillRect(0, y + self.timeline.lane_h - 1, w, 1, theme.LANE_SEP)
+        tl = self.timeline
+        for i in tl._visible_rows(tl.header_h(), h):
+            p.fillRect(0, tl.lane_top(i) + tl.row_h(i) - 1, w, 1, theme.LANE_SEP)
         p.fillRect(0, 0, w, self.timeline.header_h(), theme.RULER_BG)
         p.fillRect(0, self.timeline.header_h() - 1, w, 1, theme.LANE_SEP)
         p.fillRect(w - 1, 0, 1, h, theme.LANE_SEP)
         if self._drop_index is not None:
-            y = self.timeline.header_h() + self._drop_index * self.timeline.lane_h - self._voffset
+            y = self.timeline.lane_top(self._drop_index)
             p.setPen(QPen(theme.ACCENT, 2))
             p.drawLine(0, y, w, y)
         p.end()
@@ -437,8 +438,13 @@ class TrackPanel(QWidget):
     # -- drag to reorder --------------------------------------------------------
     def _index_at_global(self, gp: QPoint) -> int:
         y = self.mapFromGlobal(gp).y() + self._voffset - self.timeline.header_h()
-        n = len(self.ctl.ws.tracks)
-        return max(0, min(n, round(y / self.timeline.lane_h)))
+        offs = self.timeline._ensure_rows()
+        i = bisect.bisect_right(offs, y) - 1          # the row under the point; the nearer boundary wins
+        if i < 0:
+            return 0
+        if i >= len(offs) - 1:
+            return len(offs) - 1
+        return i + 1 if y - offs[i] >= offs[i + 1] - y else i
 
     def _grip_press(self, tid: str, gp: QPoint) -> None:
         self._drag_tid = tid
@@ -450,7 +456,7 @@ class TrackPanel(QWidget):
         self._drop_index = self._index_at_global(gp)
         self.update()
         # Draw indicator above child headers.
-        self._indicator().setGeometry(QRect(0, self._drop_index * self.timeline.lane_h
+        self._indicator().setGeometry(QRect(0, self.timeline.row_y(self._drop_index)
                                             - self._voffset - 1, self.width(), 2))
         self._indicator().show()
         self._indicator().raise_()
