@@ -310,6 +310,25 @@ Plan: [session-sources](plans/session-sources.md). Use two or three imports, inc
 - [x] Right-click a track ▸ Source Info… still works exactly as before.
 - [x] No menu or toolbar entry for Sources: the (i) is the only way in.
 
+## 8r. Controller display (`feature/controller-display`)
+
+Plan: [controller-display](plans/controller-display.md). Use a Reason song with mod-wheel and pitch-bend curves and a Cubase project with CC data, if you have them.
+
+- [ ] The toolbar has a **Controller** list after Markers, set to **Off**, and two icon buttons that are greyed while nothing is shown. View ▸ Controller mirrors the list, with "Overlay on Notes" and "Joined Lines" ticks.
+- [ ] The list shows exactly what the imports hold: Pitch Bend, Aftertouch, then CCs by number with names. No bank select, RPN/NRPN or mode messages.
+- [ ] Pick each controller in turn. Curves are drawn as steps and look like the DAW's own lanes. Pitch bend shows a faint centre line.
+- [ ] The first icon button switches every track between a lane under the notes and an overlay on them. The second switches steps and joined lines. Tooltips name the current state.
+- [ ] Each track header has a small box under its ✕. It shows CC1, PB or AT for what the track displays, and is empty when the picker is Off.
+- [ ] Click a track's box: **Follow view (…)**, **None**, then that track's controllers. Choose one: only that track changes, and its box turns red. Undo puts it back, and the picker and buttons don't make undo steps.
+- [ ] A track without the chosen controller shows nothing.
+- [ ] Trim a clip in the middle of a curve: the line starts at the held value at the new edge. Export the clip: that first value matches in the DAW.
+- [ ] A controller that only has data before a clip's trimmed start is still listed and drawn from its carried value.
+- [ ] Make the lanes as short as they go: the strip gives way to the overlay and the box under the ✕ hides. Make them taller and both return.
+- [ ] Zoom fully out on a long, dense song and scroll: it stays responsive.
+- [ ] Quit and reopen: picker, both buttons and overrides come back. Choose a controller, delete the only track holding it: the list keeps it greyed as "(none in workspace)", and undo brings it back.
+- [ ] Export or drag out with the display on and off: the files are the same.
+- [ ] Right-click a colour box: the menu is unchanged, with no controller entry.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.

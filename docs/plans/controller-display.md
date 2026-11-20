@@ -1,6 +1,6 @@
 # Plan: show controller data on a track
 
-Status: **plan for review (2026-11-19); all design questions settled, awaiting the owner's go-ahead to build.** Branch, when built: `feature/controller-display` from `release/0.5.0`.
+Status: **built, awaiting manual test (2026-11-20).** Branch, when built: `feature/controller-display` from `release/0.5.0`.
 
 Draw a clip's controller data (a CC, pitch bend or channel aftertouch) as a line, either in a strip under the notes or over them. You pick one controller for the whole timeline, and a track can override it from a small box in its header.
 
@@ -19,7 +19,7 @@ Controller data travels with the clips but can't be seen today. Before moving MI
   1. **Pitch Bend**
   2. **Aftertouch** (channel aftertouch)
   3. CCs in number order, as number and standard name: "1 Mod Wheel", "7 Volume", "10 Pan", "11 Expression", "64 Sustain". A CC with no standard name shows as "CC 20".
-- The list is the union over all tracks and clips, muted ones included. It counts what each clip shows, so a controller that sits only in a trimmed-away part isn't listed. The list refreshes when tracks change: import, delete, trim, undo and redo.
+- The list is the union over all tracks and clips, muted ones included. It counts what each clip shows. A controller whose data sits only *before* a clip's trimmed start is still listed and drawn, because export carries its last value into the cut and the line starts from that value (as built; agreed 2026-11-20). A controller that exists only *after* a trimmed end isn't listed. The list refreshes when tracks change: import, delete, trim, undo and redo.
 - **Not listed:**
   - **Controllers that aren't curves**, the same set Simplify never touches (`SEQUENCE_CCS` in `core/simplify.py`), so the two features agree: bank select (0, 32), data entry and increment/decrement (6, 38, 96, 97), and RPN/NRPN (98–101).
   - **Channel mode messages, CC 120–127** (`MODE_CCS`). They're commands, not values.
@@ -153,7 +153,7 @@ A new `tests/test_controller_display.py`, using `from test_ui_assembly import ap
   - an untrimmed start has no value before the first event;
   - a trimmed start carries the export's value, checked against `audible_events` for the same clip;
   - nothing past a trimmed end;
-  - a controller only in a trimmed-away part isn't listed.
+  - a controller only before a trimmed start is listed and drawn from the carried value; one only after a trimmed end isn't listed.
 - **Channels:** a two-channel track gives one line per channel; with an export channel set, one merged line.
 - **Picker:**
   - defaults to Off;
@@ -219,3 +219,16 @@ A new `tests/test_controller_display.py`, using `from test_ui_assembly import ap
 3. **The box at short lane heights.** Hidden below about 45 px, where the info line is already clipped. An overridden track still draws its own controller on the timeline. Agreed.
 
 No design questions remain open.
+
+## As built (2026-11-20)
+
+- **Labels:** toolbar label " Controller "; entries "Off", "Pitch Bend", "Aftertouch", "1 Mod Wheel", "CC 20" and so on. A kept choice with no data shows as "7 Volume (none in workspace)", greyed. The View menu has a Controller submenu, then "Overlay on Notes" and "Joined Lines" ticks.
+- **Tooltips:**
+  - Mode: "Controller in a lane under the notes. Click to draw it over the notes." / "Controller drawn over the notes. Click to draw it in a lane under the notes." When lanes are too short for a strip it adds that they draw over the notes.
+  - Style: "Controller drawn as steps. Click to join the points with lines." / "Controller joined with lines. Click to draw it as steps."
+  - With nothing shown, both add "(Nothing shown: pick a controller first.)"
+- **Controller box:** 34 by 16 px, under the ✕, hidden when the lane is under 45 px. Text is CC1, PB, AT, "–" for None, and empty when the track follows an Off picker. Tooltips: "Controller: follows view (1 Mod Wheel)", "Controller: 11 Expression (this track; click to change)", "Controller: none (this track; click to change)". Popup: "Follow view (7 Volume)" or "Follow view (Off)", "None", a separator, then the track's own controllers.
+- **Strip:** 35% of the note area, at least 10 px, with a 2 px gap; overlay fallback when the note area is under 30 px.
+- **Painting test:** the decimated point count is held to at most twice the view width plus 4 (the closing hold and the one-pixel columns at each view edge).
+- **Muted clips** still count towards the list and the lines (the lists use an un-muted copy of the clip, since `visible_msgs` returns nothing for a muted trimmed clip).
+- **Channel lines** are built per channel that has the controller in the clip, equivalent to one line per channel in `Track.channels` but also correct for muted trimmed clips.

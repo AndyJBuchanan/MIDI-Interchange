@@ -43,10 +43,10 @@ Ranges are optional, but they're what make this a palette rather than a file shu
 
 ![The main window, annotated](docs/images/01-window.png)
 
-1. **Toolbar:** New, Open, Save MIDI, Undo/Redo, zoom, the Snap list, the **Markers** button, Clear All Ranges, and About at the far right.
+1. **Toolbar:** New, Open, Save MIDI, Undo/Redo, zoom, the Snap list, the **Markers** button, the **Controller** list with its two icon buttons (see [See controller data](#see-controller-data)), Clear All Ranges, and About at the far right.
 2. **Ruler and info rows:** bar numbers, then tempo and time signature, then markers. The **marker row** appears only when there is a marker to show: it lists the markers of the tracks an export with no ranges would include (so muting a track removes its markers), each in its track's colour. The **Markers** button (also Timing ▸ Show Markers) turns the row off; markers still show in their lanes and are still exported. The button's setting is remembered between runs.
 3. **Range strip:** your ranges, as amber bars. This is where you make and move them.
-4. **Track headers:** colour, **M**ute, **S**olo, name, and a ✕ to remove. Drag ⋮⋮ to reorder.
+4. **Track headers:** colour, **M**ute, **S**olo, name, and a ✕ to remove. Drag ⋮⋮ to reorder. A small box under the ✕ shows which controller the track displays (CC1, PB, AT), red when the track overrides the toolbar choice.
 5. **Lanes:** one per track, showing its clips with their notes, lyrics and text. The timeline is this whole area.
 6. **Bottom panel:** the selected range's name and exact positions, then the export controls: the mode, the **Drag MIDI out** tile and **Save MIDI…**.
 
@@ -135,6 +135,15 @@ The rest of the rules, in one place:
 The **clip menu** (left) has Duplicate, Mute/Unmute Clip, Butt Against Previous Clip, Restore Full Clip (on a trimmed clip), Move Clip to Track (or New Track) and Delete Clip. Its **Track:** submenu, and a right-click on a track header, give the **track menu** (right): Mute/Unmute, Rename, Move Up/Down, **Merge Into** another track, **Save This Track…** (exports just that track, even if it's muted), Source Info… and Remove Track.
 
 Tracks: click a name to rename it, drag ⋮⋮ to reorder, ✕ to remove. File ▸ New (⌘N, also on the toolbar) clears the workspace, and Undo brings it back (see [Returning to your workspace](#returning-to-your-workspace) for what happens if you then quit). **Undo / redo** (⌘Z / ⇧⌘Z) cover everything.
+
+### See controller data
+
+Pick a controller from the toolbar's **Controller** list (also View ▸ Controller) to draw its curve on every track that has it. The list holds every controller found in the session, starting with Pitch Bend and Aftertouch, then CCs by number (1 Mod Wheel, 7 Volume, 11 Expression, 64 Sustain…). Bank select, RPN/NRPN and the channel mode messages aren't listed. **Off** is the default.
+
+- The first icon button draws the curve in a **lane** under the notes, or **over** the notes. The second draws it as **steps** (how Reason and Cubase first import it) or with **joined lines**. Both apply to every track.
+- Click the box under a track's ✕ to give that track its own controller, or none, or **Follow view** again. Overriding tracks show a red box, and the change is one undo step.
+- A clip with none of the chosen controller shows nothing. Trimmed clips start from the value export carries into the cut.
+- This only changes what you see. Your MIDI, and everything you export or drag out, is the same whatever is shown. The choice is remembered with your workspace.
 
 ### Step 3: Mark ranges
 
@@ -233,6 +242,8 @@ An export whose clips all come from one song keeps the song's title in its tempo
 | Choose an export mode | The Export list: whole workspace, keep positions, rebase & concatenate, separate files |
 | Trim silence | Tick Trim leading/trailing silence |
 | Thin controller curves | Tick Simplify controller data |
+| See a controller's curve | **Controller** list on the toolbar (or View ▸ Controller); the icon buttons beside it switch lane / overlay and steps / joined lines |
+| Give one track its own controller | Click the box under its ✕ ▸ Follow view, None, or a controller. Red when it overrides |
 | Export | **Save MIDI…** (⌘S), or drag the **Drag MIDI out** tile into another app or a folder |
 | Start again | File ▸ New (⌘N, also on the toolbar). Export settings are kept; Undo brings your work back until you quit |
 | Return to your work | Just reopen the app: the workspace is restored. Opening files while it runs adds them to the open window. See [Returning to your workspace](#returning-to-your-workspace) |
