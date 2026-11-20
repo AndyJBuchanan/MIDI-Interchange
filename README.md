@@ -140,7 +140,7 @@ Tracks: click a name to rename it, drag ⋮⋮ to reorder, ✕ to remove. File �
 
 Pick a controller from the toolbar's **Controller** list (also View ▸ Controller) to draw its curve on every track that has it. The list holds every controller found in the session, starting with Pitch Bend and Aftertouch, then CCs by number (1 Mod Wheel, 7 Volume, 11 Expression, 64 Sustain…). Bank select, RPN/NRPN and the channel mode messages aren't listed. **Off** is the default.
 
-- The first icon button draws the curve in a **lane** under the notes, or **over** the notes. The second draws it as **steps** (how Reason and Cubase first import it) or with **joined lines**. Both apply to every track.
+- The first icon button draws the curve in a **lane** under the notes, or **over** the notes. A lane makes only the tracks that have the controller taller, by a strip under their notes; overlay leaves every track at the normal height. The second draws it as **steps** (how Reason and Cubase first import it) or with **joined lines**. Both apply to every track.
 - Click the box under a track's ✕ to give that track its own controller, or none, or **Follow view** again. Overriding tracks show a red box, and the change is one undo step.
 - A clip with none of the chosen controller shows nothing. Trimmed clips start from the value export carries into the cut.
 - This only changes what you see. Your MIDI, and everything you export or drag out, is the same whatever is shown. The choice is remembered with your workspace.
