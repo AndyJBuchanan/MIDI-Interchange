@@ -1,6 +1,6 @@
 # Plan: show controller data on a track
 
-Status: **first design built (b626d99, 2026-11-20); change to unequal row heights built 2026-11-20, awaiting manual test.** Branch: `feature/controller-display` from `release/0.5.0`.
+Status: **first design built (b626d99, 2026-11-20); change to unequal row heights built and manually tested (2026-11-21).** Branch: `feature/controller-display` from `release/0.5.0`.
 
 Draw a clip's controller data (a CC, pitch bend or channel aftertouch) as a line, either in a strip under the notes or over them. You pick one controller for the whole timeline, and a track can override it from a small box in its header.
 
