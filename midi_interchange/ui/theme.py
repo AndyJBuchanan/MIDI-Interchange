@@ -40,6 +40,9 @@ DROP_NEW_FILL = QColor(242, 177, 52, 18)
 DROP_LABEL_BG = QColor(20, 21, 24, 225)
 OVERLAP_FILL = QColor(255, 96, 96, 38)
 OVERLAP_EDGE = QColor(255, 110, 110, 200)
+CONTROLLER_STRIP = QColor(0, 0, 0, 55)          # the lane strip under the notes, inside a clip
+CONTROLLER_EDGE = QColor(12, 12, 15, 210)       # thin dark edge under an overlaid line
+CONTROLLER_CENTRE = QColor(255, 255, 255, 38)   # pitch bend's centre line
 
 
 def _luminance(c: QColor) -> float:

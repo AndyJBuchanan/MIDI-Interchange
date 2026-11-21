@@ -5,10 +5,12 @@ import os
 
 from fractions import Fraction
 
-from PySide6.QtCore import QPoint, QPointF, QSettings, Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPainter
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSettings, Qt, QTimer
+from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPainter, QPen, QStandardItemModel
 from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox,
-                               QSizePolicy, QSplitter, QToolBar, QVBoxLayout, QWidget)
+                               QSizePolicy, QSplitter, QToolBar, QToolButton, QVBoxLayout, QWidget)
+
+from ..core import controllers as ctlr
 
 from ..core.import_smf import ImportError_
 from ..core.names import quoted
@@ -38,6 +40,64 @@ class DropOverlay(QWidget):
         p = QPainter(self)
         p.setPen(theme.ACCENT)
         p.drawRect(self.rect().adjusted(1, 1, -2, -2))
+        p.end()
+
+
+class ControllerIconButton(QToolButton):
+    """A checkable button that paints a small icon for its current setting.
+    kind "mode": Lane (unchecked) or Overlay (checked); kind "style": Steps or Joined lines."""
+    W, H = 26, 22
+
+    def __init__(self, kind: str, parent=None) -> None:
+        super().__init__(parent)
+        self.kind = kind
+        self.setCheckable(True)
+        self.setFixedSize(self.W, self.H)
+        self.setAutoRaise(True)
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        on = self.isEnabled()
+        if self.underMouse() and on:
+            p.fillRect(self.rect(), QColor(255, 255, 255, 25))
+        color = QColor(theme.TEXT if on else theme.TEXT_FAINT)
+        dim = QColor(color)
+        dim.setAlpha(110)
+        x0, y0, w, h = 5.0, 4.0, self.W - 10.0, self.H - 8.0
+        pen = QPen(color, 1.4, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin)
+        if self.kind == "mode":
+            notes = ((0.00, 0.30, 0.35), (0.40, 0.05, 0.30), (0.75, 0.20, 0.25))     # x, y, width (fractions)
+            overlay = self.isChecked()
+            area_h = h if overlay else h * 0.55
+            for nx, ny, nw in notes:
+                p.fillRect(QRectF(x0 + nx * w, y0 + ny * area_h, nw * w, 2.6), dim)
+            p.setPen(pen)
+            if overlay:
+                pts = [(0.0, 0.8), (0.3, 0.5), (0.55, 0.65), (0.8, 0.2), (1.0, 0.35)]
+                top, hh = y0, h
+            else:
+                p.fillRect(QRectF(x0, y0 + h * 0.68, w, h * 0.32), QColor(255, 255, 255, 28))
+                pts = [(0.0, 0.9), (0.3, 0.3), (0.6, 0.7), (1.0, 0.2)]
+                top, hh = y0 + h * 0.68, h * 0.32
+            for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+                p.drawLine(QPointF(x0 + ax * w, top + ay * hh), QPointF(x0 + bx * w, top + by * hh))
+        else:
+            p.setPen(pen)
+            pts = [(0.0, 0.85), (0.3, 0.55), (0.6, 0.3), (0.9, 0.05)]
+            if self.isChecked():
+                for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+                    p.drawLine(QPointF(x0 + ax * w, y0 + ay * h), QPointF(x0 + bx * w, y0 + by * h))
+                p.setBrush(color)
+                for ax, ay in pts:
+                    p.drawEllipse(QPointF(x0 + ax * w, y0 + ay * h), 1.5, 1.5)
+            else:
+                prev = pts[0]
+                for ax, ay in pts[1:]:
+                    p.drawLine(QPointF(x0 + prev[0] * w, y0 + prev[1] * h), QPointF(x0 + ax * w, y0 + prev[1] * h))
+                    p.drawLine(QPointF(x0 + ax * w, y0 + prev[1] * h), QPointF(x0 + ax * w, y0 + ay * h))
+                    prev = (ax, ay)
+                p.drawLine(QPointF(x0 + prev[0] * w, y0 + prev[1] * h), QPointF(x0 + w, y0 + prev[1] * h))
         p.end()
 
 
@@ -140,6 +200,12 @@ class MainWindow(QMainWindow):
         self.a_markers.setCheckable(True)
         self.a_markers.setChecked(self.settings.value("show_markers", True, type=bool))
         self.timeline.set_show_markers(self.a_markers.isChecked())
+        self.a_ctl_overlay = self._act("Overlay on Notes", lambda on: self.ctl.set_controller_overlay(bool(on)),
+                                       tip="Draw the controller over the notes instead of in a lane under them")
+        self.a_ctl_overlay.setCheckable(True)
+        self.a_ctl_joined = self._act("Joined Lines", lambda on: self.ctl.set_controller_joined(bool(on)),
+                                      tip="Join the controller's points with lines instead of drawing steps")
+        self.a_ctl_joined.setCheckable(True)
 
     def _markers_toggled(self, on: bool) -> None:
         self.settings.setValue("show_markers", on)
@@ -176,6 +242,21 @@ class MainWindow(QMainWindow):
         self.snap_combo.currentIndexChanged.connect(self._snap_changed)
         tb.addWidget(self.snap_combo)
         tb.addAction(self.a_markers)
+        tb.addWidget(QLabel(" Controller "))
+        self.controller_combo = QComboBox()
+        self.controller_combo.setModel(QStandardItemModel(self.controller_combo))
+        self.controller_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.controller_combo.setMinimumContentsLength(14)
+        self.controller_combo.setToolTip("Show one controller (a CC, pitch bend or aftertouch) as a line on the tracks. "
+                                         "A track can choose its own from the box in its header. Display only.")
+        self.controller_combo.currentIndexChanged.connect(self._controller_picked)
+        tb.addWidget(self.controller_combo)
+        self.controller_mode_btn = ControllerIconButton("mode")
+        self.controller_style_btn = ControllerIconButton("style")
+        self.controller_mode_btn.clicked.connect(lambda on: self.ctl.set_controller_overlay(bool(on)))
+        self.controller_style_btn.clicked.connect(lambda on: self.ctl.set_controller_joined(bool(on)))
+        tb.addWidget(self.controller_mode_btn)
+        tb.addWidget(self.controller_style_btn)
         tb.addSeparator()
         tb.addAction(self.a_clear_ranges)
         spacer = QWidget()
@@ -203,6 +284,15 @@ class MainWindow(QMainWindow):
         m = mb.addMenu("&View")
         for a in (self.a_zoom_in, self.a_zoom_out, self.a_zoom_fit, self.a_taller, self.a_shorter):
             m.addAction(a)
+        m.addSeparator()
+        self.controller_menu = m.addMenu("Controller")
+        m.addAction(self.a_ctl_overlay)
+        m.addAction(self.a_ctl_joined)
+        self._controller_entries: list | None = None
+        self.ctl.tracksChanged.connect(self._refresh_controller_ui)
+        self.ctl.controllerViewChanged.connect(self._refresh_controller_ui)
+        self.timeline.laneHeightChanged.connect(lambda _h: self._refresh_controller_ui())
+        self._refresh_controller_ui()
         m = mb.addMenu("&Timing")
         self.snap_menu = m.addMenu("Snap")
         grp = QActionGroup(self)
@@ -216,6 +306,77 @@ class MainWindow(QMainWindow):
         self.tempo_menu = m.addMenu("Tempo Map")
         self.tempo_menu.aboutToShow.connect(lambda: self._fill_tempo_menu(self.tempo_menu))
         m.addAction(self.a_markers)
+
+    # -- controller display ------------------------------------------------------
+    def _controller_entries_now(self) -> list[tuple[str, str | None, bool]]:
+        """(text, key, enabled): Off, then the controllers in the workspace. A choice with no data
+        left stays, greyed and marked."""
+        keys = self.ctl.workspace_controllers()
+        current = self.ctl.controller_show
+        stale = current is not None and current not in keys
+        if stale:
+            keys = sorted([*keys, current], key=ctlr.sort_key)
+        entries: list[tuple[str, str | None, bool]] = [("Off", None, True)]
+        for k in keys:
+            gone = stale and k == current
+            entries.append((ctlr.label(k) + (" (none in workspace)" if gone else ""), k, not gone))
+        return entries
+
+    def _refresh_controller_ui(self) -> None:
+        ctl = self.ctl
+        entries = self._controller_entries_now()
+        current = ctl.controller_show
+        index = next(i for i, e in enumerate(entries) if e[1] == current)
+        if entries != self._controller_entries:
+            self._controller_entries = entries
+            combo = self.controller_combo
+            combo.blockSignals(True)
+            combo.clear()
+            for text, key, enabled in entries:
+                combo.addItem(text, key)
+                if not enabled:
+                    combo.model().item(combo.count() - 1).setEnabled(False)
+            combo.blockSignals(False)
+            self.controller_menu.clear()
+            group = QActionGroup(self.controller_menu)
+            for text, key, enabled in entries:
+                a = self.controller_menu.addAction(text)
+                a.setCheckable(True)
+                a.setEnabled(enabled)
+                a.setData(key)
+                a.setActionGroup(group)
+                a.triggered.connect(lambda _c=False, k=key: ctl.set_controller_show(k))
+        self.controller_combo.blockSignals(True)
+        self.controller_combo.setCurrentIndex(index)
+        self.controller_combo.blockSignals(False)
+        for a in self.controller_menu.actions():
+            a.setChecked(a.data() == current)
+        self.controller_mode_btn.setChecked(ctl.controller_overlay)
+        self.controller_style_btn.setChecked(ctl.controller_joined)
+        self.a_ctl_overlay.setChecked(ctl.controller_overlay)
+        self.a_ctl_joined.setChecked(ctl.controller_joined)
+        active = ctl.controller_active()
+        for b in (self.controller_mode_btn, self.controller_style_btn):
+            b.setEnabled(active)
+            b.update()
+        self._update_controller_tips(active)
+
+    def _update_controller_tips(self, active: bool) -> None:
+        ctl = self.ctl
+        if ctl.controller_overlay:
+            mode = "Controller drawn over the notes. Click to draw it in a lane under the notes."
+        else:
+            mode = "Controller in a lane under the notes. Click to draw it over the notes."
+        if ctl.controller_joined:
+            style = "Controller joined with lines. Click to draw it as steps."
+        else:
+            style = "Controller drawn as steps. Click to join the points with lines."
+        note = "" if active else "\n(Nothing shown: pick a controller first.)"
+        self.controller_mode_btn.setToolTip(mode + note)
+        self.controller_style_btn.setToolTip(style + note)
+
+    def _controller_picked(self, i: int) -> None:
+        self.ctl.set_controller_show(self.controller_combo.itemData(i))
 
     def _snap_changed(self, i: int) -> None:
         self.ctl.snap = self.snap_combo.itemData(i)

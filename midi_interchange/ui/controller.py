@@ -5,6 +5,7 @@ from fractions import Fraction
 
 from PySide6.QtCore import QObject, Signal
 
+from ..core import controllers as ctlr
 from ..core.document import Track, Workspace
 from ..core.export_smf import (ExportMode, ExportOptions, ExportResult, build_exports, export_name,
                                export_tracks)
@@ -31,6 +32,7 @@ class Controller(QObject):
     tempoChanged = Signal()
     undoStateChanged = Signal()
     exportSettingsChanged = Signal()
+    controllerViewChanged = Signal()   # the picker, mode or style (view state: no undo step)
     message = Signal(str)
 
     UNDO_LIMIT = 200
@@ -43,6 +45,11 @@ class Controller(QObject):
         self.export_mode = ExportMode.REBASE   # default (2026-11-10); with no ranges, export is whole
         self.trim = False
         self.simplify_controllers = False
+        # Controller display (view state, like zoom and Show Markers: never undoable).
+        self.controller_show: str | None = None      # the picker; None is Off
+        self.controller_overlay = False              # Lane (False) or Overlay
+        self.controller_joined = False               # Steps (False) or Joined lines
+        self._clip_controllers: dict[str, tuple] = {}
         self.file_drag_active = False  # transient native drag-out; never checkpoint mid-drag
         self._undo: list[tuple[dict, str | None]] = []
         self._redo: list[tuple[dict, str | None]] = []
@@ -348,6 +355,71 @@ class Controller(QObject):
             self.checkpoint()
             track.export_channel = channel
             self.tracksChanged.emit()
+
+    # -- controller display ----------------------------------------------------
+    def set_track_controller(self, track_id: str, value: str | None) -> None:
+        """A track's own controller: None follows the view, "none" shows nothing, else a key."""
+        if value is not None and value != "none" and not ctlr.is_valid_key(value):
+            raise ValueError("Track controller must be None, 'none' or a controller key")
+        track = self.ws.track(track_id)
+        if track is not None and track.controller != value:
+            self.checkpoint()
+            track.controller = value
+            self.tracksChanged.emit()
+
+    def set_controller_show(self, key: str | None) -> None:
+        if key is not None and not ctlr.is_valid_key(key):
+            raise ValueError("Not a controller key")
+        if key != self.controller_show:
+            self.controller_show = key
+            self.controllerViewChanged.emit()
+
+    def set_controller_overlay(self, on: bool) -> None:
+        if on != self.controller_overlay:
+            self.controller_overlay = on
+            self.controllerViewChanged.emit()
+
+    def set_controller_joined(self, on: bool) -> None:
+        if on != self.controller_joined:
+            self.controller_joined = on
+            self.controllerViewChanged.emit()
+
+    def shown_controller(self, track: Track) -> str | None:
+        """The key a track displays: its own choice, or the view's."""
+        if track.controller is None:
+            return self.controller_show
+        return None if track.controller == "none" else track.controller
+
+    def controller_active(self) -> bool:
+        """Whether anything is shown: the picker is not Off, or a track overrides it with a controller."""
+        return self.controller_show is not None or any(
+            t.controller not in (None, "none") for t in self.ws.tracks)
+
+    def clip_controller_keys(self, clip) -> frozenset[str]:
+        """The keys a clip shows (cached per clip; events are shared and never mutated)."""
+        stamp = (clip.trim_start, clip.trim_end, clip.length)
+        entry = self._clip_controllers.get(clip.id)
+        if entry is None or entry[0] is not clip.events or entry[1] != stamp:
+            entry = self._clip_controllers[clip.id] = (clip.events, stamp, frozenset(ctlr.clip_controllers(clip)))
+        return entry[2]
+
+    def track_controllers(self, track: Track) -> list[str]:
+        """The controllers a track has, in picker order."""
+        found = set()
+        for clip in track.clips:
+            found |= self.clip_controller_keys(clip)
+        return sorted(found, key=ctlr.sort_key)
+
+    def workspace_controllers(self) -> list[str]:
+        """The union over every track and clip (muted ones too), in picker order."""
+        live = {c.id for t in self.ws.tracks for c in t.clips}
+        for cid in list(self._clip_controllers):
+            if cid not in live:
+                del self._clip_controllers[cid]
+        found = set()
+        for t in self.ws.tracks:
+            found.update(self.track_controllers(t))
+        return sorted(found, key=ctlr.sort_key)
 
     def set_track_color(self, track_id: str, color: str) -> None:
         t = self.ws.track(track_id)

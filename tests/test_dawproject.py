@@ -183,6 +183,7 @@ def test_schema_2_upgrades_defaults_and_preserves_exports():
                 del obj['data']['muted']
             if obj.get('kind') == 'Track':
                 del obj['data']['source_transpose']   # schema 5
+                del obj['data']['controller']         # schema 6
             for value in obj.values():
                 remove_new_fields(value)
         elif isinstance(obj, list):

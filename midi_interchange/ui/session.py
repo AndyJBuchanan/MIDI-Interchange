@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+from ..core.controllers import is_valid_key
 from ..core.export_smf import ExportMode
 from ..core.session import Session, SessionStore, boolean, integer, number, require
 from .controller import SNAP_CHOICES
@@ -32,12 +33,15 @@ def capture(window) -> Session:
         'zoom': tl.ppb, 'lane_height': tl.lane_h,
         'horizontal_scroll': tl.horizontalScrollBar().value(),
         'vertical_scroll': tl.verticalScrollBar().value(),
+        'controller_view': {'show': ctl.controller_show, 'overlay': ctl.controller_overlay,
+                            'joined': ctl.controller_joined},
     })
 
 
 def validate_settings(session: Session):
     s = session.settings
-    require(set(s) == {'export_mode', 'trim', 'snap', 'selected_range_id', 'zoom',
+    # controller_view is optional: sessions from before schema 6 have none, and mean the defaults.
+    require(set(s) - {'controller_view'} == {'export_mode', 'trim', 'snap', 'selected_range_id', 'zoom',
                        'lane_height', 'horizontal_scroll', 'vertical_scroll'}, 'Invalid settings fields')
     ExportMode(s['export_mode'])
     boolean(s['trim'])
@@ -48,6 +52,12 @@ def validate_settings(session: Session):
     integer(s['lane_height'], 28, 220)
     integer(s['horizontal_scroll'], 0, 2**31 - 1)
     integer(s['vertical_scroll'], 0, 2**31 - 1)
+    if 'controller_view' in s:
+        view = s['controller_view']
+        require(type(view) is dict and set(view) == {'show', 'overlay', 'joined'}, 'Invalid controller view')
+        require(view['show'] is None or is_valid_key(view['show']), 'Invalid controller choice')
+        boolean(view['overlay'])
+        boolean(view['joined'])
 
 
 def apply_session(window, session: Session):
@@ -60,6 +70,11 @@ def apply_session(window, session: Session):
     ctl.set_trim(s['trim'])
     window.snap_combo.setCurrentIndex(next(i for i, (_, v) in enumerate(SNAP_CHOICES) if v == s['snap']))
     tl.set_lane_height(s['lane_height'])
+    # the controller view first: it sets the row heights the saved scroll offset belongs to
+    view = s.get('controller_view', {'show': None, 'overlay': False, 'joined': False})
+    ctl.set_controller_show(view['show'])
+    ctl.set_controller_overlay(view['overlay'])
+    ctl.set_controller_joined(view['joined'])
     tl.set_zoom(s['zoom'])
     tl.horizontalScrollBar().setValue(s['horizontal_scroll'])
     tl.verticalScrollBar().setValue(s['vertical_scroll'])
@@ -94,7 +109,7 @@ class SessionLifecycle(QObject):
         if self.enabled:
             ctl, tl = window.ctl, window.timeline
             for signal in (ctl.tracksChanged, ctl.rangesChanged, ctl.selectionChanged,
-                           ctl.tempoChanged, ctl.exportSettingsChanged,
+                           ctl.tempoChanged, ctl.exportSettingsChanged, ctl.controllerViewChanged,
                            window.snap_combo.currentIndexChanged, tl.zoomChanged,
                            tl.laneHeightChanged, tl.horizontalScrollBar().valueChanged,
                            tl.verticalScrollBar().valueChanged):
