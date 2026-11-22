@@ -11,6 +11,7 @@ from ..core.export_smf import (ExportMode, ExportOptions, ExportResult, build_ex
                                export_tracks)
 from ..core.import_smf import ImportError_
 from ..interchange.readers import read_payload
+from ..core.mirror import carry_over
 from ..core.names import quoted
 from ..core.placement import Placement, place_imports
 from ..core.ranges import Range
@@ -33,6 +34,7 @@ class Controller(QObject):
     undoStateChanged = Signal()
     exportSettingsChanged = Signal()
     controllerViewChanged = Signal()   # the picker, mode or style (view state: no undo step)
+    mirrorChanged = Signal()           # mirror mode entered or left
     message = Signal(str)
 
     UNDO_LIMIT = 200
@@ -50,12 +52,24 @@ class Controller(QObject):
         self.controller_overlay = False              # Lane (False) or Overlay
         self.controller_joined = False               # Steps (False) or Joined lines
         self._clip_controllers: dict[str, tuple] = {}
+        self.mirroring = False         # mirror mode: every edit is refused (docs/plans/mirror-mode.md)
+        self._file_ms: dict[str, tuple[bool, bool]] = {}   # mirroring: each track's (muted, soloed) as the file last saved them
         self.file_drag_active = False  # transient native drag-out; never checkpoint mid-drag
         self._undo: list[tuple[dict, str | None]] = []
         self._redo: list[tuple[dict, str | None]] = []
 
     # -- undo --------------------------------------------------------------
+    def _blocked(self, what: str = "edit") -> bool:
+        """The mirror-mode backstop: while mirroring, editing methods return without changing anything."""
+        if not self.mirroring:
+            return False
+        self.message.emit("Mirroring: unmirror to import" if what == "import"
+                          else "Mirroring: read-only (unmirror to edit)")
+        return True
+
     def checkpoint(self) -> None:
+        if self.mirroring:
+            return                       # mirror mode makes no undo steps
         self._undo.append((self.ws.snapshot(), self.selected_range_id))
         del self._undo[:-self.UNDO_LIMIT]
         self._redo.clear()
@@ -68,13 +82,13 @@ class Controller(QObject):
         return bool(self._redo)
 
     def undo(self) -> None:
-        if self._undo:
+        if self._undo and not self.mirroring:
             self._redo.append((self.ws.snapshot(), self.selected_range_id))
             snap, sel = self._undo.pop()
             self._apply(snap, sel)
 
     def redo(self) -> None:
-        if self._redo:
+        if self._redo and not self.mirroring:
             self._undo.append((self.ws.snapshot(), self.selected_range_id))
             snap, sel = self._redo.pop()
             self._apply(snap, sel)
@@ -87,6 +101,74 @@ class Controller(QObject):
         self.rangesChanged.emit()
         self.selectionChanged.emit()
         self.undoStateChanged.emit()
+
+    # -- mirror mode ----------------------------------------------------------
+    def enter_mirror(self, result) -> None:
+        """Mirroring owns the workspace: clear it and import the file at bar 1 as new tracks.
+        No undo step (unmirroring starts a clean history)."""
+        self.mirroring = True
+        self._undo.clear()
+        self._redo.clear()
+        self.ws.clear()
+        self.selected_range_id = None
+        notes, _stats = place_imports(self.ws, [result], Placement())
+        self._file_ms = {t.id: (t.muted, t.soloed) for t in self.ws.tracks}
+        self._clip_controllers.clear()
+        self.tracksChanged.emit()
+        self.tempoChanged.emit()
+        self.rangesChanged.emit()
+        self.selectionChanged.emit()
+        self.undoStateChanged.emit()
+        self.mirrorChanged.emit()
+        for n in [*notes, *(f"{result.source.name}: {w}" for w in result.source.warnings)]:
+            self.message.emit(n)
+
+    def apply_mirror(self, result) -> dict:
+        """A re-import of the mirrored file (no undo step). Returns carry_over's counts."""
+        snap, counts, self._file_ms = carry_over(self.ws, result, self._file_ms)
+        self.ws.restore(snap)
+        if not self.ws.range(self.selected_range_id or ""):
+            self.selected_range_id = None
+        self.tracksChanged.emit()
+        self.tempoChanged.emit()
+        self.rangesChanged.emit()
+        self.selectionChanged.emit()
+        return counts
+
+    def leave_mirror(self) -> None:
+        """Unmirror: the workspace stays as it is; undo and redo start clean."""
+        self.mirroring = False
+        self._file_ms = {}
+        self._undo.clear()
+        self._redo.clear()
+        self.undoStateChanged.emit()
+        self.mirrorChanged.emit()
+
+    def ms_differs(self, track_id: str | None = None) -> bool:
+        """While mirroring: does this track (or any track) differ in mute or solo from what the file last saved?"""
+        if not self.mirroring:
+            return False
+        tracks = self.ws.tracks if track_id is None else [t for t in self.ws.tracks if t.id == track_id]
+        return any((t.muted, t.soloed) != self._file_ms.get(t.id, (t.muted, t.soloed)) for t in tracks)
+
+    def ms_note(self, track_id: str) -> str:
+        """For the marker's tooltip: how this track differs from what the file last saved."""
+        def words(muted: bool, soloed: bool) -> str:
+            return "soloed" if soloed else "muted" if muted else "not muted or soloed"
+        t = self.ws.track(track_id)
+        if t is None or track_id not in self._file_ms:
+            return ""
+        return (f"Differs from the file: here it is {words(t.muted, t.soloed)}, the file saved it "
+                f"{words(*self._file_ms[track_id])}.\nRight-click the track and choose Follow File's Mute/Solo to match.")
+
+    def sync_mutes(self, track_id: str | None = None) -> None:
+        """Mirroring: put this track (or every track) back to the file's mute and solo. No undo step."""
+        if not self.ms_differs(track_id):
+            return
+        for t in self.ws.tracks:
+            if track_id in (None, t.id) and t.id in self._file_ms:
+                t.muted, t.soloed = self._file_ms[t.id]
+        self._ms_changed()
 
     def restore_session(self, snap: dict, selection: str | None) -> None:
         """Apply validated persistent state using the same refresh path as undo."""
@@ -106,6 +188,8 @@ class Controller(QObject):
 
     def import_payloads(self, payloads: list[Payload], placement: Placement | None = None) -> list[str]:
         """Import payloads accumulatively. Returns error strings for failures."""
+        if self._blocked("import"):
+            return []
         parsed, errors = self.parse_payloads(payloads)
         if parsed:
             self.checkpoint()
@@ -139,7 +223,7 @@ class Controller(QObject):
 
     def new_document(self) -> None:
         """Clear the workspace (one undoable step). Export settings are kept."""
-        if not (self.ws.tracks or self.ws.ranges or self.ws.sources):
+        if self._blocked() or not (self.ws.tracks or self.ws.ranges or self.ws.sources):
             return
         self.checkpoint()
         self.ws.clear()
@@ -153,6 +237,8 @@ class Controller(QObject):
     # -- clips -------------------------------------------------------------
     def move_clip_live(self, clip_id: str, offset: Fraction, track_id: str | None = None) -> None:
         """Live clip move during a drag (caller checkpoints once at drag start)."""
+        if self._blocked():
+            return
         found = self.ws.find_clip(clip_id)
         if found is None:
             return
@@ -168,6 +254,8 @@ class Controller(QObject):
         The edge snaps like a clip move; Shift bypasses. It stays within the
         clip's full extent and keeps a minimum length of one snap step (one
         tick when the snap is bypassed or off)."""
+        if self._blocked():
+            return
         found = self.ws.find_clip(clip_id)
         if found is None:
             return
@@ -202,6 +290,8 @@ class Controller(QObject):
         return time if self.ws.can_split_clip(clip_id, time, self._min_trim(found[1], bypass_snap)) else None
 
     def split_clip(self, clip_id: str, time: Fraction, bypass_snap: bool = False) -> str | None:
+        if self._blocked():
+            return
         time = self.split_position(clip_id, time, bypass_snap)
         if time is None:
             return None
@@ -212,6 +302,8 @@ class Controller(QObject):
         return right.id
 
     def toggle_clip_mute(self, clip_id: str) -> None:
+        if self._blocked():
+            return
         found = self.ws.find_clip(clip_id)
         if found is None:
             return
@@ -221,6 +313,8 @@ class Controller(QObject):
 
     def restore_clip(self, clip_id: str) -> None:
         """Menu command: put a trimmed clip's edges back to its full extent."""
+        if self._blocked():
+            return
         found = self.ws.find_clip(clip_id)
         if found is None or not found[1].is_trimmed:
             return
@@ -234,6 +328,8 @@ class Controller(QObject):
 
     def move_clip_to_track(self, clip_id: str, track_id: str | None) -> None:
         """Menu command: move to another track, or to a new track when track_id is None."""
+        if self._blocked():
+            return
         found = self.ws.find_clip(clip_id)
         if found is None:
             return
@@ -247,6 +343,8 @@ class Controller(QObject):
         self.tracksChanged.emit()
 
     def delete_clip(self, clip_id: str) -> None:
+        if self._blocked():
+            return
         if self.ws.find_clip(clip_id):
             self.checkpoint()
             self.ws.delete_clip(clip_id)
@@ -254,6 +352,8 @@ class Controller(QObject):
 
     def duplicate_clip(self, clip_id: str, offset: Fraction | None = None,
                        track_id: str | None = None, checkpoint: bool = True) -> str | None:
+        if self._blocked():
+            return
         if not self.ws.find_clip(clip_id):
             return None
         if checkpoint:
@@ -263,6 +363,8 @@ class Controller(QObject):
         return dup.id if dup else None
 
     def snap_clip_to_previous(self, clip_id: str) -> None:
+        if self._blocked():
+            return
         found = self.ws.find_clip(clip_id)
         if found is None:
             return
@@ -277,6 +379,8 @@ class Controller(QObject):
             self.message.emit("No earlier clip on this track to butt against")
 
     def merge_tracks(self, from_id: str, into_id: str) -> None:
+        if self._blocked():
+            return
         if self.ws.track(from_id) and self.ws.track(into_id) and from_id != into_id:
             self.checkpoint()
             self.ws.merge_tracks(from_id, into_id)
@@ -340,6 +444,8 @@ class Controller(QObject):
             self._ms_changed()
 
     def rename_track(self, track_id: str, name: str) -> None:
+        if self._blocked():
+            return
         t = self.ws.track(track_id)
         name = name.strip()
         if t and name and t.name != name:
@@ -348,6 +454,8 @@ class Controller(QObject):
             self.tracksChanged.emit()
 
     def set_export_channel(self, track_id: str, channel: int | None) -> None:
+        if self._blocked():
+            return
         if channel is not None and (type(channel) is not int or not 1 <= channel <= 16):
             raise ValueError("Export channel must be Original channels or 1–16")
         track = self.ws.track(track_id)
@@ -359,6 +467,8 @@ class Controller(QObject):
     # -- controller display ----------------------------------------------------
     def set_track_controller(self, track_id: str, value: str | None) -> None:
         """A track's own controller: None follows the view, "none" shows nothing, else a key."""
+        if self._blocked():
+            return
         if value is not None and value != "none" and not ctlr.is_valid_key(value):
             raise ValueError("Track controller must be None, 'none' or a controller key")
         track = self.ws.track(track_id)
@@ -422,6 +532,8 @@ class Controller(QObject):
         return sorted(found, key=ctlr.sort_key)
 
     def set_track_color(self, track_id: str, color: str) -> None:
+        if self._blocked():
+            return
         t = self.ws.track(track_id)
         if t and t.color != color:
             self.checkpoint()
@@ -429,6 +541,8 @@ class Controller(QObject):
             self.tracksChanged.emit()
 
     def move_track(self, track_id: str, new_index: int) -> None:
+        if self._blocked():
+            return
         t = self.ws.track(track_id)
         if t is None:
             return
@@ -439,6 +553,8 @@ class Controller(QObject):
         self.tracksChanged.emit()
 
     def remove_track(self, track_id: str) -> None:
+        if self._blocked():
+            return
         if self.ws.track(track_id):
             self.checkpoint()
             self.ws.remove_track(track_id)
@@ -449,6 +565,8 @@ class Controller(QObject):
         self.move_clip_live(clip_id, offset)
 
     def adopt_tempo(self, source_id: str) -> None:
+        if self._blocked():
+            return
         if source_id != self.ws.tempo_source_id:
             self.checkpoint()
             self.ws.adopt_tempo_map(source_id)

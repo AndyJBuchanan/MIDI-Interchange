@@ -329,6 +329,27 @@ Plan: [controller-display](plans/controller-display.md). Use a Reason song with 
 - [x] Export or drag out with the display on and off: the files are the same.
 - [x] Right-click a colour box: the menu is unchanged, with no controller entry.
 
+## 8s. Mirror mode (`feature/mirror-mode`)
+
+Plan: [mirror-mode](plans/mirror-mode.md). Use a Cubase project and a Reason song, a small one and a large one of each. Save in the DAW, then wait a couple of seconds; the status bar should name the time of each re-import. Keep the files from this run if something misbehaves.
+
+- [ ] With something in the workspace, **File ▸ Open & Mirror MIDI/Project File…** (and the **Mirror…** toolbar button) pick a Cubase project. The confirmation "Mirroring replaces the workspace." offers Replace Workspace and Cancel; Cancel changes nothing.
+- [ ] After accepting, the mode is obvious at a glance: cyan frame, cyan banner naming the file with an Unmirror button and a last-updated time, tinted track panel and ruler, the lanes unchanged, "Mirroring …" in the title bar, and the toolbar button filled cyan. The tracks are at bar 1.
+- [ ] Make two ranges, lock one with a track left out, and mute a track here. In Cubase move a part and save: within about two seconds the timeline updates, the status bar says "re-imported at HH:MM:SS", and the ranges, the lock and the mute are all still there.
+- [ ] Mute a track here: its M and S buttons get a cyan outline and the tooltip says how it differs from the file. Save in Cubase: the muted track stays muted. Unmute a track the project had muted: it stays unmuted after the next save.
+- [ ] A track you haven't touched follows Cubase: mute it in Cubase, save, and it mutes here.
+- [ ] **File ▸ Sync Mutes to File** is greyed when nothing differs. With a difference it resets every track to what Cubase last saved and the outlines go. A track's right-click ▸ **Follow File's Mute/Solo** does just that track, and is greyed when it already matches. Neither makes an undo step.
+- [ ] Rename a track in Cubase and save: it arrives as a new track and the old one goes (the expected limitation). Add a track and save: it appears, is included in the unlocked range, and has no outline.
+- [ ] **Drag out** a range into Cubase, and **Save MIDI…**. Both work while mirroring and match a normal workspace.
+- [ ] Try to edit: Alt-drag a clip, split a clip, ✕ on a track, rename, move a track, a file drop, Open, New, the tempo menus. All are unavailable or do nothing, and Undo and Redo are greyed. Mute, solo, ranges, zoom and the controller list still work.
+- [ ] Save a large Cubase project and watch: no half-read state appears, and at worst the status bar says it couldn't read it and keeps the last version, then recovers by itself.
+- [ ] Rename the project file in Finder, then rename it back: "not found; waiting", then a re-import.
+- [ ] **Unmirror** (the banner button, and File ▸ Unmirror): the workspace stays, editing works, Undo is empty, and further saves in Cubase change nothing here.
+- [ ] Repeat the save, range and mute checks with a Reason song. Reason writes in place, so also touch the file without changing it (open and save the song without edits): nothing should change here.
+- [ ] Open & Mirror a plain `.mid` file and re-save it from another app: it re-imports.
+- [ ] Quit while mirroring and relaunch: an ordinary workspace with the last import and your ranges, not mirroring.
+- [ ] Leave it mirroring for a long session (an hour of normal work in the DAW, with a dozen saves): the app stays responsive and its memory stays steady.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.

@@ -135,9 +135,15 @@ class TrackHeader(QFrame):
             self.name_edit.setCursorPosition(0)
         self.mute_btn.setChecked(track.muted)
         self.solo_btn.setChecked(track.soloed)
+        # Mirroring: an outline on the M/S block marks a setting that differs from what the file last saved.
+        differs = self.ctl.ms_differs(track.id)
+        outline = f"QToolButton {{ border: 2px solid {theme.MIRROR.name()}; border-radius: 3px; }}" if differs else ""
         self.mute_btn.setStyleSheet(
-            f"QToolButton:checked {{ background: {(theme.DISABLED if track.soloed else theme.ACCENT).name()}; }}")
-        self.solo_btn.setStyleSheet(f"QToolButton:checked {{ background: {theme.SOLO.name()}; }}")
+            outline + f"QToolButton:checked {{ background: {(theme.DISABLED if track.soloed else theme.ACCENT).name()}; }}")
+        self.solo_btn.setStyleSheet(outline + f"QToolButton:checked {{ background: {theme.SOLO.name()}; }}")
+        note = self.ctl.ms_note(track.id) if differs else ""
+        self.mute_btn.setToolTip(("Mute; Alt/Option-click: set all mutes" + ("\n" + note if note else "")))
+        self.solo_btn.setToolTip(("Solo; Alt/Option-click: exclusive solo" + ("\n" + note if note else "")))
         self.color_btn.setText("" if track.export_channel is None else str(track.export_channel))
         channel_label = "Original channels" if track.export_channel is None else f"Export MIDI channel {track.export_channel}"
         self.color_btn.setToolTip(f"Track colour / export MIDI channel\n{channel_label}")
@@ -152,9 +158,18 @@ class TrackHeader(QFrame):
         self.info.setText(self.info.fontMetrics().elidedText(text, Qt.ElideMiddle, max(self.width() - 20 - room, 40)))
         self.info.setToolTip(source_desc + (f"\nOriginal track name: {track.original_name}" if track.original_name else ""))
         self.name_edit.setEnabled(True)
+        self._apply_mirror_state()
         self.name_edit.setStyleSheet(
             "QLineEdit { background: transparent; font-weight: 600; color: %s; }"
             "QLineEdit:focus { background: #1b1c1f; }" % (theme.TEXT.name() if track in self.ctl.ws.global_tracks() else theme.TEXT_DIM.name()))
+
+    def _apply_mirror_state(self) -> None:
+        """While mirroring the header is read-only: no rename, remove, reorder, colour/channel or controller choice.
+        Mute and solo stay."""
+        editable = not self.ctl.mirroring
+        self.name_edit.setReadOnly(not editable)
+        for w in (self.remove_btn, self.grip, self.color_btn, self.ctl_box):
+            w.setEnabled(editable)
 
     def resizeEvent(self, e) -> None:
         super().resizeEvent(e)
@@ -356,6 +371,7 @@ class TrackPanel(QWidget):
         ctl.tracksChanged.connect(self.rebuild)
         ctl.tempoChanged.connect(self.rebuild)
         ctl.controllerViewChanged.connect(self.rebuild)
+        ctl.mirrorChanged.connect(self.rebuild)
         timeline.verticalOffsetChanged.connect(self._set_offset)
         timeline.rowsChanged.connect(self._layout)
         timeline.headerHeightChanged.connect(lambda _h: self._layout())
@@ -421,11 +437,12 @@ class TrackPanel(QWidget):
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
         w, h = self.width(), self.height()
-        p.fillRect(0, 0, w, h, theme.PANEL_BG)
+        mirror = self.ctl.mirroring
+        p.fillRect(0, 0, w, h, theme.PANEL_BG_MIRROR if mirror else theme.PANEL_BG)
         tl = self.timeline
         for i in tl._visible_rows(tl.header_h(), h):
             p.fillRect(0, tl.lane_top(i) + tl.row_h(i) - 1, w, 1, theme.LANE_SEP)
-        p.fillRect(0, 0, w, self.timeline.header_h(), theme.RULER_BG)
+        p.fillRect(0, 0, w, self.timeline.header_h(), theme.RULER_BG_MIRROR if mirror else theme.RULER_BG)
         p.fillRect(0, self.timeline.header_h() - 1, w, 1, theme.LANE_SEP)
         p.fillRect(w - 1, 0, 1, h, theme.LANE_SEP)
         if self._drop_index is not None:

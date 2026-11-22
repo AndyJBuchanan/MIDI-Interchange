@@ -317,9 +317,9 @@ Notes:
 
 ```
 main.py                        entry point; macOS FileOpen handling; CLI paths
-midi_interchange/core/         pure Python model, timing, SMF import/export (no Qt imports)
+midi_interchange/core/         pure Python model, timing, SMF import/export (no Qt imports); mirror.py is mirror mode's carry-over
 midi_interchange/interchange/  drag-in payload extraction, drag-out temp files
-midi_interchange/ui/           PySide6 controller, timeline, track panel, export panel, theme
+midi_interchange/ui/           PySide6 controller, timeline, track panel, export panel, theme; mirror.py is the file watcher
 tests/                         pytest suite (helpers.py builds synthetic SMFs)
 tools/make_demo_midi.py        regenerates samples/
 scripts/                       build scripts; installer.iss (Windows installer); entitlements.plist; signing.env.example (copy to git-ignored signing.local.env)
@@ -332,6 +332,14 @@ docs/                          brief, design notes, this guide, RELEASING.md, re
 - Keep `midi_interchange/core` free of Qt so it can be tested without a GUI.
 - Widgets change the workspace only through `ui/controller.py`. Call `checkpoint()` before a change you want to be undoable.
 - Round-trip and boundary tests, where import and export regression tests usually go, are in `tests/test_roundtrip.py` and `tests/test_export.py`.
+- **Mirror mode** ([plan](plans/mirror-mode.md)):
+  - The watch polls the file (every 250 ms), not `QFileSystemWatcher`: Cubase saves to a temp file and renames it over the project, which loses a file watch, and Reason writes in place and sometimes only touches the modification time. A change is read after the file has been still for 0.5 s; a read that fails is retried every 2 s, three times; the file counts as missing after 3 s. The evidence for these numbers is in the plan's step 0 results.
+  - A read runs on a worker thread, and its result is applied from `MirrorWatcher.poll()` on the main thread. A generation counter drops a result that a newer change has made stale, and a content hash skips a save that changed nothing.
+  - `Controller._blocked()` is the one place that refuses edits while `mirroring`; every editing method calls it. `checkpoint()`, undo and redo do nothing in the mode.
+  - `core/mirror.carry_over` builds the snapshot for a re-import: tracks matched by `placement.assign_tracks` keep their ids. The controller keeps each track's mute and solo as the file last saved them, so it can tell the owner's settings from the file's.
+  - `theme.apply(app, mirror=True)` tints the chrome app-wide, so a test that mirrors must restore the application palette afterwards. It calls `setStyle("Fusion")` only when the style isn't already Fusion, because setting it every time is very slow.
+  - Tests use an injected clock and an inline or manual executor, never real waits. `QMenu.exec` can't be monkeypatched in PySide6: subclass `QMenu` and patch `main_window.QMenu`.
+  - Anything that installs an application-wide event filter must remove it when it is hidden or closed: every event passes through every installed filter, and leaked ones once made the test suite take 11 minutes instead of 40 seconds (`Timeline` does this in `showEvent` and `hideEvent`).
 - Record decisions or changes of direction in `docs/DESIGN_NOTES.md`. Don't edit `docs/DESIGN_BRIEF.md`.
 - Record DAW interop results in the README checklist. Only tick a box once that drag has actually been tested.
 - A feature's plan links to its section of [TEST_CHECKLIST.md](TEST_CHECKLIST.md) (see CLAUDE.md, step 4) and doesn't keep its own copy of the checklist.

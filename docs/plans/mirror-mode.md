@@ -1,6 +1,6 @@
 # Plan: mirror mode, watching one file
 
-Status: **plan agreed (2026-11-22); step 0 save logs are in; settle time agreed (0.5 s). Ready to build.** Branch, when built: `feature/mirror-mode` from `release/0.5.0`.
+Status: **built on `feature/mirror-mode` (2026-11-22); awaiting the owner's manual test (TEST_CHECKLIST 8s).** Branch: `feature/mirror-mode` from `release/0.5.0`.
 
 A separate mode in which the app watches one MIDI or project file and re-imports it every time it's saved. You keep working in Cubase or Reason; whatever you last saved is on the timeline, ready to drag out.
 
@@ -410,7 +410,7 @@ A new `tests/test_mirror_mode.py`, using `from test_ui_assembly import app, win`
 All the recommendations were agreed:
 
 1. **Entering over a non-empty workspace:** ask first, then replace it.
-2. **Mute and solo across saves:** a track muted or soloed in the app keeps that setting until unmirror; other tracks follow what the DAW saved.
+2. **Mute and solo across saves:** superseded by the refinement below (2026-11-22, after the build). Originally: a track muted or soloed in the app keeps that setting until unmirror; other tracks follow what the DAW saved.
 3. **Renamed tracks in the DAW:** arrive as new tracks for now. Reordering is harmless.
 4. **File moved or deleted:** keep the last import and wait at the same path, showing "not found; waiting". Moves aren't followed.
 5. **Unmirror:** no confirmation.
@@ -418,3 +418,17 @@ All the recommendations were agreed:
 7. **Settle time:** 0.5 s after the last change, polling every 250 ms (agreed after step 0).
 
 **Step 0 is done** (results above). Settle time agreed 2026-11-22: **0.5 s** after the last change, polling every 250 ms, so a save shows up in about 0.75 to 1.5 s.
+
+## Refinement: remembering the file's mute and solo, and syncing (agreed 2026-11-22, after the build)
+
+The owner confirmed the build's other small choices and asked for this change to decision 2.
+
+- **The app remembers each track's mute and solo as the file last saved them** (kept by the controller, per track id; not part of the document or the session; cleared on unmirror). It is taken when mirroring starts and at every re-import.
+- **A track's setting is the owner's when it differs from that remembered state.** On a re-import a track the owner changed keeps their setting; any other track follows the new file. So unmuting a track the file had muted is kept, where the first build re-muted it at the next save.
+- **New tracks** take the file's state and are never marked.
+- **Sync commands** (no undo steps, like every change while mirroring):
+  - `File ▸ Sync Mutes to File` resets every track to the file's remembered state. Greyed when not mirroring or when nothing differs.
+  - `Follow File's Mute/Solo` in the track's right-click menu (the header menu, which the M/S buttons pass through) resets just that track. Greyed when it already matches.
+- **Marker:** a track that differs gets an outline in the mirror cyan on its M/S block, with a tooltip saying how it differs ("muted here, not in the file"). The owner asked for a small marker; its look is checked on a render before it is called done.
+- **Tests:** an unmuted track stays unmuted across a save; a track you didn't touch follows the file; sync all and sync one; the marker and tooltip; a new track is unmarked; unmirror forgets the remembered state.
+
