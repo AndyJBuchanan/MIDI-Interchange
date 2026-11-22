@@ -5,8 +5,9 @@ research CLI; findings and evidence are in docs/plans/reason-import.md.
 Input files are only read.
 
 Container ("X15_FILE"): a small paged store. Big-endian throughout.
-  header  'X15_FILE' | u32 page size (0x40000) | u32 0x24 | u64 a
-          | u64 index hint | 5 x u32 (not decoded)
+  header  'X15_FILE' | u32 page size (0x40000) | u32 0x24
+          | two 18-byte slots (offsets 16 and 34), each: u64 generation
+            | u64 index page | u16 CRC-16/XMODEM of those 16 bytes
   pages   start at byte 52; unused page bytes are 0xFE.
   index   a page starting with 8 x 0xFF | u32 count | count entries of
           (u32 stream id | u64 byte size | u64 page count | u64 pages...
@@ -15,11 +16,13 @@ Stream 1 is the song: an IFF 'FORM' 'X15S' chunk followed by a 'Hash' chunk
 whose last 32 bytes are the SHA-256 of the whole FORM chunk. Other streams
 hold embedded samples.
 
-A save writes a new song stream and a new index to free pages; the old ones
+A save writes a new song stream and a new index to free pages (lowest free
+pages first, so successive saves alternate between two page sets); the old ones
 stay until their pages are reused, so a file can hold two complete,
-hash-verified songs. The newest is taken to be the one indexed on the highest
-page (see current_song). The header's u64 at offset 24 names one of the
-index pages, but not reliably the newest.
+hash-verified songs. Each save also writes the next generation number into the
+header slot it is not using: the slot with the higher generation names the
+current save's index page (see current_song and
+docs/formats/REASON_FILE_FORMAT.md).
 
 Song FORM: CAT WWWI (metadata) | CAT ApVC | FORM REMB | BODY | ...
 BODY: a 128-byte header whose first six bytes name the format generation,
@@ -56,20 +59,50 @@ class ReasonFormatError(ValueError):
 
 # ---------------------------------------------------------------- container
 
+SLOT_OFFSETS = (16, 34)
+
+
+def crc16_xmodem(b: bytes) -> int:
+    crc = 0
+    for x in b:
+        crc ^= x << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
+    return crc
+
+
+@dataclass
+class Slot:
+    generation: int
+    index_page: int
+    valid: bool          # the slot's CRC-16 matches its 16 bytes
+
+
 @dataclass
 class Header:
     page_size: int
-    a: int
-    index_hint: int      # u64 at offset 24; an index page, not reliably the newest
+    slots: tuple[Slot, ...]
+
+    @property
+    def a(self) -> int:              # slot 0's generation (the u64 at offset 16)
+        return self.slots[0].generation
+
+    @property
+    def index_hint(self) -> int:     # slot 0's index page (the u64 at offset 24): NOT the current save
+        return self.slots[0].index_page
 
 
 def read_header(data: bytes) -> Header:
     if data[:8] != MAGIC or len(data) < HEADER_SIZE:
         raise ReasonFormatError('not a Reason song file (no X15_FILE header)')
-    page_size, _, a, hint = struct.unpack('>IIQQ', data[8:32])
+    page_size, _ = struct.unpack('>II', data[8:16])
     if page_size <= 0 or page_size & (page_size - 1):
         raise ReasonFormatError(f'unexpected page size {page_size}')
-    return Header(page_size, a, hint)
+    slots = []
+    for off in SLOT_OFFSETS:
+        generation, index_page, check = struct.unpack('>QQH', data[off:off + 18])
+        slots.append(Slot(generation, index_page, crc16_xmodem(data[off:off + 16]) == check))
+    return Header(page_size, tuple(slots))
 
 
 def page_count(data: bytes, h: Header) -> int:
@@ -147,19 +180,34 @@ def verified_songs(data: bytes, h: Header | None = None) -> list[SongCopy]:
 def current_song(data: bytes) -> tuple[SongCopy, list[str]]:
     """The current save's song stream, and notes about how it was chosen.
 
-    Rule (provisional): of the hash-verified copies, the one whose index is
-    on the highest page. It holds for every two-copy file whose newer save is
-    known (the r-series against their MIDI exports, a folders/no-folders pair,
-    files mixing an older Reason's copy with a 13/14 copy). The header's index
-    pointer does not decide it: it names the older copy in some files and the
-    newer in others."""
+    The header's two slots each hold a generation and an index page with a
+    CRC-16; each save writes the next generation into the slot it is not
+    using, so the valid slot with the highest generation names the current
+    save. If that slot names no hash-verified copy (a damaged or unfinished
+    save), the next-highest slot is tried, then, failing that, the verified
+    copy whose index is on the highest page. A file with one verified copy
+    just uses it.
+
+    Evidence: docs/formats/REASON_FILE_FORMAT.md. Not yet confirmed: that
+    Reason itself picks this way, and what it does when the newer slot is damaged."""
     h = read_header(data)
     copies = verified_songs(data, h)
     if not copies:
         raise ReasonFormatError('no intact song found in this file')
+    if len(copies) == 1:
+        return copies[0], []
+    by_page = {c.index_page: c for c in copies}
+    ranked = sorted((sl for sl in h.slots if sl.valid), key=lambda sl: sl.generation, reverse=True)
+    for rank, sl in enumerate(ranked):
+        if sl.index_page in by_page:
+            note = (f'{len(copies)} saved copies; using the one the header names as current '
+                    f'(generation {sl.generation}, index page {sl.index_page})')
+            if rank:
+                note += '; the newest header slot names no intact copy'
+            return by_page[sl.index_page], [note]
     pick = max(copies, key=lambda c: c.index_page)
-    notes = [] if len(copies) == 1 else [f'{len(copies)} saved copies; using the one indexed on page {pick.index_page}']
-    return pick, notes
+    return pick, [f'{len(copies)} saved copies; the header names none of them, so using the one indexed on '
+                  f'page {pick.index_page}']
 
 
 def unverified_song(data: bytes) -> Song | None:
