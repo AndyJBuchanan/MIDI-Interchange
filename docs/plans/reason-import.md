@@ -97,13 +97,25 @@ velocity, length). The rules are in `played_notes()`. Every Reason 13 and
   contiguous.
 - The song stream is `FORM X15S` + `Hash`; **the Hash is SHA-256 of the FORM
   chunk**, so stale or partly overwritten copies are detected exactly.
-- A save writes a new song and index to free pages; the previous ones survive
-  until reused. **Many files hold two verified songs.** Rule adopted: the
-  newest is the verified copy whose index is on the **highest page**. It fits
-  every case with known order (10 two-copy r-files checked against exports,
-  a folders/no-folders pair, and the files mixing an older Reason's copy with
-  a 13/14 copy). The header pointer named the older copy in some files and
-  the newer in others, so it is not used. *To confirm (question 4 below).*
+- A save writes a new song and index to free pages (lowest free pages first, so
+  successive saves alternate between two page sets); the previous ones survive
+  until reused. **Many files hold two verified songs.**
+- **Which copy is current (corrected 2026-11-22).** The first rule adopted here,
+  "the verified copy whose index is on the highest page", was provisional and is
+  **wrong from the third save of a file onward**: it only held for the older
+  fixtures because a second save lands on the higher pages. The file says which
+  copy is current: the header holds two 18-byte slots (offsets 16 and 34), each a
+  u64 generation, a u64 index page and a u16 CRC-16/XMODEM of those 16 bytes; each
+  save writes the next generation into the slot it isn't using, and the slot with
+  the higher generation names the current copy's index page. Found from the owner's
+  controlled saves in Reason (the Aug01 file, bar 10, 12, 14, 16: the newest copy
+  alternated between the pages-1-5 set (index 6) and the pages-0,7-10 set (index
+  11)); every slot in the 104 fixtures checked has a valid CRC and the higher slot
+  names an intact copy in all 36 two-copy files. Full evidence:
+  [REASON_FILE_FORMAT.md](../formats/REASON_FILE_FORMAT.md), section 7. Still
+  unconfirmed: that Reason itself reads the generations, and what it does when the
+  newer slot is damaged (experiments in section 7.6). The reader falls back to the
+  next slot, then to the highest page, and says so in its notes.
 - Note: an early pass took the last copy in the file and wrongly suggested the
   r-saves lagged by a step. They did not; the fixtures are as described.
 
