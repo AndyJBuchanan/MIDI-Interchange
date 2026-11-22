@@ -5,7 +5,7 @@ import bisect
 import sys
 
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QMouseEvent, QPainter, QPen, QWheelEvent
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QMouseEvent, QPainter, QPen, QWheelEvent
 from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QWidgetAction,
                                QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
@@ -323,7 +323,6 @@ class TrackPanel(QWidget):
         self._voffset = 0
         self._drag_tid: str | None = None
         self._drop_index: int | None = None
-        self.setMinimumWidth(215)       # the title band fits "TRACKS  120/120", the (i) and M/S
         self.setAcceptDrops(False)
 
         # headers live in a container below the title band, which clips them
@@ -331,6 +330,15 @@ class TrackPanel(QWidget):
 
         self.title = QLabel("TRACKS", self)
         self.title.setStyleSheet(f"color: {theme.TEXT_DIM.name()}; font-weight: 600; letter-spacing: 1px;")
+
+        # Measured rather than a fixed guess: text metrics (bold weight, widest
+        # count "120/120") vary enough between platform font renderers that a
+        # single hardcoded width fit on one OS clipped the title on another.
+        title_font = QFont(self.title.font())
+        title_font.setBold(True)
+        widest_title = QFontMetrics(title_font).horizontalAdvance("TRACKS  120/120")
+        self.setMinimumWidth(10 + widest_title + 6 + CONTROL_GAP + InfoButton.SIZE + 2
+                              + 2 * CONTROL_SIZE + CONTROL_GAP + 10)
 
         self.info_btn = InfoButton(self)
         self.info_btn.clicked.connect(self.sourcesRequested)

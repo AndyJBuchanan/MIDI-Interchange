@@ -22,7 +22,13 @@ def app():
 def win(app):
     from midi_interchange.ui.main_window import MainWindow
     w = MainWindow()
-    w.resize(1200, 700)
+    # Requesting exactly (or below) the window's real layout-driven minimum
+    # width means the resize is a no-op from Qt's perspective: no resize
+    # event is delivered, so the toolbar never lays out its actions and
+    # leaves them at their unlaid-out default geometry. Stay safely above
+    # that minimum (font metrics vary by platform) so a real resize happens.
+    min_size = w.minimumSizeHint()
+    w.resize(max(1200, min_size.width() + 300), max(700, min_size.height() + 100))
     w.show()
     QTest.qWaitForWindowExposed(w)
     yield w

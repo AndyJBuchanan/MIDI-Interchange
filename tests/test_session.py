@@ -293,7 +293,7 @@ def window(app, tmp_path):
     QApplication.processEvents()
 
 
-def pump_until(predicate, timeout=5):
+def pump_until(predicate, timeout=15):
     deadline = time.monotonic() + timeout
     while not predicate():
         QApplication.processEvents()
@@ -328,7 +328,11 @@ def lifecycle(window, tmp_path):
 
 
 def finish_write(manager):
-    pump_until(lambda: manager._future is not None and manager._future.done())
+    # On this machine, CrowdStrike Falcon (a kernel-level file-I/O filter) can
+    # stall an individual save's fsync/replace well past the default pump
+    # timeout during a long full-suite run; it is not a hang, just slow, so
+    # give it more room here than other waits get.
+    pump_until(lambda: manager._future is not None and manager._future.done(), timeout=30)
     manager.tick()
 
 
