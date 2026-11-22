@@ -27,7 +27,9 @@ def load(path: str) -> bytes:
 def cmd_copies(path: str) -> None:
     data = load(path)
     h = rf.read_header(data)
-    print(f'pages {rf.page_count(data, h)} x {h.page_size}; header a={h.a} index_hint={h.index_hint}')
+    print(f'pages {rf.page_count(data, h)} x {h.page_size}')
+    for i, sl in enumerate(h.slots):
+        print(f'  header slot {i}: generation {sl.generation}, index page {sl.index_page}, crc {"ok" if sl.valid else "BAD"}')
     for n in range(rf.page_count(data, h)):
         if rf.page(data, h, n)[:8] != rf.INDEX_MARK:
             continue

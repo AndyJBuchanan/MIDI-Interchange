@@ -83,8 +83,15 @@ def song_stream(*, generation=b'RS1300', notes=((15360, 60, 100, 15360),), clip=
     return form + chunk(b'Hash', rec(1, hashlib.sha256(form).digest()))
 
 
-def container(copies: dict[int, bytes], pages: int, hint: int = 0) -> bytes:
-    """copies: {index page: song stream}; each stream goes on the pages just before its index."""
+def slot_bytes(generation: int, index_page: int, valid: bool = True) -> bytes:
+    body = struct.pack('>QQ', generation, index_page)
+    return body + struct.pack('>H', rf.crc16_xmodem(body) if valid else (rf.crc16_xmodem(body) ^ 0x1234))
+
+
+def container(copies: dict[int, bytes], pages: int, hint: int = 0, slots=None) -> bytes:
+    """copies: {index page: song stream}; each stream goes on the pages just before its index.
+    slots: [(generation, index page) or (generation, index page, False for a bad CRC)] x 2 for the header;
+    without them the header slots are not valid, as in the older synthetic files."""
     out = [b'\xfe' * PAGE for _ in range(pages)]
     for idx, stream in copies.items():
         n = -(-len(stream) // PAGE)
@@ -96,6 +103,9 @@ def container(copies: dict[int, bytes], pages: int, hint: int = 0) -> bytes:
         page = rf.INDEX_MARK + struct.pack('>I', 1) + entry + struct.pack('>I', 0xB0BAFE77)
         out[idx] = page + b'\xfe' * (PAGE - len(page))
     head = rf.MAGIC + struct.pack('>IIQQ', PAGE, 0x24, 2, hint) + bytes(20)
+    if slots is not None:
+        head = rf.MAGIC + struct.pack('>II', PAGE, 0x24) + b''.join(slot_bytes(*sl) for sl in slots)
+        assert len(head) == rf.HEADER_SIZE
     return head + b''.join(out)
 
 
@@ -128,7 +138,7 @@ def test_song_decodes_tracks_lanes_clips_and_metadata():
     assert [(n.pos, n.pitch) for n in c.notes] == [(15360, 60)]
 
 
-def test_newest_copy_is_highest_verified_index_page_and_bad_hash_is_ignored():
+def test_without_a_valid_header_slot_the_newest_copy_is_the_highest_verified_index_page_and_bad_hash_is_ignored():
     old = song_stream(notes=((0, 60, 100, 15360),))
     new = song_stream(notes=((0, 62, 100, 15360),))
     for hint in (4, 9):                       # the header hint does not decide it
@@ -138,6 +148,75 @@ def test_newest_copy_is_highest_verified_index_page_and_bad_hash_is_ignored():
     broken[200] ^= 0xFF                        # corrupt the newer copy: its hash fails
     song, notes = rf.open_song(container({4: old, 9: bytes(broken)}, 10))
     assert rf.tracks(song)[0].lanes[0].clips[0].notes[0].pitch == 60 and notes == []
+
+
+def pitch_of(data):
+    song, notes = rf.open_song(data)
+    return rf.tracks(song)[0].lanes[0].clips[0].notes[0].pitch, notes
+
+
+def test_the_slot_with_the_higher_generation_names_the_current_copy_even_on_a_lower_page():
+    """Saves alternate between two page sets, so every other save lands on the lower pages."""
+    old = song_stream(notes=((0, 60, 100, 15360),))
+    new = song_stream(notes=((0, 62, 100, 15360),))
+    for slots in ([(8, 4), (7, 9)], [(7, 9), (8, 4)]):            # slot order does not matter
+        pitch, notes = pitch_of(container({9: old, 4: new}, 10, slots=slots))
+        assert pitch == 62
+        assert 'generation 8' in notes[0] and 'index page 4' in notes[0] and 'newest header slot' not in notes[0]
+    pitch, _ = pitch_of(container({4: old, 9: new}, 10, slots=[(2, 4), (3, 9)]))       # and on the higher pages
+    assert pitch == 62
+
+
+def test_a_run_of_saves_alternating_between_two_page_sets_always_reads_the_newest():
+    low, high = 4, 9
+    streams = [song_stream(notes=((0, 60 + n, 100, 15360),)) for n in range(6)]
+    for n in range(1, 6):                                          # save n is the newest; save n-1 is the older copy
+        page_new, page_old = (low, high) if n % 2 == 0 else (high, low)
+        data = container({page_new: streams[n], page_old: streams[n - 1]}, 10,
+                         slots=[(n + 1, page_new), (n, page_old)] if n % 2 == 0 else [(n, page_old), (n + 1, page_new)])
+        assert pitch_of(data)[0] == 60 + n
+
+
+def test_a_damaged_header_slot_is_ignored_and_the_other_one_is_used():
+    old = song_stream(notes=((0, 60, 100, 15360),))
+    new = song_stream(notes=((0, 62, 100, 15360),))
+    pitch, notes = pitch_of(container({9: old, 4: new}, 10, slots=[(8, 4, False), (7, 9)]))   # newest slot's CRC is bad
+    assert pitch == 60 and 'generation 7' in notes[0]
+    pitch, notes = pitch_of(container({9: old, 4: new}, 10, slots=[(8, 4, False), (7, 9, False)]))   # no valid slot
+    assert pitch == 60 and 'the header names none of them' in notes[0]                         # falls to the highest page
+
+
+def test_a_newest_slot_naming_no_intact_copy_falls_back_to_the_older_slot():
+    old = song_stream(notes=((0, 60, 100, 15360),))
+    other = song_stream(notes=((0, 62, 100, 15360),))
+    pitch, notes = pitch_of(container({9: other, 4: old}, 10, slots=[(9, 6), (8, 4)]))     # generation 9 names page 6: no index there
+    assert pitch == 60 and 'newest header slot names no intact copy' in notes[0] and 'generation 8' in notes[0]
+
+
+def test_a_copy_whose_hash_fails_leaves_the_other_one_in_use():
+    old = song_stream(notes=((0, 60, 100, 15360),))
+    broken = bytearray(song_stream(notes=((0, 62, 100, 15360),)))
+    broken[200] ^= 0xFF                                            # the newest save's hash fails
+    pitch, notes = pitch_of(container({9: old, 4: bytes(broken)}, 10, slots=[(8, 4), (7, 9)]))
+    assert pitch == 60 and notes == []
+
+
+def test_one_verified_copy_is_used_whatever_the_header_says():
+    only = song_stream(notes=((0, 61, 100, 15360),))
+    pitch, notes = pitch_of(container({4: only}, 10, slots=[(8, 7), (7, 9)]))
+    assert pitch == 61 and notes == []
+
+
+@pytest.mark.parametrize('path', sorted(glob.glob(os.path.join(PROBE, '*.reason')) + glob.glob(os.path.join(CHECK, '*.reason'))))
+def test_fixture_headers_have_valid_slots_and_the_higher_slot_names_an_intact_copy(path):
+    data = open(path, 'rb').read()
+    h = rf.read_header(data)
+    assert all(sl.valid for sl in h.slots)
+    copies = rf.verified_songs(data, h)
+    if len(copies) == 2:
+        best = max(h.slots, key=lambda sl: sl.generation)
+        assert best.index_page in {c.index_page for c in copies}
+        assert rf.current_song(data)[0].index_page == best.index_page
 
 
 def test_encrypted_generation_reads_metadata_only():
