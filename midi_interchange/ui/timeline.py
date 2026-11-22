@@ -237,7 +237,6 @@ class Timeline(QAbstractScrollArea):
         self._split_preview: tuple[str, Fraction] | None = None
         self._scissors_cursor = clip_cursor()
         self._copy_cursor = clip_cursor(copy=True)
-        QApplication.instance().installEventFilter(self)
         self._press_pos: QPointF | None = None
         self._drop_ind: tuple[int | None, Fraction, str] | None = None   # lane (None = new track), time, label
         self._show_markers = True      # Show Markers (the setting; the row also needs markers to show)
@@ -1352,6 +1351,17 @@ class Timeline(QAbstractScrollArea):
         if self._pointer is not None and self._drag is None and not self._external_drag:
             self._update_cursor(self._pointer, self._pointer_mods)
         self.viewport().update()
+
+    def showEvent(self, e) -> None:
+        # The application-wide filter (live modifier keys, window deactivation) runs only while the
+        # timeline is shown. A closed window must not leave one behind: every event passes through
+        # every installed filter, so they pile up (a test suite that opens many windows crawled).
+        QApplication.instance().installEventFilter(self)
+        super().showEvent(e)
+
+    def hideEvent(self, e) -> None:
+        QApplication.instance().removeEventFilter(self)
+        super().hideEvent(e)
 
     def eventFilter(self, obj, e) -> bool:
         if e.type() in (QEvent.KeyPress, QEvent.KeyRelease) and self._pointer is not None:
