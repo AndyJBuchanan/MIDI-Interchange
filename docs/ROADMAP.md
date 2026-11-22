@@ -2,7 +2,7 @@
 
 All outstanding features and fixes, agreed or not, are listed here and only here. Each feature gets its own plan in [plans/](plans/) and its own branch when it is picked up. When something is finished, remove it from this list; its plan records how it was done.
 
-Updated 2026-11-21.
+Updated 2026-11-22.
 
 ## Agreed, not started
 
@@ -10,6 +10,16 @@ Updated 2026-11-21.
   - **Cubase before 15** (agreed, later): fixtures are in `samples/` (a Cubase 13 file, `argontest003`); older versions are rejected cleanly for now.
   - **Logic** (secondary) and **Reaper, Bitwig, Ableton, FL Studio** (low priority; the user uses only Reason and Cubase). Feasibility and order are in the [desk research](plans/daw-desk-research.md). **Studio One is deferred**; there is no access to it for testing.
   - Each reader keeps the shared rules: read only, never modify the project; report what was skipped; fail cleanly on unreadable files; preserve track and clip mute states.
+
+- **Mirror mode: watch one file** (2026-11-16, agreed 2026-11-22; plan: [mirror-mode](plans/mirror-mode.md), to be written): a separate mode of operation, entered by an explicit "Open & Mirror MIDI/Project File" command, not a toggle on a normal open. One MIDI or project file (any format the app opens directly: MIDI, DAWproject, Cubase, Reason) is locked to the timeline at bar 1 and the app watches it. Whenever the file changes on disk it is re-imported automatically. The aim is to mirror a Cubase (or Reason) project while still working in it, so whatever was last saved is ready to drag out.
+  - **Owns the workspace:** nothing else sits on the timeline while mirroring. Unmirroring keeps the last imported state as a normal workspace and starts a clean undo history.
+  - **Read-only view:** no edits and no drops while mirroring. Allowed: range selections, track locks and probably track mute/solo, carried across reimports (the readers already have `preserve_track_state`; ranges are kept by time; tracks are matched the way the readers already match them).
+  - **Strong visual cue:** the mode must be unmistakable at a glance: a tint of the base UI and/or a red or yellow outline round the whole window, plus a banner with an Unmirror button, and the mode named in the title bar. Edit tools are unavailable.
+  - **Leaving the mode:** the user must unmirror to resume normal operation.
+  - **Failed or half-written reads:** keep the last good import and show a notice in the status bar.
+  - **Session:** relaunch restores the workspace as a normal one; a watch is never resumed automatically.
+  - **Only saved files count:** a project changes on disk only when the user saves, which is acceptable.
+  - **To check, not assume:** how Cubase and Reason actually write on save (in place, or temp file then rename), and so how to detect a finished save and which watch mechanism holds up (`QFileSystemWatcher` loses its watch when a file is replaced by rename; polling the modification time is the simple alternative; undecided). Needs a project saved in each DAW on this Mac while file events are logged.
 
 ## Suggested, not agreed
 
@@ -33,11 +43,6 @@ Updated 2026-11-21.
   - **Packaging:** macOS bundle name `MIDI Interchange.app` and `bundle_identifier` `com.midiinterchange.app`; a new bundle identifier is a new app to macOS (preferences, notarisation history, Open With). **Keep the Windows installer's `AppId` GUID** so installs upgrade in place; change only the display name, install folder, exe and file names. Release asset names `MIDI-Interchange-<ver>-…`, the build scripts, and the single-instance lock name (`midi-interchange-…`).
   - **Repository and links:** GitHub renames redirect the old URL, but the README, release notes and RELEASING.md use `AndyJBuchanan/MIDI-Interchange` explicitly; update them, and the remote URL on each machine. Old release notes keep the old name (they are history).
   - **Before choosing:** search for existing products and trademarks with the name, and check the GitHub repository name is free. No domain or web page is planned.
-- **Mirror mode: watch one file** (2026-11-16, under consideration, **not agreed**): a separate mode of operation, entered by an explicit "Open & Mirror MIDI/Project File" command, not a toggle on a normal open. One MIDI or project file is locked to the timeline at bar 1 and the app watches it; whenever the file changes on disk it is re-imported automatically. The aim is to mirror a Cubase (or Reason) project while still working in it, so whatever was last saved is ready to drag out.
-  - **Read-only view:** no edits and no drops while mirroring. Allowed: range selections, track locks and probably track mute/solo, carried across reimports (the readers already have `preserve_track_state`; ranges would be kept by time).
-  - **Leaving the mode:** the user must unmirror to resume normal operation. It should look and feel different (clear banner, edit tools unavailable).
-  - **Only saved files count:** a project changes on disk only when the user saves, which is acceptable.
-  - **Open questions:** how to detect a finished save (DAWs write in stages; wait until size and modification time settle, and keep the last good import if a read fails); watch mechanism (`QFileSystemWatcher` loses its watch when a file is replaced by rename; polling the modification time is the simple alternative; undecided); how Cubase and Reason actually write on save (check, don't assume).
 
 ## Later, after more real-world use
 
