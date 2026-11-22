@@ -1,6 +1,6 @@
 # Plan: mirror mode, watching one file
 
-Status: **plan agreed (2026-11-22); build waits for the step 0 save logs.** Branch, when built: `feature/mirror-mode` from `release/0.5.0`.
+Status: **plan agreed (2026-11-22); step 0 save logs are in; settle time agreed (0.5 s). Ready to build.** Branch, when built: `feature/mirror-mode` from `release/0.5.0`.
 
 A separate mode in which the app watches one MIDI or project file and re-imports it every time it's saved. You keep working in Cubase or Reason; whatever you last saved is on the timeline, ready to drag out.
 
@@ -14,22 +14,27 @@ Today, to move the latest version of a song you re-open or re-drop the project a
 
 **This runs on the owner's Mac** (this MacBook counts as a studio Mac). Nothing is read from it until the owner pastes or copies the output across.
 
-1. Save the script below as `watch_save.py` anywhere outside the repository (it isn't committed). It's stdlib Python, so the Mac's `python3` will do.
-2. Run `python3 watch_save.py "/path/to/Song.cpr" | tee cubase-save.txt`.
+1. The script is `watch_save.py` (below; it isn't committed). It's stdlib Python, so the Mac's `python3` will do.
+2. Run it with **every project file you will save in that DAW**, a small test project and a large one: `python3 watch_save.py "/path/to/Small.cpr" "/path/to/Large.cpr"`. It writes its own log, `watch_save-HHMMSS.log`, in the folder you run it from (no `tee`).
 3. While it runs, do the scenarios below, then press Ctrl-C.
-4. Repeat with a Reason song (`reason-save.txt`).
+4. Repeat with Reason songs, and send both logs.
 
 ```python
 #!/usr/bin/env python3
-"""Log how an app saves one file. Run, save in the app, then press Ctrl-C.
+"""Log how an app saves one or more files. Run, save in the app, then press Ctrl-C.
 
-Every 50 ms, stat the file and every entry in its folder; print each change
-(new / gone / inode, size or mtime changed) with a timestamp. Read-only.
+Give it every project file you will save (for example a small test project and a
+large one). Every 50 ms it stats each file's folder (every entry in it) and prints
+each change (new / gone / inode, size or mtime changed) with a timestamp. Entries
+for the files you named are marked with *. Read-only. The log is also written to
+watch_save-HHMMSS.log in the folder you run it from, one line at a time.
 """
 import datetime
 import os
 import sys
 import time
+
+IGNORE = set()   # this script's own log file (full paths)
 
 
 def snapshot(folder):
@@ -39,41 +44,74 @@ def snapshot(folder):
     except OSError as exc:
         return {"<folder unreadable>": (0, 0, str(exc))}
     for name in names:
+        full = os.path.join(folder, name)
+        if full in IGNORE:
+            continue
         try:
-            st = os.stat(os.path.join(folder, name), follow_symlinks=False)
+            st = os.stat(full, follow_symlinks=False)
         except FileNotFoundError:
             continue
-        out[name] = (st.st_ino, st.st_size, st.st_mtime_ns)
+        out[full] = (st.st_ino, st.st_size, st.st_mtime_ns)
     return out
 
 
+class Tee:
+    """Print and log every line immediately, so Ctrl-C or a crash loses nothing."""
+
+    def __init__(self, path):
+        self.f = open(path, "w", buffering=1)
+
+    def write(self, text):
+        sys.__stdout__.write(text)
+        sys.__stdout__.flush()
+        self.f.write(text)
+        self.f.flush()
+
+    def flush(self):
+        pass
+
+
 def main():
-    if len(sys.argv) != 2:
-        sys.exit("usage: python3 watch_save.py /path/to/project-file")
-    path = os.path.abspath(sys.argv[1])
-    folder, target = os.path.split(path)
+    if len(sys.argv) < 2:
+        sys.exit("usage: python3 watch_save.py /path/to/project-file [/path/to/another ...]")
+    targets = [os.path.abspath(a) for a in sys.argv[1:]]
+    folders = sorted({os.path.dirname(t) for t in targets})
+    log = os.path.join(os.getcwd(), f"watch_save-{datetime.datetime.now():%H%M%S}.log")
+    IGNORE.add(log)
+    sys.stdout = Tee(log)
+    print(f"logging to {log}")
     start = time.monotonic()
-    prev = snapshot(folder)
-    print(f"{datetime.datetime.now():%H:%M:%S} watching {path}")
-    print(f"  {len(prev)} entries in the folder; file present: {target in prev}")
-    if target in prev:
-        ino, size, mtime = prev[target]
-        print(f"  file: inode {ino}, {size} bytes, mtime_ns {mtime}")
+    prev = {}
+    for folder in folders:
+        prev.update(snapshot(folder))
+    print(f"{datetime.datetime.now():%H:%M:%S} watching {len(targets)} file(s) in {len(folders)} folder(s)")
+    for folder in folders:
+        n = sum(1 for p in prev if os.path.dirname(p) == folder)
+        print(f"  {folder}: {n} entries")
+    for t in targets:
+        if t in prev:
+            ino, size, mtime = prev[t]
+            print(f"  * {t}: inode {ino}, {size} bytes, mtime_ns {mtime}")
+        else:
+            print(f"  * {t}: NOT PRESENT")
     try:
         while True:
             time.sleep(0.05)
-            cur = snapshot(folder)
+            cur = {}
+            for folder in folders:
+                cur.update(snapshot(folder))
             t = time.monotonic() - start
             clock = f"{datetime.datetime.now():%H:%M:%S.%f}"[:-3]
-            for name in sorted(set(prev) | set(cur)):
-                a, b = prev.get(name), cur.get(name)
+            for path in sorted(set(prev) | set(cur)):
+                a, b = prev.get(path), cur.get(path)
                 if a == b:
                     continue
-                mark = "*" if name == target else " "
+                mark = "*" if path in targets else " "
+                shown = os.path.basename(path) if len(folders) == 1 else path
                 if a is None:
-                    print(f"{t:9.3f} {clock} {mark} NEW     {name}  inode {b[0]}, {b[1]} bytes")
+                    print(f"{t:9.3f} {clock} {mark} NEW     {shown}  inode {b[0]}, {b[1]} bytes")
                 elif b is None:
-                    print(f"{t:9.3f} {clock} {mark} GONE    {name}  inode {a[0]}")
+                    print(f"{t:9.3f} {clock} {mark} GONE    {shown}  inode {a[0]}")
                 else:
                     what = []
                     if a[0] != b[0]:
@@ -82,7 +120,7 @@ def main():
                         what.append(f"size {a[1]} -> {b[1]}")
                     if a[2] != b[2]:
                         what.append(f"mtime +{(b[2] - a[2]) / 1e6:.1f} ms")
-                    print(f"{t:9.3f} {clock} {mark} CHANGED {name}  " + ", ".join(what))
+                    print(f"{t:9.3f} {clock} {mark} CHANGED {shown}  " + ", ".join(what))
             prev = cur
     except KeyboardInterrupt:
         print("stopped")
@@ -92,8 +130,8 @@ main()
 ```
 
 **Scenarios, in each DAW:**
-- Save once after a small edit.
-- Save a large project (many tracks and parts).
+- Save the small test project once after a small edit.
+- Save the large project (many tracks and parts) once after a small edit.
 - Save twice quickly.
 - Open and close the project without saving.
 - Let auto-save run once, if it's on.
@@ -111,6 +149,28 @@ main()
 - whether any temp or backup names need ignoring;
 - confirmation that polling is the right mechanism (it's recommended either way, below);
 - the manual test's wording.
+
+## Step 0 results (owner-run on this MacBook, 2026-11-22)
+
+Log: `watch_save-031855.log` (4 files, 3 folders, polled every 50 ms, about 9 minutes). The owner did the big file last in each set. The log doesn't say which scenario produced which event, so only the patterns below are claimed. Versions of Cubase and Reason weren't recorded.
+
+**Cubase (`Ditty-04-Macbook.cpr` 8.6 MB, `orchestral-import-test-01.cpr` 173 MB): temp file, then rename.**
+- Every save created a new file in the same folder named with the **next number**: `Ditty-04-Macbook-01.cpr`, and `orchestral-import-test-02.cpr` for the `-01` project. It grew over two or three polls, then was renamed over the project in a single poll: the temp name went GONE in the same poll that the project's **inode changed**.
+- The project file itself was **never missing**, and was never seen half-written: it only ever changed by a whole-file replace. The new file was complete at the moment of the rename.
+- Timing: the Ditty temp file lived about 0.1 to 0.2 s. The 173 MB project took about 0.17 s from first appearance to rename (12 MB, then 100 MB, then 173 MB, over four polls).
+- The project's size after saves differed by a byte or so from the same project's previous save (9083371, 9083372, 9083371), so size alone isn't a safe test.
+- Ditty produced five save cycles, the orchestral file one. No `.bak` or auto-save files appeared in these folders (the `Auto Saves` folder exists in the Verify folder, but nothing top-level changed there).
+
+**Reason (`Aug01-01-03.reason` 3.1 MB, `DumDum001-9_mix2(14)-folders.reason` 9.4 MB): written in place.**
+- The **inode never changed**. No temp or extra files appeared.
+- Writes were seen as a single change in one 50 ms poll (so under about 50 ms for these sizes), but they are in-place writes, so a read could in principle catch one half-done.
+- **mtime-only changes happen:** Aug01 changed its mtime four times with its size unchanged at 3145780 bytes, and DumDum once (then once more with a size change, 9437236 to 8650804 bytes, about five seconds later). We can't tell whether Reason rewrote identical content or only touched the file.
+
+**What this changes in the plan:**
+- Watching the project file by inode, size and mtime catches both patterns (Cubase by inode, Reason by mtime), and watching the folder isn't needed. Temp and numbered names in the folder can be ignored.
+- **Skip the re-import when the bytes are unchanged:** after the settle time, compare a content hash with the last imported file and do nothing if it matches. Reason's mtime-only changes then cost nothing.
+- Cubase needs no long settle (its file is complete when it changes). Reason's in-place write needs a short one. The settle time is 0.5 s (agreed).
+- The "file never goes missing" result means a gone project file really does mean the user moved or deleted it.
 
 ## Behaviour
 
@@ -226,7 +286,7 @@ The app has one dark theme (`ui/theme.py`, Fusion with a dark palette), so there
 The details:
 - **Signature:** `(inode, size, mtime_ns)` of the path. An inode change catches a replacement even when the size and time look alike.
 - **Poll** every 250 ms (a `QTimer` on the main thread).
-- **Settle:** read only once the signature has stayed the same for **1.0 s** after a change, so a write in progress isn't read. These two numbers are provisional until step 0.
+- **Settle:** read only once the signature has stayed the same for **0.5 s** after a change, so a write in progress isn't read. Poll interval 250 ms. Both agreed 2026-11-22 from the step 0 evidence.
 - **One read at a time:** if the file changes again during a read, the result is discarded and the read starts over once it settles (a generation counter).
 - **Retry:** after a failed read, retry 2 s later, up to 3 times while the signature stays the same, then wait for the next change. A completed save always changes the signature, so it's always picked up.
 - **Missing file:** keep the last import and keep polling. If it's gone for more than 3 s (provisional), the status bar and banner say "Song.cpr not found; waiting for it". When it reappears it's read as a change. See design question 4.
@@ -355,6 +415,6 @@ All the recommendations were agreed:
 4. **File moved or deleted:** keep the last import and wait at the same path, showing "not found; waiting". Moves aren't followed.
 5. **Unmirror:** no confirmation.
 6. **Visual cue:** option (a), a cyan frame, a cyan banner with an Unmirror button, the mode named in the title bar, and tinted chrome. The lanes are left untouched.
-7. **Settle time:** provisionally 1.0 s after the last change, polling every 250 ms, to be adjusted once step 0 shows how long each DAW's save takes.
+7. **Settle time:** 0.5 s after the last change, polling every 250 ms (agreed after step 0).
 
-**Still blocking the build:** step 0, the owner-run save logging in Cubase and Reason.
+**Step 0 is done** (results above). Settle time agreed 2026-11-22: **0.5 s** after the last change, polling every 250 ms, so a save shows up in about 0.75 to 1.5 s.
