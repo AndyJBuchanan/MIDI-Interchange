@@ -163,6 +163,17 @@ def test_real_projects_match_dawproject_counts(name, version, offset, notes_, mu
     assert {t.name for t in music if t.muted} == muted_tracks
 
 
+def test_release_velocity_zero_is_kept():
+    """OffV is (v - 1) / 126, which can't hold 0. Cubase stores OffV 0.0 with a 0 tail byte for a
+    release of 0 and exports it as velocity 0 (docs/formats/CUBASE_FILE_FORMAT.md, 6.2). In Ditty the
+    release values are 100, 64 and 0, matching the tail byte on every note."""
+    from collections import Counter
+    _, tracks, _ = read(SETS / 'Ditty-04-Macbook.cpr')
+    releases = Counter(e.msg.velocity for t in tracks for c in t.clips for e in c.events if e.msg.type == 'note_off')
+    assert releases[0] == 158 and releases[100] == 854 and releases[64] == 470
+    assert sum(releases.values()) == 1501 - 19          # less the muted notes
+
+
 def test_indy_export_matches_cubase_midi_in_reference_window():
     """Phase 2 go/no-go, now through the reader and the real exporter."""
     from scripts.compare_project_exports import compare
