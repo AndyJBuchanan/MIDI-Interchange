@@ -685,6 +685,41 @@ def track_state_flags(wk: Walker, track_event: Obj) -> int | None:
     return None if at is None else int.from_bytes(body[at:at + 4], 'big')
 
 
+def _own_bytes(wk: Walker, ev: Obj) -> bytes:
+    """The event's body with its direct children's byte ranges removed."""
+    out, at = [], ev.body_at
+    for ch in sorted(ev.children, key=lambda c: c.tag_at):
+        if ch.tag_at >= at:
+            out.append(wk.d[at:ch.tag_at])
+            at = max(at, ch.end)
+    out.append(wk.d[at:ev.end])
+    return b''.join(out)
+
+
+def track_disabled_hidden(wk: Walker, track_event: Obj) -> tuple[bool, bool]:
+    """(disabled, hidden) from the track event's property list (section 4.3).
+
+    The list sits straight after the MListNode child (2 bytes, then the
+    properties) and ends exactly where the mixer object starts. Disabled is
+    'noit' (reader key 'tion') EQUAL TO 1: a track that was disabled and
+    re-enabled keeps it at 0, one never toggled has none. Hidden is 'dihT'
+    (reader key 'Thid') equal to 1. If the list does not parse, the same
+    markers are searched for in the event's own bytes (never inside a child).
+    """
+    node = next((ch for ch in track_event.children if ch.cls.name == 'MListNode'), None)
+    if node is not None:
+        try:
+            props, end = _props(wk, node.end + 2, track_event.end)
+            mixer = next((ch for ch in sorted(track_event.children, key=lambda c: c.tag_at)
+                          if ch.tag_at >= end and ch.cls.name in ('MInstrumentTrack', 'MMidiTrack', 'MAudioTrack')), None)
+            if mixer is None or mixer.tag_at == end:
+                return props.get('tion') == 1, props.get('Thid') == 1
+        except (ValueError, IndexError, struct.error):
+            pass
+    own = _own_bytes(wk, track_event)
+    return b'noit\x00\x01' + bytes(7) + b'\x01' in own, b'dihT\x00\x01' + bytes(7) + b'\x01' in own
+
+
 def track_solo_flag(wk: Walker, track_event: Obj) -> int | None:
     """Mixer channel record 'SoloFlag' (i64), present with value 1 when an
     instrument track is muted (alongside a 'Solo' record when soloed). The

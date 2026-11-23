@@ -87,11 +87,11 @@ def _file_digest(path: str) -> str:
     return h.hexdigest()
 
 
-def read_snapshot(path: str) -> Snapshot:
+def read_snapshot(path: str, include_disabled: bool = False) -> Snapshot:
     """Read-only: stat, hash and parse the file. Raises if it changed while being read."""
     before = file_signature(path)
     digest = _file_digest(path)
-    result = read_payload(payload_from_path(path))
+    result = read_payload(payload_from_path(path), include_disabled=include_disabled)
     if file_signature(path) != before:
         raise _ChangedWhileReading()
     return Snapshot(before, digest, result)
@@ -117,13 +117,14 @@ class MirrorWatcher(QObject):
     diag = Signal(str, bool)      # a diagnostic line (wall-clock stamped) and whether it is worth the status bar
 
     def __init__(self, path: str, clock=time.monotonic, executor=None, reader=read_snapshot,
-                 parent=None, wall=time.time) -> None:
+                 parent=None, wall=time.time, include_disabled: bool = False) -> None:
         super().__init__(parent)
         self.path = path
         self.clock = clock
         self._own_executor = executor is None
         self._executor = executor or ThreadPoolExecutor(max_workers=1, thread_name_prefix="mirror")
         self._reader = reader
+        self.include_disabled = include_disabled      # passed on every re-import
         self._wall = wall
         self._last_clips: dict[str, tuple] = {}
         self.applied_sig: Signature | None = None
@@ -205,7 +206,7 @@ class MirrorWatcher(QObject):
             self._future_generation = self.generation
             self.read_count += 1
             self._diag(f"reading (still for {now - self.obs_since:.2f}s, generation {self.generation})")
-            self._future = self._executor.submit(self._reader, self.path)
+            self._future = self._executor.submit(self._reader, self.path, self.include_disabled)
             self._collect(now)       # a synchronous executor is already done
 
     def _ready_to_read(self, now: float) -> bool:

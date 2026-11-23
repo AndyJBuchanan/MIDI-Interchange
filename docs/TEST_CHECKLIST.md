@@ -351,6 +351,19 @@ Plan: [mirror-mode](plans/mirror-mode.md). Use a Cubase project and a Reason son
 - [ ] Leave it mirroring for a long session (an hour of normal work in the DAW, with a dozen saves): the app stays responsive and its memory stays steady. *(Deferred by the owner to release-time testing, 2026-11-23.)*
 - [ ] A track's controller display (the CC box on its header) can be changed while mirroring, and the choice survives the next save.
 
+## 8t. Cubase disabled tracks (`feature/cubase-disabled-tracks`)
+
+Plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/` (copy them to the studio Mac). Cubase's Disable Track is not mute.
+
+- [ ] Drag `d1.cpr` in: "Pianoteq 9 B" is absent, A and C are there, and the import notes (and Source Info, Warnings) say `Track "Pianoteq 9 B" is disabled in Cubase; not imported`. Same for `d2.cpr` (B also muted).
+- [ ] Drag `d4.cpr` (B hidden) in: all three tracks arrive and Source Info says B is hidden in Cubase.
+- [ ] Drag `d0.cpr` and `d5.cpr` (B enabled, d5 after being disabled): all three tracks, no disabled note.
+- [ ] Drag `d6.cpr`, `d7.cpr`, `d8.cpr`, `d9.cpr`, `d10.cpr` and `d11.cpr` in: each fails with "N track(s) in the project is/are disabled in Cubase, and no other track could be imported, so nothing was imported" (N is 2 for d10, which has a disabled audio and instrument track; 1 for the others), with the other notes (Pattern Editor for d7, audio for d10) after it. `d8` says disabled, not linear time base. Nothing is added to the workspace.
+- [ ] `d9 baseline.cpr` (enabled audio only) fails with the usual "no supported MIDI parts or markers".
+- [ ] Mirror a copy of `d0.cpr` in Cubase's own project: disable a track and save, and it leaves the palette; re-enable and save, and it comes back as a new track. The other tracks keep their ranges, locks and mutes.
+- [ ] Mirror a project, then disable every MIDI/instrument track and save: the status bar reports the all-disabled message and the last version is kept.
+- [ ] Open a big project with many disabled tracks (`orchestral-import-test-01.cpr`, `BBCSO_Woodwinds101`): only the enabled tracks arrive (25 and 16), and they match what Cubase plays.
+
 ## 9. New document
 
 - [x] **⌘N**, the toolbar button and File ▸ New all clear the workspace.

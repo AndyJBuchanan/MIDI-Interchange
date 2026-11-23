@@ -23,6 +23,7 @@ class Reader:
     read: Callable
     path_backed: bool = False
     preserve_track_state: bool = False
+    has_disabled_option: bool = False     # read(p, include_disabled=...) is accepted
 
 
 def _midi(p):
@@ -43,7 +44,9 @@ READERS = (
            lambda p: import_dawproject(p.path, p.name, p.data, byte_size=p.byte_size), path_backed=True, preserve_track_state=True),
     Reader('Cubase projects', ('.cpr',),
            lambda p: os.path.splitext(p.path or p.name)[1].lower() == '.cpr' or is_cubase_project(p.data[:16]),
-           lambda p: import_cubase(p.path, p.name, p.data, byte_size=p.byte_size), path_backed=True, preserve_track_state=True),
+           lambda p, include_disabled=False: import_cubase(p.path, p.name, p.data, byte_size=p.byte_size,
+                                                           include_disabled=include_disabled),
+           path_backed=True, preserve_track_state=True, has_disabled_option=True),
     Reader('Reason songs', ('.reason',),
            lambda p: os.path.splitext(p.path or p.name)[1].lower() == '.reason' or p.data[:8] == REASON_MAGIC,
            lambda p: import_reason(p.path, p.name, p.data, byte_size=p.byte_size), path_backed=True, preserve_track_state=True),
@@ -53,10 +56,13 @@ FILE_FILTER = 'Supported imports (' + ' '.join('*'+e for r in READERS for e in r
     r.label + ' (' + ' '.join('*'+e for e in r.extensions) + ')' for r in READERS) + ';;All files (*)'
 
 
-def read_payload(p: Payload):
+def read_payload(p: Payload, *, include_disabled: bool = False):
+    """include_disabled: Cubase projects bring tracks disabled in Cubase in muted
+    (a plain option, no UI); other readers have nothing to disable and ignore it."""
     for reader in READERS:
         if reader.detect(p):
-            return ImportResult(*reader.read(p), preserve_track_state=reader.preserve_track_state)
+            extra = {'include_disabled': True} if include_disabled and reader.has_disabled_option else {}
+            return ImportResult(*reader.read(p, **extra), preserve_track_state=reader.preserve_track_state)
     raise ImportError_('Not a supported MIDI or project file')
 
 

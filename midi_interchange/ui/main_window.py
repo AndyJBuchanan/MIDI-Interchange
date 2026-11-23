@@ -780,12 +780,13 @@ class MainWindow(QMainWindow):
         box.exec()
         return box.clickedButton() is go
 
-    def start_mirror(self, path: str, clock=None, executor=None, log_path: str | None = None) -> bool:
+    def start_mirror(self, path: str, clock=None, executor=None, log_path: str | None = None,
+                     include_disabled: bool = False) -> bool:
         """Read the file, ask first when the workspace isn't empty, then mirror it. Returns whether it started."""
         if self.ctl.mirroring:
             return False
         try:
-            snap = read_snapshot(path)
+            snap = read_snapshot(path, include_disabled)
         except Exception as exc:  # noqa: BLE001 - any reader failure is reported, nothing changes
             QMessageBox.warning(self, "Couldn't mirror the file", f"{os.path.basename(path)}: {exc}")
             return False
@@ -802,7 +803,8 @@ class MainWindow(QMainWindow):
             kwargs["clock"] = clock
         self._mirror_defer_logged = False
         self._open_mirror_log(log_path)
-        w = self._mirror_watcher = MirrorWatcher(self._mirror_path, executor=executor, parent=self, **kwargs)
+        w = self._mirror_watcher = MirrorWatcher(self._mirror_path, executor=executor, parent=self,
+                                                   include_disabled=include_disabled, **kwargs)
         w.diag.connect(self._mirror_diag)
         w.set_baseline(snap)
         w.imported.connect(self._mirror_imported)

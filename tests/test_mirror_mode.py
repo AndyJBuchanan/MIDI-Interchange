@@ -336,6 +336,50 @@ def test_a_cubase_project_replaced_by_temp_file_and_rename(tmp_path, app):
     assert names(ev.imported[0]) == names(read_snapshot(str(CUBASE_B)).result)
 
 
+DTRACKS = SAMPLES / 'project-cubase-phases' / 'DTracks'
+
+
+def test_a_track_disabled_then_re_enabled_in_cubase_goes_and_comes_back(tmp_path, app):
+    """d0 (three enabled tracks) -> d1 (B disabled) -> d5 (B enabled again): B leaves the workspace, then
+    returns as a new track, and A and C keep their ids and states throughout."""
+    p = tmp_path / 'Song.cpr'
+    shutil.copy(DTRACKS / 'd0.cpr', p)
+    w, clock, ev = watch(p)
+    ws = workspace_of(read_snapshot(str(p)).result)
+    a, c = by_name(ws, 'Pianoteq 9 A'), by_name(ws, 'Pianoteq 9 C')
+    a.color, c.muted = '#123456', True
+    ids = {a.id, c.id}
+    for src, expected_names, counts in (
+            ('d1', ['Pianoteq 9 A', 'Pianoteq 9 C'], {'tracks': 2, 'new': 0, 'gone': 1}),
+            ('d5', ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C'], {'tracks': 3, 'new': 1, 'gone': 0})):
+        save_replace(p, (DTRACKS / f'{src}.cpr').read_bytes())
+        advance(w, clock, 1.5)
+        result = ev.imported[-1]
+        snap, got, _ = carry_over(ws, result)
+        assert names(result) == expected_names and got == counts
+        assert {t.id for t in snap['tracks']} >= ids
+        kept = {t.name: t for t in snap['tracks']}
+        assert kept['Pianoteq 9 A'].id == a.id and kept['Pianoteq 9 A'].color == '#123456'
+        assert kept['Pianoteq 9 C'].id == c.id and kept['Pianoteq 9 C'].muted
+        ws.tracks = list(snap['tracks'])
+
+
+def test_mirror_passes_include_disabled_on_every_reimport(tmp_path, app):
+    p = tmp_path / 'Song.cpr'
+    shutil.copy(DTRACKS / 'd0.cpr', p)
+    clock = FakeClock()
+    w = MirrorWatcher(str(p), clock=clock, executor=Inline(), include_disabled=True)
+    w.set_baseline(read_snapshot(str(p), True))
+    ev = Events(w)
+    save_replace(p, (DTRACKS / 'd1.cpr').read_bytes())
+    advance(w, clock, 1.5)
+    assert names(ev.imported[0]) == ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C']
+    assert [t.muted for t in ev.imported[0].tracks] == [False, True, False]
+    save_replace(p, (DTRACKS / 'd2.cpr').read_bytes())
+    advance(w, clock, 1.5)
+    assert len(ev.imported) == 2 and names(ev.imported[-1]) == ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C']
+
+
 def test_a_reason_song_written_in_place(tmp_path, app):
     p = tmp_path / 'Song.reason'
     shutil.copy(REASON_A, p)

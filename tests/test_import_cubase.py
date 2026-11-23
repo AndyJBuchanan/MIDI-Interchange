@@ -27,6 +27,11 @@ def read(path):
     return result.source, result.tracks, result
 
 
+def read_disabled(path):
+    result = read_payload(payload_from_path(str(path)), include_disabled=True)
+    return result.source, result.tracks, result
+
+
 def notes(track):
     """(start, end, pitch, velocity, channel) in workspace beats, visible part only."""
     out = []
@@ -298,8 +303,9 @@ def test_verify_bbcso_score_symbols_and_named_flags_tail():
     and the track's own name."""
     source, tracks, _ = read(verify('BBCSO_Woodwinds101-App01-MacBook.cpr'))
     music = [t for t in tracks if not t.auxiliary]
-    assert len(music) == 34 and not any(t.muted or t.soloed for t in music)
-    assert sum(1 for t in music for c in t.clips for e in c.events if e.msg.type == 'note_on') == 2365
+    # 34 tracks have parts; the 18 disabled in Cubase are left out (16 imported), as in its export
+    assert len(music) == 16 and not any(t.muted or t.soloed for t in music)
+    assert sum(1 for t in music for c in t.clips for e in c.events if e.msg.type == 'note_on') == 1807
     assert any('Score Editor symbols' in w and 'articulation' in w for w in source.warnings)
     # Markers are declared past 16 MB, so their references start 0x81: all 8
     # must be found, as in Cubase's MIDI export (user, 2026-11-16).
@@ -337,8 +343,13 @@ def test_verify_out_of_range_value_skipped_not_fatal():
     t0 = time.time()
     source, tracks, _ = read(path)
     assert time.time() - t0 < 2
-    assert sum(1 for t in tracks for c in t.clips for e in c.events if e.msg.type == 'note_on') == 605
+    # 170 tracks were imported before disabled tracks were left out (169 plus Markers); 25 are not disabled
+    assert len(tracks) == 25 and sum(1 for t in tracks if t.auxiliary) == 1
+    assert sum(1 for t in tracks for c in t.clips for e in c.events if e.msg.type == 'note_on') == 579
     assert any('out-of-range' in w for w in source.warnings)
+    source, tracks, _ = read_disabled(path)
+    assert len(tracks) == 170
+    assert sum(1 for t in tracks for c in t.clips for e in c.events if e.msg.type == 'note_on') == 605
 
 
 def test_verify_cubase14_rejected_until_validated():
@@ -382,3 +393,188 @@ def test_verify_drum_track_is_a_track_and_lyric_project_imports():
     source, tracks, _ = read(path)
     assert by_name(tracks)['Omnivocal Reeve'].clips
     assert any('Pattern Editor parts are not imported' in w for w in source.warnings)
+
+
+# ---------------------------------------------------------------- disabled and hidden tracks
+# docs/plans/cubase-disabled-tracks.md; format: CUBASE_FILE_FORMAT.md section 4.3
+
+DT = PHASES / 'DTracks'
+DISABLED_B = 'Track "Pianoteq 9 B" is disabled in Cubase; not imported'
+
+
+def music(tracks):
+    return [t for t in tracks if not t.auxiliary]
+
+
+def note_count(track):
+    return sum(1 for c in track.clips for e in c.events if e.msg.type == 'note_on')
+
+
+def exported(path):
+    """(track name, note count) for each track of Cubase's own MIDI export that has notes."""
+    out = []
+    for t in mido.MidiFile(path).tracks:
+        n = sum(1 for m in t if m.type == 'note_on' and m.velocity > 0)
+        if n:
+            out.append((t.name, n))
+    return out
+
+
+def cpr_flags(path):
+    from midi_interchange.core import cpr_format as cf
+    data = Path(path).read_bytes()
+    wk, _ = cf.walk_archive(cf.read_container(str(path), data), 'Arrangement1', skip=cf.READER_SKIP)
+    return {cf.track_name(wk, o): cf.track_disabled_hidden(wk, o)
+            for o in sorted((o for o in wk.objects.values() if o.cls.name in (*cf.TRACK_EVENTS, 'MAudioTrackEvent')),
+                            key=lambda o: o.tag_at)}
+
+
+@pytest.mark.parametrize('name, expected', [
+    ('d0', ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C']), ('d5', ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C']),
+    ('d6 baseline', ['MIDI 01']), ('d10 baseline', ['Pianoteq 9 01'])])
+def test_nothing_disabled_imports_as_before(name, expected):
+    """Enabled twins and untoggled tracks: no disabled note, nothing left out ('equals 1', not 'present':
+    d0's and d5's track B keep noit = 0)."""
+    assert not any(disabled for disabled, _ in cpr_flags(DT / f'{name}.cpr').values())
+    source, tracks, _ = read(DT / f'{name}.cpr')
+    assert not any('disabled' in w for w in source.warnings)
+    assert [t.name for t in music(tracks)] == expected
+
+
+def test_d7_baseline_fails_as_before():
+    """A drum track holding only Pattern Editor parts: the same error as before this feature."""
+    with pytest.raises(ImportError_, match='^Could not read Cubase project: The project contains no supported MIDI parts or markers$'):
+        read(DT / 'd7 baseline.cpr')
+
+
+def test_disabled_marker_equals_one_not_present():
+    assert cpr_flags(DT / 'd0.cpr')['Pianoteq 9 B'] == (False, False)      # noit = 0
+    assert cpr_flags(DT / 'd5.cpr')['Pianoteq 9 B'] == (False, False)      # disabled then re-enabled: noit = 0
+    assert cpr_flags(DT / 'd1.cpr')['Pianoteq 9 B'] == (True, False)
+    assert cpr_flags(DT / 'd2.cpr')['Pianoteq 9 B'] == (True, False)       # also muted
+    assert cpr_flags(DT / 'd4.cpr')['Pianoteq 9 B'] == (False, True)       # hidden: noit = 0, dihT = 1
+
+
+@pytest.mark.parametrize('name', ['d1', 'd2'])
+def test_disabled_track_left_out_matching_cubase_export(name):
+    source, tracks, _ = read(DT / f'{name}.cpr')
+    assert [t.name for t in music(tracks)] == ['Pianoteq 9 A', 'Pianoteq 9 C']
+    assert DISABLED_B in source.warnings
+    assert [(t.name, note_count(t)) for t in music(tracks)] == exported(DT / f'{name}.midi')
+
+
+def test_disabled_and_muted_d2_is_still_disabled():
+    flags = cpr_flags(DT / 'd2.cpr')
+    assert flags['Pianoteq 9 B'][0] and not flags['Pianoteq 9 A'][0]
+
+
+def test_hidden_track_still_imports_and_is_noted_matching_cubase_export():
+    source, tracks, _ = read(DT / 'd4.cpr')
+    assert [(t.name, note_count(t)) for t in music(tracks)] == exported(DT / 'd4.midi')
+    assert 'Track "Pianoteq 9 B" is hidden in Cubase; imported' in source.warnings
+    assert not any('disabled' in w for w in source.warnings)
+
+
+def test_enabled_twin_d5_matches_its_export_and_has_no_notes():
+    source, tracks, _ = read(DT / 'd5.cpr')
+    assert [(t.name, note_count(t)) for t in music(tracks)] == exported(DT / 'd5.midi')
+    assert not any('disabled' in w or 'hidden' in w for w in source.warnings)
+
+
+@pytest.mark.parametrize('name,count', [('d6', 1), ('d7', 1), ('d8', 1), ('d9', 1), ('d10', 2), ('d11', 1)])
+def test_all_importable_tracks_disabled_gives_a_clearer_error(name, count):
+    with pytest.raises(ImportError_) as err:
+        read(DT / f'{name}.cpr')
+    text = str(err.value)
+    verb = 'is' if count == 1 else 'are'
+    assert (f'{count} track{"" if count == 1 else "s"} in the project {verb} disabled in Cubase, '
+            'and no other track could be imported, so nothing was imported') in text
+    assert 'no supported MIDI parts' not in text
+
+
+def test_all_disabled_error_keeps_the_notes_collected():
+    assert 'Pattern Editor parts are not imported' in _error(DT / 'd7.cpr')      # d7: drum track, Pattern Editor
+    assert 'Audio tracks and media are not imported' in _error(DT / 'd10.cpr')   # d10: disabled audio track alongside
+
+
+def test_all_disabled_d8_says_disabled_not_linear():
+    text = _error(DT / 'd8.cpr')
+    assert 'disabled in Cubase' in text and 'linear' not in text
+
+
+def test_enabled_audio_only_project_keeps_the_existing_error():
+    """d9 baseline holds only an enabled audio track; nothing is disabled, so the existing error stands."""
+    assert 'no supported MIDI parts or markers' in _error(DT / 'd9 baseline.cpr')
+    assert cpr_flags(DT / 'd9.cpr')['70sBandLoop'][0] and not cpr_flags(DT / 'd9 baseline.cpr')['70sBandLoop'][0]
+
+
+def _error(path):
+    with pytest.raises(ImportError_) as err:
+        read(path)
+    return str(err.value)
+
+
+def test_d10_enabled_twin_imports_the_instrument_track():
+    source, tracks, _ = read(DT / 'd10 baseline.cpr')
+    assert [t.name for t in music(tracks)] == ['Pianoteq 9 01']
+    assert 'Folder tracks are flattened; folder mute/solo is applied to their tracks' in source.warnings
+
+
+def test_include_disabled_imports_the_tracks_muted():
+    source, tracks, result = read_disabled(DT / 'd1.cpr')
+    assert [(t.name, t.muted) for t in music(tracks)] == [
+        ('Pianoteq 9 A', False), ('Pianoteq 9 B', True), ('Pianoteq 9 C', False)]
+    assert 'Track "Pianoteq 9 B" is disabled in Cubase; imported muted' in source.warnings
+    for name in ('d6', 'd10', 'd11'):
+        _, tracks, _ = read_disabled(DT / f'{name}.cpr')
+        assert music(tracks) and all(t.muted for t in music(tracks))
+    # direct call
+    _, tracks = import_cubase(str(DT / 'd1.cpr'), 'd1.cpr', include_disabled=True)
+    assert [t.muted for t in music(tracks)] == [False, True, False]
+
+
+def test_include_disabled_is_ignored_by_other_readers(tmp_path):
+    from helpers import conductor, note, smf, track
+    data = smf([conductor(480), track(note(0, 60, 0, 480), 'T')])
+    from midi_interchange.interchange.payload import Payload
+    result = read_payload(Payload('a.mid', data, byte_size=len(data)), include_disabled=True)
+    assert [t.name for t in result.tracks] == ['T']
+
+
+def test_disabled_does_not_change_the_other_cubase_fixtures():
+    """Regression: every other fixture reads with nothing left out and the same tracks either way."""
+    paths = sorted((TIER1.glob('*.cpr'))) + sorted(TIER2.glob('*.cpr')) + sorted(TIER3.glob('*.cpr')) + sorted(SETS.glob('*.cpr'))
+    assert paths
+    checked = 0
+    for path in paths:
+        try:
+            a = read(path)
+            b = read_disabled(path)
+        except ImportError_:
+            continue
+        flags = cpr_flags(path)
+        if any(disabled for disabled, _ in flags.values()):
+            continue                       # covered by the disabled tests (GA, Beat003vs: audio only)
+        checked += 1
+        assert [(t.name, t.muted, t.soloed, len(t.clips)) for t in a[1]] == [(t.name, t.muted, t.soloed, len(t.clips)) for t in b[1]]
+        assert not any('is disabled in Cubase' in w for w in a[0].warnings)
+    assert checked > 20
+
+
+def test_verify_bbcso_disabled_tracks_match_cubase_export():
+    """The 18 of 34 tracks with noit = 1 are absent from Cubase's export; the other 16 match it."""
+    path = verify('BBCSO_Woodwinds101-App01-MacBook.cpr')
+    mid = VERIFY / 'BBCSO_Woodwinds101-App01-MacBook.midi'
+    if not mid.exists():
+        pytest.skip('BBCSO export is not in the repository')
+    _, tracks, _ = read(path)
+    _, everything, _ = read_disabled(path)
+    assert len(music(everything)) == 34 and len(music(tracks)) == 16
+    assert sum(1 for t in music(everything) if t.muted) == 18 + sum(1 for t in music(tracks) if t.muted)
+    assert [(t.name, note_count(t)) for t in music(tracks)] == exported(mid)
+
+
+def test_verify_orchestral_most_tracks_disabled():
+    path = verify('orchestral-import-test-01.cpr')
+    _, tracks, _ = read(path)
+    assert len(tracks) == 25
