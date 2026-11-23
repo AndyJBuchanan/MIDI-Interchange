@@ -466,9 +466,9 @@ class Controller(QObject):
 
     # -- controller display ----------------------------------------------------
     def set_track_controller(self, track_id: str, value: str | None) -> None:
-        """A track's own controller: None follows the view, "none" shows nothing, else a key."""
-        if self._blocked():
-            return
+        """A track's own controller: None follows the view, "none" shows nothing, else a key.
+
+        A display choice, so it's allowed while mirroring (carry_over keeps it across re-imports)."""
         if value is not None and value != "none" and not ctlr.is_valid_key(value):
             raise ValueError("Track controller must be None, 'none' or a controller key")
         track = self.ws.track(track_id)

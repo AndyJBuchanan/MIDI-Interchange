@@ -794,7 +794,6 @@ def test_every_editing_method_is_refused_and_changes_nothing(mirrored):
         lambda: ctl.move_track(bass.id, 1),
         lambda: ctl.remove_track(bass.id),
         lambda: ctl.adopt_tempo(ctl.ws.sources[0].id),
-        lambda: ctl.set_track_controller(bass.id, 'cc7'),
         lambda: ctl.undo(),
         lambda: ctl.redo(),
         lambda: ctl.move_clip(bass.id, clip.id, F(5)),
@@ -1390,3 +1389,13 @@ def test_a_read_that_waits_for_a_gesture_says_so_once(mirrored, tmp_path, monkey
     assert 'Mirror: import waiting' in w.statusBar().currentMessage()
     w._mirror_pending = None
     w._close_mirror_log()
+
+
+def test_a_tracks_controller_display_can_be_set_while_mirroring_and_survives_a_save(app):
+    ctl = mirroring_ctl(Bass=40, Keys=60)
+    bass = by_name(ctl.ws, 'Bass')
+    ctl.set_track_controller(bass.id, 'pb')                  # a display choice, not an edit
+    assert bass.controller == 'pb'
+    assert not ctl._undo                                     # and no undo step
+    ctl.apply_mirror(file_result(Bass=40, Keys=60))
+    assert by_name(ctl.ws, 'Bass').controller == 'pb'
