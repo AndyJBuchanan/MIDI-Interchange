@@ -708,6 +708,8 @@ class MainWindow(QMainWindow):
         parts = [f"<b>MIRRORING</b> {self._mirror_name()}", "read-only", "updates when the file is saved"]
         if self._mirror_updated:
             parts.append(f"Last updated {self._mirror_updated}")
+        if not any(not t.auxiliary for t in self.ctl.ws.tracks):
+            parts.append("<b>No importable tracks</b> in the current save")
         if self._mirror_failed:
             parts.append("Last read failed" + (f": {html.escape(self._mirror_failed_headline())}" if self._mirror_failed_reason else ""))
         if self._mirror_watcher is not None and self._mirror_watcher.missing:
@@ -822,7 +824,9 @@ class MainWindow(QMainWindow):
         w.missingChanged.connect(self._mirror_missing_changed)
         self.ctl.enter_mirror(snap.result)
         n = len(self.ctl.ws.tracks)
-        self.statusBar().showMessage(f"Mirroring {self._mirror_name()}: {n} track{'s' if n != 1 else ''} at bar 1", 10000)
+        shown = "no importable tracks" if not any(not t.auxiliary for t in self.ctl.ws.tracks) else \
+            f"{n} track{'s' if n != 1 else ''} at bar 1"
+        self.statusBar().showMessage(f"Mirroring {self._mirror_name()}: {shown}", 10000)
         w.start()
         return True
 
@@ -889,8 +893,10 @@ class MainWindow(QMainWindow):
         detail = ", ".join(x for x in (f"{counts['new']} new" if counts["new"] else "",
                                        f"{counts['gone']} gone" if counts["gone"] else "") if x)
         n = counts["tracks"]
+        shown = "no importable tracks" if not any(not t.auxiliary for t in self.ctl.ws.tracks) else \
+            f"{n} track{'s' if n != 1 else ''}"
         self.statusBar().showMessage(f"Mirror: {self._mirror_name()} re-imported at {stamp}: "
-                                     f"{n} track{'s' if n != 1 else ''}" + (f" ({detail})" if detail else ""), 10000)
+                                     f"{shown}" + (f" ({detail})" if detail else ""), 10000)
         self._update_mirror_banner()
 
     def _mirror_unchanged(self) -> None:

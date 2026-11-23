@@ -16,6 +16,8 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from ..core.import_cubase import NoEnabledTracks
+from ..core.import_result import ImportResult
 from ..interchange.readers import payload_from_path, read_payload
 
 def _wall(t: float | None = None) -> str:
@@ -91,7 +93,11 @@ def read_snapshot(path: str, include_disabled: bool = False) -> Snapshot:
     """Read-only: stat, hash and parse the file. Raises if it changed while being read."""
     before = file_signature(path)
     digest = _file_digest(path)
-    result = read_payload(payload_from_path(path), include_disabled=include_disabled)
+    try:
+        result = read_payload(payload_from_path(path), include_disabled=include_disabled)
+    except NoEnabledTracks as exc:
+        # Every track is disabled: the project holds nothing importable, and an empty workspace is the true mirror.
+        result = ImportResult(exc.source, [], preserve_track_state=True)
     if file_signature(path) != before:
         raise _ChangedWhileReading()
     return Snapshot(before, digest, result)

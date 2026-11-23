@@ -210,7 +210,7 @@ Log: `watch_save-031855.log` (4 files, 3 folders, polled every 50 ms, about 9 mi
 - **Failed or half-written read:**
   - The last good import stays.
   - The status bar says what failed: "Mirror: Song.cpr couldn't be read at 14:03:05 (reason). Keeping the version from 14:02:31; retrying."
-  - The app retries (see *Watching*), and the banner shows "Last read failed: <the reason>" (its first sentence), so the problem is visible without the status bar. A save with no enabled tracks left (Cubase disabled tracks) shows its reason this way.
+  - The app retries (see *Watching*), and the banner shows "Last read failed: <the reason>" (its first sentence), so the problem is visible without the status bar. A save with no importable tracks left (every track disabled in Cubase) is not a failed read: the workspace empties, because no tracks is what the file now holds, and the banner says "No importable tracks in the current save".
 - **Deferred during gestures:** a finished read isn't applied while a range drag, an external drag or a drag-out is in progress (`timeline.gesture_active`, `ctl.file_drag_active`). It's applied when the gesture ends, as session saves are deferred today.
 
 ### Read-only while mirroring

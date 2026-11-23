@@ -165,6 +165,16 @@ def _markers(wk: cf.Walker) -> list[Event]:
     return [Event(t, mido.MetaMessage('marker', text=name), i) for i, (t, name) in enumerate(out)]
 
 
+class NoEnabledTracks(ImportError_):
+    """Every track that could be imported is disabled in Cubase. Importing it is refused (there is nothing
+    to bring in), but the project really does hold no importable tracks, so a mirror applies .source
+    with no tracks instead of keeping the previous version."""
+
+    def __init__(self, message: str, source: Source):
+        super().__init__(message)
+        self.source = source
+
+
 def _all_disabled_message(count: int, notes: list[str]) -> str:
     """The failure for a project whose only importable tracks are disabled.
     The notes collected on the way go into the message so they are not lost."""
@@ -293,18 +303,20 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
         # Audio tracks are never imported, but a disabled one still counts towards "everything is disabled".
         skipped_disabled += sum(1 for o in wk.objects.values()
                                 if o.cls.name == 'MAudioTrackEvent' and cf.track_disabled_hidden(wk, o)[0])
-        if skipped_disabled and not any(not t.auxiliary for t in tracks) and not marker_events:
-            raise ValueError(_all_disabled_message(skipped_disabled, warnings))
+        all_disabled = bool(skipped_disabled) and not any(not t.auxiliary for t in tracks) and not marker_events
+        all_disabled_text = _all_disabled_message(skipped_disabled, warnings) if all_disabled else ''
         if any(t.source_transpose for t in tracks):
             warn('Track transpose (MIDI Modifiers) is applied to the notes, as Cubase\'s MIDI export does')
         warn('Instruments, MIDI inserts and other MIDI modifiers are not applied; the stored MIDI is imported')
-        if not any(not t.auxiliary for t in tracks) and not marker_events:
+        if not any(not t.auxiliary for t in tracks) and not marker_events and not all_disabled:
             raise ValueError('The project contains no supported MIDI parts or markers')
         source = Source(sid, name, TICKS, 1, datetime.now(), tempo_map=tempo_map, path=path,
                         app=f'Cubase {version}', track_names=tuple(names), warnings=tuple(warnings),
                         byte_size=byte_size if byte_size is not None else len(data),
                         input_format='cubase', format_version=version,
                         display_bar_offset=cf.display_bar_offset(wk))
+        if all_disabled:
+            raise NoEnabledTracks(all_disabled_text, source)
         return source, tracks
     except (ValueError, TypeError, KeyError, IndexError, OSError, UnicodeError, struct.error,
             RecursionError, ZeroDivisionError, OverflowError) as exc:

@@ -748,19 +748,36 @@ def test_a_failed_read_keeps_the_import_reports_it_and_a_good_save_clears_it(mir
     assert 'Last read failed' not in mirrored.win.mirror_label.text()
 
 
-def test_the_banner_says_why_the_last_save_was_not_imported(mirrored):
-    """A save with no enabled tracks left is a problem: the banner says so, not only the status bar."""
-    from midi_interchange.core.import_cubase import import_cubase
-    from midi_interchange.core.import_smf import ImportError_
-    with pytest.raises(ImportError_) as err:
-        import_cubase(str(DTRACKS / 'd6.cpr'), 'd6.cpr')
+def test_the_banner_names_the_reason_for_a_failed_read(mirrored):
     w = mirrored.win
-    w._mirror_read_failed(str(err.value))
+    w._mirror_read_failed('Could not read Cubase project: The part is damaged; more detail')
     text = w.mirror_label.text()
-    assert 'Last read failed: 1 track in the project is disabled in Cubase, and no other track could be imported' in text
-    assert 'Could not read Cubase project' not in text and '<b>MIRRORING</b>' in text
+    assert 'Last read failed: The part is damaged' in text and 'more detail' not in text
     mirrored.saved(song(Bass=40, Keys=60, Lead=70))                      # a good save clears the reason
     assert 'Last read failed' not in w.mirror_label.text()
+
+
+def test_a_save_with_every_track_disabled_empties_the_workspace_and_the_banner_says_so(tmp_path, win, monkeypatch):
+    """No importable tracks is a true mirror of that save: the workspace empties (it is not kept), it is not
+    reported as a failed read, and a later save with tracks brings them back."""
+    p = tmp_path / 'Song.cpr'
+    shutil.copy(DTRACKS / 'd0.cpr', p)
+    monkeypatch.setattr(win, '_confirm_mirror_replace', lambda: True)
+    clock = FakeClock()
+    assert win.start_mirror(str(p), clock=clock, executor=Inline())
+    win._mirror_watcher._timer.stop()
+    try:
+        m = Mirrored(win, p, clock)
+        assert len(win.ctl.ws.tracks) >= 3 and 'No importable tracks' not in win.mirror_label.text()
+        m.saved((DTRACKS / 'd6.cpr').read_bytes())                       # d6: its only track is disabled
+        assert win.ctl.ws.tracks == []
+        assert 'No importable tracks' in win.mirror_label.text() and 'Last read failed' not in win.mirror_label.text()
+        assert 'no importable tracks' in m.status()
+        m.saved((DTRACKS / 'd0.cpr').read_bytes())
+        assert [t.name for t in win.ctl.ws.tracks] == ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C']
+        assert 'No importable tracks' not in win.mirror_label.text()
+    finally:
+        win.unmirror()
 
 
 def test_a_missing_file_says_so_and_a_restored_one_is_read(mirrored):
