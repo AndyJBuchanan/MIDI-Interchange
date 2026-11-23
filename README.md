@@ -80,6 +80,7 @@ The Cubase and Reason readers are checked against each DAW's own MIDI export of 
 
 - **Versions:** Cubase 15 and 16, and Reason 13 and 14. Other Cubase versions are refused with a clear message. Songs saved by Reason 12 and earlier are encrypted: open them in Reason 13 or later and save them again first. A future DAW update could change the format; if a project won't open, or something looks wrong, a copy of the project helps a lot in a bug report.
 - **MIDI only:** audio, instruments, plug-ins and device automation aren't imported, nor is anything a DAW generates at playback: Cubase Pattern Editor parts, the chord track and MIDI inserts, and Reason pattern devices and Player devices. They're listed in Source Info.
+- **Disabled tracks:** a Cubase track switched off with Disable Track isn't imported, as Cubase plays nothing from it and leaves it out of its own MIDI export; a note in Source Info says which. Muted and hidden tracks still come in (hidden ones are noted).
 - **Approximations:** Cubase tempo ramps become a tempo step every beat, as Cubase's own MIDI export does. Folders are flattened, Reason's mixer mute and solo aren't read, and a Reason clip's hidden notes and loop structure can't be brought back once written out.
 
 Details, evidence and decisions: the [Cubase](docs/plans/cubase-import.md), [Reason](docs/plans/reason-import.md) and [DAWproject](docs/plans/dawproject-import.md) plans.

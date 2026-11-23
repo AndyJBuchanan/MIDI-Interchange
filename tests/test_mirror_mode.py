@@ -336,6 +336,50 @@ def test_a_cubase_project_replaced_by_temp_file_and_rename(tmp_path, app):
     assert names(ev.imported[0]) == names(read_snapshot(str(CUBASE_B)).result)
 
 
+DTRACKS = SAMPLES / 'project-cubase-phases' / 'DTracks'
+
+
+def test_a_track_disabled_then_re_enabled_in_cubase_goes_and_comes_back(tmp_path, app):
+    """d0 (three enabled tracks) -> d1 (B disabled) -> d5 (B enabled again): B leaves the workspace, then
+    returns as a new track, and A and C keep their ids and states throughout."""
+    p = tmp_path / 'Song.cpr'
+    shutil.copy(DTRACKS / 'd0.cpr', p)
+    w, clock, ev = watch(p)
+    ws = workspace_of(read_snapshot(str(p)).result)
+    a, c = by_name(ws, 'Pianoteq 9 A'), by_name(ws, 'Pianoteq 9 C')
+    a.color, c.muted = '#123456', True
+    ids = {a.id, c.id}
+    for src, expected_names, counts in (
+            ('d1', ['Pianoteq 9 A', 'Pianoteq 9 C'], {'tracks': 2, 'new': 0, 'gone': 1}),
+            ('d5', ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C'], {'tracks': 3, 'new': 1, 'gone': 0})):
+        save_replace(p, (DTRACKS / f'{src}.cpr').read_bytes())
+        advance(w, clock, 1.5)
+        result = ev.imported[-1]
+        snap, got, _ = carry_over(ws, result)
+        assert names(result) == expected_names and got == counts
+        assert {t.id for t in snap['tracks']} >= ids
+        kept = {t.name: t for t in snap['tracks']}
+        assert kept['Pianoteq 9 A'].id == a.id and kept['Pianoteq 9 A'].color == '#123456'
+        assert kept['Pianoteq 9 C'].id == c.id and kept['Pianoteq 9 C'].muted
+        ws.tracks = list(snap['tracks'])
+
+
+def test_mirror_passes_include_disabled_on_every_reimport(tmp_path, app):
+    p = tmp_path / 'Song.cpr'
+    shutil.copy(DTRACKS / 'd0.cpr', p)
+    clock = FakeClock()
+    w = MirrorWatcher(str(p), clock=clock, executor=Inline(), include_disabled=True)
+    w.set_baseline(read_snapshot(str(p), True))
+    ev = Events(w)
+    save_replace(p, (DTRACKS / 'd1.cpr').read_bytes())
+    advance(w, clock, 1.5)
+    assert names(ev.imported[0]) == ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C']
+    assert [t.muted for t in ev.imported[0].tracks] == [False, True, False]
+    save_replace(p, (DTRACKS / 'd2.cpr').read_bytes())
+    advance(w, clock, 1.5)
+    assert len(ev.imported) == 2 and names(ev.imported[-1]) == ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C']
+
+
 def test_a_reason_song_written_in_place(tmp_path, app):
     p = tmp_path / 'Song.reason'
     shutil.copy(REASON_A, p)
@@ -704,6 +748,38 @@ def test_a_failed_read_keeps_the_import_reports_it_and_a_good_save_clears_it(mir
     assert 'Last read failed' not in mirrored.win.mirror_label.text()
 
 
+def test_the_banner_names_the_reason_for_a_failed_read(mirrored):
+    w = mirrored.win
+    w._mirror_read_failed('Could not read Cubase project: The part is damaged; more detail')
+    text = w.mirror_label.text()
+    assert 'Last read failed: The part is damaged' in text and 'more detail' not in text
+    mirrored.saved(song(Bass=40, Keys=60, Lead=70))                      # a good save clears the reason
+    assert 'Last read failed' not in w.mirror_label.text()
+
+
+def test_a_save_with_every_track_disabled_empties_the_workspace_and_the_banner_says_so(tmp_path, win, monkeypatch):
+    """No importable tracks is a true mirror of that save: the workspace empties (it is not kept), it is not
+    reported as a failed read, and a later save with tracks brings them back."""
+    p = tmp_path / 'Song.cpr'
+    shutil.copy(DTRACKS / 'd0.cpr', p)
+    monkeypatch.setattr(win, '_confirm_mirror_replace', lambda: True)
+    clock = FakeClock()
+    assert win.start_mirror(str(p), clock=clock, executor=Inline())
+    win._mirror_watcher._timer.stop()
+    try:
+        m = Mirrored(win, p, clock)
+        assert len(win.ctl.ws.tracks) >= 3 and 'No importable tracks' not in win.mirror_label.text()
+        m.saved((DTRACKS / 'd6.cpr').read_bytes())                       # d6: its only track is disabled
+        assert win.ctl.ws.tracks == []
+        assert 'No importable tracks' in win.mirror_label.text() and 'Last read failed' not in win.mirror_label.text()
+        assert 'no importable tracks' in m.status()
+        m.saved((DTRACKS / 'd0.cpr').read_bytes())
+        assert [t.name for t in win.ctl.ws.tracks] == ['Pianoteq 9 A', 'Pianoteq 9 B', 'Pianoteq 9 C']
+        assert 'No importable tracks' not in win.mirror_label.text()
+    finally:
+        win.unmirror()
+
+
 def test_a_missing_file_says_so_and_a_restored_one_is_read(mirrored):
     data = mirrored.path.read_bytes()
     mirrored.path.unlink()
@@ -873,9 +949,9 @@ def test_track_headers_are_read_only_but_mute_and_solo_work(mirrored):
     for t in ctl.ws.tracks:
         h = w.track_panel.header(t.id)
         assert h.name_edit.isReadOnly()
-        for widget in (h.remove_btn, h.grip, h.color_btn, h.ctl_box):
+        for widget in (h.remove_btn, h.grip, h.color_btn):
             assert not widget.isEnabled()
-        assert h.mute_btn.isEnabled() and h.solo_btn.isEnabled()
+        assert h.mute_btn.isEnabled() and h.solo_btn.isEnabled() and h.ctl_box.isEnabled()
         h.remove_btn.click()
         h.color_btn.click()
         h.name_edit.setText('X')
@@ -886,6 +962,21 @@ def test_track_headers_are_read_only_but_mute_and_solo_work(mirrored):
     assert ctl.ws.tracks[0].muted
     h.solo_btn.click()
     assert ctl.ws.tracks[0].soloed
+
+
+def test_the_header_controller_box_works_while_mirroring_and_the_choice_survives_a_save(mirrored):
+    """The CC box on a track header (not just Controller.set_track_controller) stays usable."""
+    w, ctl = mirrored.win, mirrored.ctl
+    QApplication.processEvents()
+    bass = by_name(ctl.ws, 'Bass')
+    h = w.track_panel.header(bass.id)
+    assert h.ctl_box.isEnabled()
+    choice = next(a for a in h._build_controller_menu().actions() if a.text() == 'None')
+    choice.trigger()                                         # the header menu's own action
+    assert bass.controller == 'none' and not ctl._undo       # a display choice: no undo step
+    ctl.apply_mirror(file_result(Bass=40, Keys=60))
+    assert by_name(ctl.ws, 'Bass').controller == 'none'
+    assert w.track_panel.header(by_name(ctl.ws, 'Bass').id).ctl_box.isEnabled()
 
 
 def test_header_grip_drag_does_not_reorder(mirrored):

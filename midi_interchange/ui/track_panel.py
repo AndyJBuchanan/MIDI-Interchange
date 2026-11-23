@@ -164,12 +164,14 @@ class TrackHeader(QFrame):
             "QLineEdit:focus { background: #1b1c1f; }" % (theme.TEXT.name() if track in self.ctl.ws.global_tracks() else theme.TEXT_DIM.name()))
 
     def _apply_mirror_state(self) -> None:
-        """While mirroring the header is read-only: no rename, remove, reorder, colour/channel or controller choice.
-        Mute and solo stay."""
+        """While mirroring the header is read-only: no rename, remove, reorder or colour/channel choice.
+        Mute and solo stay, and so does the controller box: it is a display choice that changes no source
+        state, and carry_over keeps it across re-imports."""
         editable = not self.ctl.mirroring
         self.name_edit.setReadOnly(not editable)
-        for w in (self.remove_btn, self.grip, self.color_btn, self.ctl_box):
+        for w in (self.remove_btn, self.grip, self.color_btn):
             w.setEnabled(editable)
+        self.ctl_box.setEnabled(True)
 
     def resizeEvent(self, e) -> None:
         super().resizeEvent(e)

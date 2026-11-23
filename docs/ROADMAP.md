@@ -63,6 +63,7 @@ Updated 2026-11-23.
 
 Not planned yet. These options exist, or are planned, in code but have no UI. They're collected here so a settings page can expose them later.
 
+- **Include disabled Cubase tracks** (planned reader option `include_disabled`, default off): see [the plan](plans/cubase-disabled-tracks.md).
 - **Show Markers** (QSettings `show_markers`, default on): the marker row in the timeline header. It also has a toolbar button. See [the timeline management plan](plans/timeline-management.md).
 - **Session persistence:** internal enable/disable setting, default on. Gate session restoration and saving; expose a switch here later if needed. See [the plan](plans/session-persistence.md).
 - **Notes that started before an edge** (`ExportOptions.partial_notes`, default on): they sound from a range or clip-trim edge, or are dropped.

@@ -165,8 +165,30 @@ def _markers(wk: cf.Walker) -> list[Event]:
     return [Event(t, mido.MetaMessage('marker', text=name), i) for i, (t, name) in enumerate(out)]
 
 
-def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=None):
-    """Return the same (Source, tracks) result as the SMF reader."""
+class NoEnabledTracks(ImportError_):
+    """Every track that could be imported is disabled in Cubase. Importing it is refused (there is nothing
+    to bring in), but the project really does hold no importable tracks, so a mirror applies .source
+    with no tracks instead of keeping the previous version."""
+
+    def __init__(self, message: str, source: Source):
+        super().__init__(message)
+        self.source = source
+
+
+def _all_disabled_message(count: int, notes: list[str]) -> str:
+    """The failure for a project whose only importable tracks are disabled.
+    The notes collected on the way go into the message so they are not lost."""
+    one = count == 1
+    text = (f'{count} track{"" if one else "s"} in the project {"is" if one else "are"} disabled in Cubase, '
+            f'and no other track could be imported, so nothing was imported')
+    return text + ''.join(f'; {n}' for n in notes if 'is disabled in Cubase' not in n)
+
+
+def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=None, include_disabled: bool = False):
+    """Return the same (Source, tracks) result as the SMF reader.
+
+    include_disabled: tracks disabled in Cubase (Disable Track) are left out
+    with a note; when true they are imported muted instead."""
     try:
         if not data:
             size = os.path.getsize(path)
@@ -202,9 +224,15 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
         part_events = [o for o in wk.objects.values() if o.cls.name == 'MMidiPartEvent']
         tracks: list[Track] = []
         names: list[str] = []
+        skipped_disabled = 0
         for index, te in enumerate(track_events):
             name_ = cf.track_name(wk, te)
             names.append(name_)
+            disabled, hidden = cf.track_disabled_hidden(wk, te)
+            if disabled and not include_disabled:
+                warn(f'Track "{name_}" is disabled in Cubase; not imported')
+                skipped_disabled += 1
+                continue
             if cf.track_time_base_linear(wk, te):
                 warn(f'Track "{name_}" uses the linear (seconds) time base; it is not imported yet')
                 continue
@@ -212,6 +240,8 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
             if flags is None:
                 raise ValueError(f'Track "{name_}": mute/solo state not found')
             muted, soloed = bool(flags & cf.TRACK_MUTE), bool(flags & cf.TRACK_SOLO)
+            if disabled:
+                muted = True            # include_disabled: silent, but there to inspect
             modifiers = cf.track_midi_modifiers(wk, te)
             transpose = sum(m.get('Transpose', 0) for m in modifiers)
             if not -127 <= transpose <= 127:
@@ -251,6 +281,10 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
                                   trim_start=trim_start, trim_end=trim_end, muted=pe.muted))
             if not clips:
                 continue
+            if disabled:
+                warn(f'Track "{name_}" is disabled in Cubase; imported muted')
+            if hidden:
+                warn(f'Track "{name_}" is hidden in Cubase; imported')
             tracks.append(Track(new_id(), name_, sid, clips, original_name=name_, muted=muted, soloed=soloed,
                                 channels=track_channels([e for c in clips for e in c.events]),
                                 source_transpose=transpose))
@@ -266,16 +300,23 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
             warn('Pattern Editor parts are not imported')
         if 'MChordEvent' in present:
             warn('Chord track events are not imported')
+        # Audio tracks are never imported, but a disabled one still counts towards "everything is disabled".
+        skipped_disabled += sum(1 for o in wk.objects.values()
+                                if o.cls.name == 'MAudioTrackEvent' and cf.track_disabled_hidden(wk, o)[0])
+        all_disabled = bool(skipped_disabled) and not any(not t.auxiliary for t in tracks) and not marker_events
+        all_disabled_text = _all_disabled_message(skipped_disabled, warnings) if all_disabled else ''
         if any(t.source_transpose for t in tracks):
             warn('Track transpose (MIDI Modifiers) is applied to the notes, as Cubase\'s MIDI export does')
         warn('Instruments, MIDI inserts and other MIDI modifiers are not applied; the stored MIDI is imported')
-        if not any(not t.auxiliary for t in tracks) and not marker_events:
+        if not any(not t.auxiliary for t in tracks) and not marker_events and not all_disabled:
             raise ValueError('The project contains no supported MIDI parts or markers')
         source = Source(sid, name, TICKS, 1, datetime.now(), tempo_map=tempo_map, path=path,
                         app=f'Cubase {version}', track_names=tuple(names), warnings=tuple(warnings),
                         byte_size=byte_size if byte_size is not None else len(data),
                         input_format='cubase', format_version=version,
                         display_bar_offset=cf.display_bar_offset(wk))
+        if all_disabled:
+            raise NoEnabledTracks(all_disabled_text, source)
         return source, tracks
     except (ValueError, TypeError, KeyError, IndexError, OSError, UnicodeError, struct.error,
             RecursionError, ZeroDivisionError, OverflowError) as exc:
