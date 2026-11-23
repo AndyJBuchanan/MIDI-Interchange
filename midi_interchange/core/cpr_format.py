@@ -32,6 +32,7 @@ precedes the body.
 from __future__ import annotations
 
 import re
+import math
 import struct
 from dataclasses import dataclass, field
 
@@ -376,7 +377,9 @@ def iter_midi_parts(wk: Walker, objs: list[Obj]):
 def decode_part_events(wk: Walker, part: Obj) -> tuple[list[CprEvent], list[str], dict]:
     """Decode an MMidiPart body.
 
-    Layout: string name | uW, u32, uW (unknown) | u32 eventCount | u8 classCount
+    Layout: string name | u32 time base, then musical: 2 x W-byte tempo and
+    signature references, or linear (1): f64 1.0 (12 bytes instead of 4 + 2W;
+    event positions and note lengths are then seconds) | u32 eventCount | u8 classCount
     | classCount x (NEW/REF class tag + uW length 0) | eventCount events.
     The u8 classCount is absent when eventCount is 0.
     Each event: u8 status, then a compact body; status 0 means a NEW/REF
@@ -386,16 +389,21 @@ def decode_part_events(wk: Walker, part: Obj) -> tuple[list[CprEvent], list[str]
     events: list[CprEvent] = []
     problems: list[str] = []
     name, p = _pstring(d, part.body_at)
-    hdr = [int.from_bytes(d[p:p + w], 'big'), int.from_bytes(d[p + w:p + w + 4], 'big'),
-           int.from_bytes(d[p + w + 4:p + 2 * w + 4], 'big')]
-    p += 2 * w + 4
+    linear = int.from_bytes(d[p:p + 4], 'big') == 1
+    if linear:
+        hdr = [1, struct.unpack('>d', d[p + 4:p + 12])[0]]
+        p += 12
+    else:
+        hdr = [int.from_bytes(d[p:p + 4], 'big'), int.from_bytes(d[p + 4:p + 4 + w], 'big'),
+               int.from_bytes(d[p + 4 + w:p + 4 + 2 * w], 'big')]
+        p += 4 + 2 * w
     count = int.from_bytes(d[p:p + 4], 'big')
     p += 4
     nclasses = 0
     if count:                                  # absent in an empty part
         nclasses = d[p]
         p += 1
-    info = {'name': name, 'header': hdr, 'count': count}
+    info = {'name': name, 'header': hdr, 'count': count, 'linear': linear}
     for _ in range(nclasses):
         o = wk.try_object(p, part.end)
         if o is None or o.length != 0:
@@ -447,7 +455,7 @@ class PartEvent:
     copy a W-byte back-reference to an existing one. Musical time base: all
     in ticks (480 PPQ) from the project's absolute zero; a note's absolute
     time is start - offset + note position. Linear time base stores seconds
-    instead (tier 3 c26) and is not decoded yet.
+    instead (tier 3 c26, d8 baseline).
     """
     obj: Obj
     flags: int
@@ -510,6 +518,37 @@ def tempo_points(wk: Walker, ev: Obj) -> tuple[list[TempoPoint], float]:
         p += 22
     fixed, = struct.unpack('>f', d[p:p + 4])
     return pts, fixed
+
+
+def part_is_linear(wk: Walker, part: Obj) -> bool:
+    """The part's own time base: the u32 after its name (1 = linear, seconds)."""
+    _, p = _pstring(wk.d, part.body_at)
+    return int.from_bytes(wk.d[p:p + 4], 'big') == 1
+
+
+def seconds_to_ticks(points: list[TempoPoint], seconds: float) -> float:
+    """Convert a time in seconds to f64 ticks (480 PPQ) through the tempo
+    points. Constant tempo between points; into a ramp point the tempo is
+    linear in beats, so with B beats from bpm0 to bpm1, t(x) = 60 B / (bpm1 -
+    bpm0) * ln(bpm(x) / bpm0), inverted here. Before the first point and after
+    the last, the nearest point's tempo continues."""
+    if not points:
+        return seconds / 0.5 * 480          # no tempo track: 120 BPM
+    i = 0
+    for k, pt in enumerate(points):
+        if pt.seconds <= seconds:
+            i = k
+    a = points[i]
+    b = points[i + 1] if i + 1 < len(points) else None
+    t = seconds - a.seconds
+    if b is not None and b.ramp and b.ticks > a.ticks:
+        bpm0, bpm1 = a.bpm, b.bpm
+        beats = (b.ticks - a.ticks) / 480
+        if abs(bpm1 - bpm0) < 1e-9:
+            return a.ticks + t / a.seconds_per_beat * 480
+        bpm = bpm0 * math.exp(t * (bpm1 - bpm0) / (60 * beats))
+        return a.ticks + beats * (bpm - bpm0) / (bpm1 - bpm0) * 480
+    return a.ticks + t / a.seconds_per_beat * 480
 
 
 def signature_points(wk: Walker, ev: Obj) -> list[tuple[int, int, int]]:

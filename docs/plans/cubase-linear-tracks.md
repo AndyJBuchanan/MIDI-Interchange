@@ -1,6 +1,6 @@
 # Plan: Cubase linear time-base tracks
 
-Status: **agreed** (2026-11-23), not built. Roadmap entry: "Cubase linear-time-base tracks" (Agreed, not started). Building is for a separate session from this plan.
+Status: **built** (2026-11-23), on `feature/cubase-linear-tracks`. Manual checklist 8u passed on the owner's studio Mac with Cubase 16 projects (d8 baseline, c26). Built as planned, with one addition agreed during the build: parts inside an inactive track version are left out, so the import matches Cubase's export (the app imports only what is active). Still unknown: a linear part spanning a tempo change in the project's own tempo, positions inside a ramp (tested only against the formula), an extended or looped linear part, a linear track in a folder or with a muted part, and Cubase 14.
 
 ## The problem
 
@@ -27,7 +27,7 @@ Details and evidence are in [CUBASE_FILE_FORMAT.md, sections 4.2 and 4.7](../for
 
 ### Reading a linear part
 
-- `cpr_format.decode_part_events` reads the header as "u32, W-byte, W-byte". A linear header is `u32 1, f64 1.0` and the same width, so the decode needs a branch on the time base, then decodes the events as for a musical part with positions and lengths in seconds. The format notes say the bytes are consumed exactly (c26); d8 baseline is the second check.
+- `cpr_format.decode_part_events` reads the header as "u32, W-byte, W-byte". A linear header is `u32 1, f64 1.0` and 8 bytes shorter (found at build), so the decode needs a branch on the time base, then decodes the events as for a musical part with positions and lengths in seconds. The format notes say the bytes are consumed exactly (c26); d8 baseline is the second check.
 - `part_event_info` and `part_event_window` already read start, length and offset as f64. For a linear part they are seconds.
 - `track_time_base_linear` is already the test. A part carries its own time base, so the part's header, not only the track's, decides how its events are read. (To check at build: whether a part can differ from its track.)
 

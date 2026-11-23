@@ -45,7 +45,7 @@ Offsets are decimal unless written `0x…`. "Archive offset" means a byte offset
 | `Verify/BBCSO_Woodwinds101-App01-MacBook.cpr` (local) | 15.0.10 | RIFF | 25 MB; expression-map articulations; markers declared past 16 MB | `.midi` export |
 | `Verify/Beat003vs.cpr` | 15.0.30 | RIF2 | Omnivocal lyric properties; varied mixer tail | None |
 | `Verify/orchestral-import-test-01.cpr` (local) | now 16.0.5 (see section 8) | RIFF | 173 MB, mostly plug-in state; one out-of-range aftertouch | None |
-| `DTracks/d0` to `d11` (no d3; `… baseline.cpr` enabled twins for d6, d7, d9, d10; `d9(15)` is an unrelated test) | 16.0.5 | RIF2 | Disabled, muted and hidden tracks: instrument, MIDI, drum and audio, in and out of a folder; a linear time base instrument track (d8) | `.midi` for d0, d1, d2, d4, d5 only |
+| `DTracks/d0` to `d11` (no d3; `… baseline.cpr` enabled twins for d6, d7, d9, d10; `d9(15)` is an unrelated test) | 16.0.5 | RIF2 | Disabled, muted and hidden tracks: instrument, MIDI, drum and audio, in and out of a folder; a linear time base instrument track (d8); d8 baseline: a linear and a musical track, tempo changed after (160 to 140 BPM) | `.midi` for d0, d1, d2, d4, d5 and d8 baseline |
 | `Verify/seqtest-001.cpr` | 16.0.5 | RIF2 | Drum and melodic Pattern Editor parts only | None |
 | `Verify/vocalfun001(16).cpr` | 16.0.5 | RIF2 | Drum Track, Omnivocal, score lyrics, ARA track, chord track | None |
 | `_archive/…` (`GA … -01x.cpr`, `delete-me-reimport.cpr`) | 15.0.30, 16.0.5 | RIFF, RIF2 | A re-save of GA; a scratch file | GA re-save has `.mid`, `.dawproject` |
@@ -381,14 +381,14 @@ Both a track's `MListNode` and a part's `MMidiPart` start with the same header:
 | Time base | u32 | 0 = musical (ticks), 1 = linear (seconds) |
 | Musical: tempo reference | W (or the whole object) | Back-reference to the `MTempoTrackEvent`; the object itself, inline, in the first node written |
 | Musical: signature reference | W (or the whole object) | Back-reference to the `MSignatureTrackEvent`; inline in the first node written |
-| Linear instead: f64 | 8 | 1.0 in all three linear nodes seen; meaning **UNKNOWN** |
+| Linear instead: f64 | 8 | 1.0 in every linear node seen (c26 and d8 baseline); meaning **UNKNOWN** |
 
 - **VERIFIED (check, 2026-11-22)**:
   - Across the fixtures of 30 MB or less, this holds in every musical-time node: 883 `MMidiPart`, 342 `MListNode` (track, device and marker lists) and 6 `MChordTrackNode` objects.
   - In 1,176 of them the two fields are back-references to the `MTempoTrackEvent` and `MSignatureTrackEvent`.
   - In the other 52 (one per file: the first node written), the two objects themselves are serialised inline at those positions.
-  - The linear form occurs in c26's Lead track node and Riff part, and in one empty, unowned part in BBCSO.
-- **Code disagreement.** `decode_part_events` reads these bytes as "uW, u32, uW (unknown)". That spans the same 4 + 2W bytes, so musical parts decode correctly. A linear part, with an f64 in place of the references, fails (section 8).
+  - The linear form occurs in c26's Lead track node and Riff part, in d8 baseline's linear track and parts, and in one empty, unowned part in BBCSO.
+- **Correction (build, 2026-11-23).** The linear header is **12 bytes** (u32 1 + f64), not the same width as the musical one (4 + 2W = 20 bytes at W = 8). The earlier note that the byte counts are the same was wrong: with W = 8 the linear header is 8 bytes shorter. `decode_part_events` now reads the u32 time base first and takes 12 bytes for linear, 4 + 2W for musical; the events then follow in both cases.
 - **INFERRED**: tracks and parts carry their own time base and a link to the tempo and signature maps used to convert between musical and linear time.
 
 ### 4.3 Tracks
@@ -526,8 +526,10 @@ Evidence for this layout:
   - The part's node header is `u32 1 · f64 1.0` instead of the two references.
   - The rest of the part body is the normal layout, with event positions and note lengths in **seconds**.
   - Decoded this way, c26's Riff part gives two notes: (0.66664 s, pitch 62, velocity 64, 1.3333 s) and (2.66664 s, 64, 90, 0.3333 s). That is exactly c07's notes (480 and 1920 ticks; 960 and 240 long) at 90 BPM, and the bytes are consumed exactly to the part's end.
-  - The reader skips linear tracks with a warning. The code comment "part body layout differs; not decoded" overstates the difference (section 8).
-- **INFERRED**: converting linear positions to beats needs the tempo map, because the part sits after c26's tempo changes. Not implemented.
+  - **VERIFIED on d8 baseline as well (build, 2026-11-23).** Its linear parts (start 0 and 9.0 s, length 7.5 s, offset 0, 14 notes each at 0, 0.5, 1.0... s, length 0.125 s) decode with the bytes consumed exactly.
+  - **Conversion rule, VERIFIED against both exports.** Each stored time in seconds is converted to ticks through the tempo points as saved, then rounded to whole ticks, as Cubase's MIDI export does. A note's length is the converted end minus the converted start. d8 baseline: 28 linear notes match `d8 baseline.midi` note for note (names, ticks, lengths; second part at 9.0 s = tick 10080 at 140 BPM). c26: the Lead's notes at ticks 8160, 9600, 15360, 16800 (lengths 960, 240) match, after the 120 -> 90 ramp.
+  - Between points tempo is constant; into a ramp point it is linear in beats (the closed form of section 4.8, inverted). On c26, converting through the exact points and through the reader's stepped tempo map both match the export after rounding (exact: 8160.0, 9600.0, 15359.98, 16799.98; stepped: about +0.36 tick). The notes sit after the ramp, so a position inside a ramp is not tested by a fixture.
+  - A part's content zero (start minus offset) is converted as a position. Event positions are converted from the content zero, so a part shared between two placements is converted once per placement.
 
 ### 4.8 Tempo track (`MTempoTrackEvent`)
 
@@ -726,7 +728,7 @@ High for the replace-by-rename pattern on this Mac: it was seen on every save of
 | Pattern Editor parts | Rendered as notes (indy: 644 drum notes) | Skipped | VERIFIED |
 | Expression-map articulations | Text events at each text-type articulation | Not imported | VERIFIED (BBCSO, section 4.14) |
 | Cycle markers | A marker at the start only | Start, plus a closing "name \|" marker (decision 4) | VERIFIED (c23) |
-| Linear-time-base tracks | Exported | Skipped with a warning | VERIFIED (c26.midi exists) |
+| Linear-time-base tracks | Exported, seconds converted at the tempo as saved | Imported the same way; a Source Info note names the track | VERIFIED (c26 and d8 baseline, note for note) |
 | Chord track | **UNKNOWN** (the plan expects it is not voiced unless converted to MIDI) | Skipped | — |
 | Instrument stack naming | Stack name ("Instrument Stack 01") | Same | VERIFIED (c18is) |
 
@@ -788,7 +790,7 @@ Each question says what would settle it. Where a Cubase experiment helps, it giv
 
 ### Q4. Linear time base in the reader
 
-**Status.** The layout is decoded (section 4.7). Converting seconds to beats needs the tempo map.
+**Status.** Answered by the build (section 4.7): the layout decodes and the conversion through the tempo map matches the exports for a part after a ramp (c26) and after a tempo change (d8 baseline). Still untested: a linear part that itself spans a tempo change.
 
 1. Open `c26.cpr`. Move the Lead part so that it starts before bar 3 and ends after bar 5, spanning the tempo change and ramp. Save As `q4-linear-span.cpr`. Export MIDI as `q4-linear-span.mid`.
 
@@ -871,8 +873,8 @@ These need no experiment unless a feature needs them:
 
 None of these changes what the reader imports today, except where noted.
 
-1. **`MMidiPart` header.** Code and plan describe it as "uW, u32, uW (unknown)". The evidence shows u32 time base · W-byte tempo reference · W-byte signature reference (section 4.2), the same byte count. It matters for linear parts, where an f64 replaces the references and the current code reports a problem.
-2. **Linear time base.** The `PartEvent` docstring and the plan say "the part body layout differs; not decoded". The only difference is the header; the events then decode in seconds (c26, section 4.7).
+1. **`MMidiPart` header (closed 2026-11-23).** Code and plan describe it as "uW, u32, uW (unknown)". The evidence shows u32 time base · W-byte tempo reference · W-byte signature reference (section 4.2), the same byte count. It matters for linear parts, where an f64 replaces the references and the current code reports a problem.
+2. **Linear time base (closed 2026-11-23).** The `PartEvent` docstring and the plan say "the part body layout differs; not decoded". The only difference is the header; the events then decode in seconds (c26, section 4.7).
 3. **Tempo and signature tracks "inside the I/O folder".** The plan, the `folder_path` docstring and `test_tempo_track_found_inside_or_outside_folders` read their byte position as folder placement ("GA has them loose; the other fixtures have tempo and signature inside the I/O folder").
    - The evidence: in all 52 files checked, the `MTempoTrackEvent` is written inline at the first node header that references it. That is "Stereo Out" in the I/O folder for most files, and the chord track node in GA (section 2.4).
    - So the position says nothing about where the user put the track. The reader finds them by class, so imports are unaffected. The test asserts a fact about byte positions, not about folders.
@@ -886,6 +888,7 @@ None of these changes what the reader imports today, except where noted.
 11. **Release velocity at 0.** The plan gives `OffV` as (v − 1) / 126, which can't represent 0. Cubase stores 0.0 for a release of 0 (the tail byte is 0) and exports velocity-0 note-offs. The reader produces 1 (section 6.2, Q5).
 12. **`HRDT`.** The plan gives it as "velocity in the same form" ((v − 1) / 126) for notes and value / 128 for aftertouch. Both scalings occur for notes, even within one file (section 4.6). The reader doesn't use it.
 13. **The "Score Editor symbols" warning.** In BBCSO the skipped `MScoreEvent`s are mostly expression-map articulation texts that Cubase exports (section 4.14), not only Score Editor symbols.
+14. **Part events inside a track version (found 2026-11-23, CLOSED).** d8 baseline's "musical" track is on track version v2; its other version (v1) is an `MTrackVariation` holding a part event (a linear part at 2.0 s, 14 notes, named without the "(D)" of the active parts). The active version's parts sit on the track itself; Cubase's editor and its MIDI export (re-exported 2026-11-23 to confirm) show only those. Owner decision: import only the active version. The reader leaves out part events inside an `MTrackVariation`. Seen on one fixture only, so which of several versions is active is not tested beyond this case.
 
 ---
 

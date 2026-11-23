@@ -72,6 +72,19 @@ def _tempo_map(wk: cf.Walker, warn) -> TempoMap:
     return TempoMap(tempos, sigs)
 
 
+def _tempo_points(wk: cf.Walker) -> list[cf.TempoPoint]:
+    ev = next((o for o in wk.objects.values() if o.cls.name == 'MTempoTrackEvent'), None)
+    return cf.tempo_points(wk, ev)[0] if ev is not None else []
+
+
+def _seconds_to_ticks(points: list[cf.TempoPoint], seconds: float) -> int:
+    """A linear-time-base position (seconds) as whole ticks through the
+    tempo points, as Cubase's MIDI export writes it."""
+    if seconds != seconds or abs(seconds) > MAX_TIME * 60:
+        raise ValueError('Position out of bounds')
+    return round(cf.seconds_to_ticks(points, seconds))
+
+
 def _message(e: cf.CprEvent, warn):
     """A non-note event as a mido message, or None if not representable."""
     ch = e.channel
@@ -93,10 +106,26 @@ def _message(e: cf.CprEvent, warn):
     return None
 
 
-def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter, transpose: int = 0) -> list[Event]:
+def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter, transpose: int = 0,
+                 linear_zero: float | None = None, points=()) -> list[Event]:
     """Events in content time (quarter notes from the part's content zero).
     transpose: the track's MIDI Modifiers transpose, added to note numbers as
-    Cubase's MIDI export does (GA's Prologue: +24)."""
+    Cubase's MIDI export does (GA's Prologue: +24).
+    linear_zero: for a linear-time-base part, the content zero in seconds;
+    positions and lengths are seconds and become whole ticks through the
+    tempo points, relative to the content zero's ticks."""
+    if linear_zero is not None:
+        zero_ticks = _seconds_to_ticks(points, linear_zero)
+
+        def conv(sec: float) -> float:
+            return _seconds_to_ticks(points, linear_zero + sec) - zero_ticks
+    else:
+        def conv(sec: float) -> float:
+            return sec
+
+    def length_of(pos: float, length: float) -> F:
+        # A linear note's length is its converted end minus its converted start.
+        return _ticks(conv(pos + length) - conv(pos)) if linear_zero is not None else _ticks(length)
     raw, problems, info = cf.decode_part_events(wk, part)
     for problem in problems:
         warn(f'{label}: {problem}; later events in this part are not imported')
@@ -114,7 +143,7 @@ def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter, transpo
             # one aftertouch value of 201). Skip the event, keep the import.
             warn('Events with out-of-range MIDI values were skipped')
             continue
-        at = _ticks(e.position)
+        at = _ticks(conv(e.position))
         if transpose and e.status in (0x90, 0xA0):
             note = e.data[0] + transpose
             if not 0 <= note <= 127:
@@ -130,7 +159,7 @@ def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter, transpo
             if off == 0 and e.tail[-1:] == b'\x00':
                 release = 0          # (v - 1) / 126 can't hold a release of 0: Cubase stores OffV 0.0 and a 0 tail byte
             out.append((at, mido.Message('note_on', channel=e.channel, note=e.data[0], velocity=max(1, e.data[1]))))
-            out.append((at + _ticks(e.length), mido.Message('note_off', channel=e.channel, note=e.data[0],
+            out.append((at + length_of(e.position, e.length), mido.Message('note_off', channel=e.channel, note=e.data[0],
                                                             velocity=max(0, min(127, release)))))
         else:
             msg = _message(e, warn)
@@ -215,13 +244,19 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
                 warnings.append(text)
 
         tempo_map = _tempo_map(wk, warn)
+        points = _tempo_points(wk)
         sid = new_id()
         counter = [0]
         shared: dict[int, list[Event]] = {}
         track_events = sorted((o for o in wk.objects.values() if o.cls.name in cf.TRACK_EVENTS),
                               key=lambda o: o.tag_at)
         folders = [o for o in wk.objects.values() if o.cls.name == 'MFolderTrack']
-        part_events = [o for o in wk.objects.values() if o.cls.name == 'MMidiPartEvent']
+        # Parts inside an MTrackVariation belong to a track version that is not the active one
+        # (the active version's parts sit on the track itself). Cubase plays and exports only the
+        # active version, so they are left out.
+        variations = [o for o in wk.objects.values() if o.cls.name == 'MTrackVariation']
+        part_events = [o for o in wk.objects.values() if o.cls.name == 'MMidiPartEvent'
+                       and not any(v.body_at <= o.tag_at < v.end for v in variations)]
         tracks: list[Track] = []
         names: list[str] = []
         skipped_disabled = 0
@@ -232,9 +267,6 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
             if disabled and not include_disabled:
                 warn(f'Track "{name_}" is disabled in Cubase; not imported')
                 skipped_disabled += 1
-                continue
-            if cf.track_time_base_linear(wk, te):
-                warn(f'Track "{name_}" uses the linear (seconds) time base; it is not imported yet')
                 continue
             flags = cf.track_state_flags(wk, te)
             if flags is None:
@@ -254,25 +286,37 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
                     ff = cf.folder_state_flags(wk, f)
                     muted, soloed = muted or bool(ff & cf.TRACK_MUTE), soloed or bool(ff & cf.TRACK_SOLO)
             clips = []
+            linear_track = cf.track_time_base_linear(wk, te)
             for o in sorted((o for o in part_events if te.body_at <= o.tag_at < te.end), key=lambda o: o.tag_at):
                 pe = cf.part_event_info(wk, o)
                 if pe.part is None:
                     raise ValueError(f'Track "{name_}": part contents not found')
                 if pe.length < 0 or pe.start < 0:
                     raise ValueError(f'Track "{name_}": invalid part extent')
-                key = (pe.part.tag_at, transpose)
+                lin = cf.part_is_linear(wk, pe.part)
+                if lin:
+                    # Seconds: converted through the tempo map as saved, as Cubase's export does.
+                    start_t = _seconds_to_ticks(points, pe.start)
+                    zero_t = _seconds_to_ticks(points, pe.start - pe.offset)
+                    length_t = _seconds_to_ticks(points, pe.start + pe.length) - start_t
+                    zero_sec = pe.start - pe.offset
+                else:
+                    start_t, zero_t, length_t, zero_sec = pe.start, pe.start - pe.offset, pe.length, None
+                # Linear events depend on where the part sits, so a shared one is converted per placement.
+                key = (pe.part.tag_at, transpose, zero_sec)
                 if key not in shared:
                     part_name = cf._pstring(wk.d, pe.part.body_at)[0]
-                    shared[key] = _clip_events(wk, pe.part, f'Part "{part_name}" on "{name_}"', warn, counter, transpose)
+                    shared[key] = _clip_events(wk, pe.part, f'Part "{part_name}" on "{name_}"', warn, counter, transpose,
+                                               zero_sec, points)
                 events = shared[key]
                 # Clip zero is the content zero, or the visible start when the
                 # part was extended before its content (negative offset; GA).
-                content_zero, start = _ticks(pe.start - pe.offset), _ticks(pe.start)
+                content_zero, start = _ticks(zero_t), _ticks(start_t)
                 offset = min(content_zero, start)
                 if content_zero > offset:
                     shift = content_zero - offset
                     events = [Event(e.time + shift, e.msg, e.seq) for e in events]
-                trim_start, trim_end = start - offset, start + _ticks(pe.length) - offset
+                trim_start, trim_end = start - offset, start + _ticks(length_t) - offset
                 length = max(trim_end, max((e.time for e in events), default=F(0)))
                 if offset + length > MAX_TIME:
                     raise ValueError('Part time exceeds workspace bounds')
@@ -283,6 +327,8 @@ def import_cubase(path: str | None, name: str, data: bytes = b'', *, byte_size=N
                 continue
             if disabled:
                 warn(f'Track "{name_}" is disabled in Cubase; imported muted')
+            if linear_track:
+                warn(f'Track "{name_}" was on Cubase\'s linear time base; its positions are converted at the project\'s tempo')
             if hidden:
                 warn(f'Track "{name_}" is hidden in Cubase; imported')
             tracks.append(Track(new_id(), name_, sid, clips, original_name=name_, muted=muted, soloed=soloed,
