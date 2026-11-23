@@ -35,6 +35,7 @@ When a feature is finished, remove it from the roadmap and set the plan's status
 - **The owner's hand testing happens on the studio Macs**, with the DAWs. Never search this development Mac for their test files, temp exports or logs. Ask them to copy files across, and remember their copy may lag this checkout.
 - The canonical working copy is on the owner's development Mac. Copies on the studio Macs and the Windows PC are for testing and building only. Fixes come back to the canonical copy.
 - **Windows is tested only at release time** ([RELEASING.md](docs/RELEASING.md), step 3). Don't ask for Windows testing between releases, and don't treat unticked Windows checklist items as gaps.
+- **A Windows test run between releases is not a build.** A fix it needs is committed and pushed like any other fix, with no questions about build commits. The named-commit rule under Releases applies only once a release build commit has been named.
 - Release downloads are built into `dist/`.
 
 ## Branches
