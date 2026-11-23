@@ -2,7 +2,7 @@
 
 All outstanding features and fixes, agreed or not, are listed here and only here. Each feature gets its own plan in [plans/](plans/) and its own branch when it is picked up. When something is finished, remove it from this list; its plan records how it was done.
 
-Updated 2026-11-22.
+Updated 2026-11-23.
 
 ## Agreed, not started
 
@@ -10,6 +10,8 @@ Updated 2026-11-22.
   - **Cubase before 15** (agreed, later): fixtures are in `samples/` (a Cubase 13 file, `argontest003`); older versions are rejected cleanly for now.
   - **Logic** (secondary) and **Reaper, Bitwig, Ableton, FL Studio** (low priority; the user uses only Reason and Cubase). Feasibility and order are in the [desk research](plans/daw-desk-research.md). **Studio One is deferred**; there is no access to it for testing.
   - Each reader keeps the shared rules: read only, never modify the project; report what was skipped; fail cleanly on unreadable files; preserve track and clip mute states.
+
+- **Cubase disabled tracks** (2026-11-23; plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md), draft, decisions made, waiting on fixtures; after mirror mode): a track disabled in Cubase (Disable Track, which is not mute) currently imports like any other, though Cubase plays nothing from it. Leave disabled tracks out of the import with a note, and keep an internal `include_disabled` option (default off, imports them muted) that a settings dialog could expose one day. Separate from mirror mode: it changes only the Cubase reader. Needs fixtures first, because where Cubase stores "disabled", and what its own MIDI export does with such a track, are not yet known.
 
 - **Mirror mode: watch one file** (2026-11-16, agreed 2026-11-22; plan: [mirror-mode](plans/mirror-mode.md), to be written): a separate mode of operation, entered by an explicit "Open & Mirror MIDI/Project File" command, not a toggle on a normal open. One MIDI or project file (any format the app opens directly: MIDI, DAWproject, Cubase, Reason) is locked to the timeline at bar 1 and the app watches it. Whenever the file changes on disk it is re-imported automatically. The aim is to mirror a Cubase (or Reason) project while still working in it, so whatever was last saved is ready to drag out.
   - **Owns the workspace:** nothing else sits on the timeline while mirroring. Unmirroring keeps the last imported state as a normal workspace and starts a clean undo history.
@@ -71,6 +73,7 @@ Updated 2026-11-22.
 
 Not planned yet. These options exist, or are planned, in code but have no UI. They're collected here so a settings page can expose them later.
 
+- **Include disabled Cubase tracks** (planned reader option `include_disabled`, default off): see [the plan](plans/cubase-disabled-tracks.md).
 - **Show Markers** (QSettings `show_markers`, default on): the marker row in the timeline header. It also has a toolbar button. See [the timeline management plan](plans/timeline-management.md).
 - **Session persistence:** internal enable/disable setting, default on. Gate session restoration and saving; expose a switch here later if needed. See [the plan](plans/session-persistence.md).
 - **Notes that started before an edge** (`ExportOptions.partial_notes`, default on): they sound from a range or clip-trim edge, or are dropped.
