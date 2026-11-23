@@ -11,7 +11,7 @@ Updated 2026-11-23.
   - **Logic** (secondary) and **Reaper, Bitwig, Ableton, FL Studio** (low priority; the user uses only Reason and Cubase). Feasibility and order are in the [desk research](plans/daw-desk-research.md). **Studio One is deferred**; there is no access to it for testing.
   - Each reader keeps the shared rules: read only, never modify the project; report what was skipped; fail cleanly on unreadable files; preserve track and clip mute states.
 
-- **Cubase linear-time-base tracks** (agreed 2026-11-23, deferred; to be a `feature/cubase-linear-tracks`): tracks that use Cubase's linear (seconds) time base are skipped today, with a warning. The format notes say only the part header differs and the events then decode in seconds (fixture c26 and its MIDI export exist). They would be imported against the **source timebase and not rescaled by later timebase changes**. See [the format notes](formats/CUBASE_FILE_FORMAT.md) once they are on this branch, and [the Cubase plan](plans/cubase-import.md).
+- **Cubase linear-time-base tracks** (agreed 2026-11-23, next; plan: [cubase-linear-tracks](plans/cubase-linear-tracks.md), agreed, not built; to be a `feature/cubase-linear-tracks`): tracks that use Cubase's linear (seconds) time base are skipped today, with a warning. The format notes say only the part header differs and the events then decode in seconds (fixture c26 and its MIDI export exist). They would be imported as ordinary tracks, converted at the project's tempo as saved, which is what Cubase's own export does (c26, d8 baseline), and **not rescaled by later tempo changes**. See [the format notes](formats/CUBASE_FILE_FORMAT.md) once they are on this branch, and [the Cubase plan](plans/cubase-import.md).
 
 ## Suggested, not agreed
 
