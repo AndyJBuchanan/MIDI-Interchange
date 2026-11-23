@@ -300,7 +300,7 @@ def test_verify_bbcso_score_symbols_and_named_flags_tail():
     music = [t for t in tracks if not t.auxiliary]
     assert len(music) == 34 and not any(t.muted or t.soloed for t in music)
     assert sum(1 for t in music for c in t.clips for e in c.events if e.msg.type == 'note_on') == 2365
-    assert any('Score Editor symbols' in w for w in source.warnings)
+    assert any('Score Editor symbols' in w and 'articulation' in w for w in source.warnings)
     # Markers are declared past 16 MB, so their references start 0x81: all 8
     # must be found, as in Cubase's MIDI export (user, 2026-11-16).
     (markers,) = [t for t in tracks if t.auxiliary]

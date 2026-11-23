@@ -27,7 +27,7 @@ SUPPORTED_MAJOR = (15, 16)
 TICKS = 480                 # Cubase positions: ticks per quarter note
 MAX_TIME = 1_000_000        # quarter notes; session/workspace bound
 DEFAULT_RELEASE = 64
-SKIPPED_OBJECTS = {'MScoreEvent': 'Score Editor symbols and text in parts are not imported'}
+SKIPPED_OBJECTS = {'MScoreEvent': 'Score Editor symbols and text in parts (including expression-map articulation texts) are not imported'}
 
 
 def _ticks(value: float) -> F:
