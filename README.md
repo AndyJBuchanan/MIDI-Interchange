@@ -12,7 +12,7 @@ It isn't a DAW or an arranger: there's no playback, no instruments and no note e
 
 ## Download
 
-The current release is **[v0.4.0-pre](https://github.com/AndyJBuchanan/MIDI-Interchange/releases/tag/v0.4.0-pre)** (2026-11-16), a pre-release. All releases are on the [Releases page](https://github.com/AndyJBuchanan/MIDI-Interchange/releases); you don't need to build anything.
+The current release is **[v0.5.0-pre](https://github.com/AndyJBuchanan/MIDI-Interchange/releases/tag/v0.5.0-pre)** (2026-11-23), a pre-release. All releases are on the [Releases page](https://github.com/AndyJBuchanan/MIDI-Interchange/releases); you don't need to build anything.
 
 | Your computer | Download |
 |---|---|
