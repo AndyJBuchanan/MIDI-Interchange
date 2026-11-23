@@ -45,6 +45,7 @@ Offsets are decimal unless written `0x…`. "Archive offset" means a byte offset
 | `Verify/BBCSO_Woodwinds101-App01-MacBook.cpr` (local) | 15.0.10 | RIFF | 25 MB; expression-map articulations; markers declared past 16 MB | `.midi` export |
 | `Verify/Beat003vs.cpr` | 15.0.30 | RIF2 | Omnivocal lyric properties; varied mixer tail | None |
 | `Verify/orchestral-import-test-01.cpr` (local) | now 16.0.5 (see section 8) | RIFF | 173 MB, mostly plug-in state; one out-of-range aftertouch | None |
+| `DTracks/d0` to `d11` (no d3; `… baseline.cpr` enabled twins for d6, d7, d9, d10; `d9(15)` is an unrelated test) | 16.0.5 | RIF2 | Disabled, muted and hidden tracks: instrument, MIDI, drum and audio, in and out of a folder; a linear time base instrument track (d8) | `.midi` for d0, d1, d2, d4, d5 only |
 | `Verify/seqtest-001.cpr` | 16.0.5 | RIF2 | Drum and melodic Pattern Editor parts only | None |
 | `Verify/vocalfun001(16).cpr` | 16.0.5 | RIF2 | Drum Track, Omnivocal, score lyrics, ARA track, chord track | None |
 | `_archive/…` (`GA … -01x.cpr`, `delete-me-reimport.cpr`) | 15.0.30, 16.0.5 | RIFF, RIF2 | A re-save of GA; a scratch file | GA re-save has `.mid`, `.dawproject` |
@@ -410,7 +411,20 @@ Both a track's `MListNode` and a part's `MMidiPart` start with the same header:
   - Integer parameters. Each is a named record of type 2, sub-kind 6, holding `Value`, `Min` and `Max` records (section 2.5). **VERIFIED.**
   - Transpose. Every GA track has slot 0 with Transpose 0. Prologue 01 also has slot 1 with **Transpose 24**, and Cubase's MIDI export plays Prologue 24 semitones up. **VERIFIED** (`test_ga_whole_song_matches_cubase_midi_export`).
   - Bypass state, negative values and the Inspector's own Transpose field are **UNKNOWN** (plan; planned fixtures c31 and c32 were never received).
-- **Disabled and hidden tracks, lanes and takes**: **UNKNOWN**. The tier 4 fixtures (c27–c29) were not received.
+- **Disabled tracks** (Cubase's Disable Track, which is not mute):
+  - Where. The track event (`MInstrumentTrackEvent`, `MMidiTrackEvent`, `MDrumTrackEvent`, `MAudioTrackEvent`) holds a property list (section 2.5) straight after its `MListNode` child, ending where the mixer object starts. A disabled track has the property `noit` (on disk `6e 6f 69 74 00 01` then an i64; `cf._props` returns it under the reversed key `'tion'`) with the value **1**. **VERIFIED** (check, 2026-11-23) on same-project enabled/disabled pairs for all four track classes: instrument (d1 and d5, d10 and its baseline), MIDI (d6), audio (d9, d10) and drum (d7), Cubase 16.0.5.
+  - The test is "equals 1", not "present". A track that was disabled and then re-enabled keeps the property with value **0** (d5), and a track never toggled has none. d0's track B already has 0, so it was toggled before d0 was saved. **VERIFIED.**
+  - Instrument and drum tracks also get a second property, `dfot` (on disk `64 66 6f 74 00 22`; reversed key `'tofd'`), whose value is an inline empty `FAttributes` object (length 4). It appears together with `noit` = 1 on every one of the 227 instrument and drum tracks in the samples and never alone, so it corroborates `noit` there. MIDI and audio tracks never get it, so it cannot be the general test. **VERIFIED.**
+  - Independent of mute (d2: disabled and muted has `noit` = 1, `dfot` and flags 4) and of hidden (below). **VERIFIED.**
+  - Nothing else changes with the state. In the same-project pairs the track event's own bytes differ only in `noit` (and `dfot`, instrument and drum), apart from lengths, ids, timestamps and noise. Not markers, and not to be used: the i32 after the track's `MAutomationNode` (0 → ffffffff on instrument tracks, but ffffffff is also found on enabled tracks), the inspector key name `psnI` ("Sel Channel" and "LastSelectedChannel"), the MIDI track's output port record, and entries in the `Devices` archive (the instrument's mixer slot and MIDI input disappear while disabled; name-based and not checked across the corpus). **VERIFIED.**
+  - Against Cubase's own MIDI export. The export **leaves out** every disabled track (d1, d2). In BBCSO_Woodwinds101 the reader imports 34 tracks; the 18 of them with `noit` = 1 are exactly the 18 absent from the export, and the other 16 match it note for note (the file's other 31 `noit` = 1 tracks have no MIDI parts). No track in any export has `noit` = 1. Not checked: GA's and Beat003vs's disabled audio tracks, which cannot appear in a MIDI export. **VERIFIED.**
+  - The owner confirms the MIDI and audio tracks in the samples with `noit` = 1 are disabled in Cubase: argontest003 Bass and Drone (MIDI), orchestral-import-test-01 Scratch (MIDI, also hidden) and Perc. Bounced (audio, hidden, in a folder), the four disabled audio tracks in GA, Beat003vs Tyler Take 1 (audio, in a folder). **VERIFIED** (owner, 2026-11-23). No MIDI or audio track the owner knows to be enabled has `noit` = 1 (all 15 MIDI tracks in tiers 2 and 3, and the enabled audio tracks in vocalfun001, BBCSO, indy and Ditty, have it absent). For instrument and drum tracks, `noit` = 1 agrees with the export check above.
+  - A disabled track inside a folder carries the marker on the track only. Disabling cannot be applied to a folder in Cubase, so folders have no marker; d10 and d11's folders carry none. **VERIFIED.**
+  - Versions. `noit` = 1 is seen in 13.0.41, 15.0.5, 15.0.10, 15.0.30 and 16.0.5. The same-project pairs are all 16.0.5, and the export check is 15.0.10 and 16.0.5. There is no Cubase 14 sample, so 14 is **UNKNOWN**.
+  - What the name `noit` means, and why Cubase writes the property at all, are **UNKNOWN**.
+  - What Cubase's export does with a track that is muted but not disabled is **UNKNOWN** (no muted-only fixture; the GA tracks missing from GA's export are muted with `noit` = 0, which suggests mute alone does not leave a track out, but that rests on GA only).
+- **Hidden tracks**: the property `dihT` (on disk `64 69 68 54 00 01` then an i64; reversed key `'Thid'`) with value 1, in the same property list. It is independent of `noit` and `dfot`, and Cubase's export **keeps** hidden tracks (d4: a hidden, enabled track has `dihT` = 1, `noit` = 0, and is in the export). **VERIFIED** (d4; `dihT` = 1 is on 218 tracks of every class in the samples).
+- **Lanes and takes**: **UNKNOWN**. The tier 4 fixture c27 was not received.
 
 ### 4.4 Folders and instrument stacks
 
@@ -798,8 +812,7 @@ Each question says what would settle it. Where a Cubase experiment helps, it giv
 The plan's fixture catalogue c27–c34 specifies these; the steps are as written there:
 
 - c27: lanes and takes (comping)
-- c28: Disable Track
-- c29: hidden track
+- ~~c28: Disable Track~~ and ~~c29: hidden track~~: answered by the DTracks fixtures (section 4.3, 2026-11-23)
 - c30: one-bar drum pattern
 - c31: Inspector Transpose +12
 - c32: velocity shift +20
@@ -850,7 +863,7 @@ These need no experiment unless a feature needs them:
 - Pattern Editor rendering (decision 8, phase 4): its fixture requests are listed in the plan.
 - Controller curve shapes: decode `MParamEventCurveRationalBezier` and decide the rendering density (decision 6).
 - Lyrics import: Omnivocal `ScTextAttrib` and Cubase 16 `ScLyricAttrib` (scope to agree).
-- Hidden, disabled and inactive material rules (plan, "Current arrangement vs everything stored"): pending Q7.
+- Inactive material rules (plan, "Current arrangement vs everything stored"): pending Q7 (lanes and takes). Disabled and hidden tracks: settled, section 4.3.
 
 ---
 
