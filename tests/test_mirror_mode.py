@@ -652,7 +652,7 @@ def test_the_toolbar_button_and_menu_entries(win):
     toolbar_texts = [a.iconText() for a in win.main_toolbar.actions() if not a.isSeparator() and a.iconText()]
     assert toolbar_texts.index('Mirror…') == toolbar_texts.index('Open') + 1
     file_menu = next(a.menu() for a in win.menuBar().actions() if a.text() == '&File')
-    assert action_texts(file_menu)[:6] == ['New', 'Open…', 'Open && Mirror MIDI/Project File…', 'Unmirror', 'Sync Mutes to File', 'Save MIDI…']
+    assert action_texts(file_menu)[:7] == ['New', 'Open…', 'Open && Mirror MIDI/Project File…', 'Unmirror', 'Sync Mutes to File', 'Show Mirror Log', 'Save MIDI…']
     assert win.a_mirror.isEnabled() and not win.a_unmirror.isEnabled()
 
 
@@ -1292,3 +1292,101 @@ def test_the_menu_item_is_greyed_outside_mirroring(win):
     assert not win.a_sync_mutes.isEnabled()
     win.ctl.set_mute(win.ctl.ws.tracks[0].id, True)
     assert not win.a_sync_mutes.isEnabled()
+
+
+# ------------------------------------------------------ diagnostics (the log of what the watcher saw)
+
+def diag_lines(watcher):
+    lines = []
+    watcher.diag.connect(lambda text, notable: lines.append((text, notable)))
+    return lines
+
+
+def moved_song(start):
+    """One track, one clip whose note starts at `start` beats."""
+    return smf([conductor(BEAT), track(note(0, 40, start * BEAT, 4 * BEAT), 'Bass')])
+
+
+def test_the_log_shows_a_save_from_the_change_to_the_read_and_names_the_moved_clip(tmp_path):
+    p = tmp_path / 'Song.mid'
+    p.write_bytes(moved_song(0))
+    w, clock, ev = watch(p)
+    lines = diag_lines(w)
+    save_in_place(p, moved_song(4))
+    advance(w, clock, 1.5)
+    text = [t for t, _ in lines]
+    assert any('changed on disk: size' in t and 'modified' in t and 'inode' in t for t in text)
+    assert any('reading (still for' in t for t in text)
+    read = next(t for t in text if 'read ok: NEW bytes' in t)
+    assert 'Bass:' in read and ' -> ' in read, read          # which track's clips moved, before and after
+    assert all(t[:2].isdigit() and t[8] == '.' for t in text)  # wall-clock stamped HH:MM:SS.mmm
+    assert [n for t, n in lines if 'changed on disk' in t] == [True]       # worth the status bar
+
+
+def test_the_log_says_when_a_save_changed_no_bytes(tmp_path):
+    p = tmp_path / 'Song.mid'
+    p.write_bytes(moved_song(0))
+    w, clock, ev = watch(p)
+    lines = diag_lines(w)
+    os.utime(p, ns=(1_700_000_000 * 10**9, 1_700_000_000 * 10**9))        # a touch, as Reason sometimes does
+    advance(w, clock, 1.5)
+    assert any('the same as the last import, nothing to do' in t and 'no clip positions changed' in t for t, _ in lines)
+
+
+def test_the_log_says_when_a_read_was_discarded_or_failed(tmp_path):
+    p = tmp_path / 'Song.mid'
+    p.write_bytes(moved_song(0))
+    manual = Manual()
+    w, clock, ev = watch(p, manual)
+    lines = diag_lines(w)
+    save_in_place(p, moved_song(4))
+    advance(w, clock, 1.0)                                   # the read is queued but not run
+    save_in_place(p, moved_song(8))                          # saved again during the read
+    advance(w, clock, 0.25)
+    manual.run()
+    advance(w, clock, 0.25)
+    assert any('read discarded: saved again during the read' in t for t, _ in lines)
+    bad = tmp_path / 'Bad.mid'
+    bad.write_bytes(b'nope' * 20)
+    w2, clock2, ev2 = watch(p)
+    lines2 = diag_lines(w2)
+    save_in_place(p, b'nope' * 20)
+    advance(w2, clock2, 1.5)
+    assert any('read FAILED (attempt 1)' in t and n for t, n in lines2)
+
+
+def test_the_window_writes_the_log_file_and_offers_it(win, mid, monkeypatch, tmp_path):
+    monkeypatch.setattr(win, '_confirm_mirror_replace', lambda: True)
+    log = tmp_path / 'logs' / 'mirror-log.txt'
+    assert not win.a_mirror_log.isEnabled()
+    clock = FakeClock()
+    assert win.start_mirror(str(mid), clock=clock, executor=Inline(), log_path=str(log))
+    win._mirror_watcher._timer.stop()
+    try:
+        assert win.a_mirror_log.isEnabled()
+        save_in_place(mid, song(Bass=40, Keys=60, Lead=70))
+        advance(win._mirror_watcher, clock, 1.5)
+        QApplication.processEvents()
+        text = log.read_text(encoding='utf-8')
+        assert str(mid) in text.splitlines()[0]
+        for expected in ('baseline:', 'changed on disk:', 'reading (', 'read ok: NEW bytes', 'applied to the timeline: 3 tracks'):
+            assert expected in text, expected
+    finally:
+        win.unmirror()
+    assert 'unmirrored' in log.read_text(encoding='utf-8')
+    assert win.a_mirror_log.isEnabled()                       # the log stays available after unmirroring
+
+
+def test_a_read_that_waits_for_a_gesture_says_so_once(mirrored, tmp_path, monkeypatch):
+    w = mirrored.win
+    log = tmp_path / 'mirror-log.txt'
+    w._open_mirror_log(str(log))
+    monkeypatch.setattr(type(w.timeline), 'gesture_active', property(lambda self: True))
+    w._mirror_pending = file_result(Bass=40, Keys=60)
+    w._apply_mirror_pending()
+    w._apply_mirror_pending()
+    text = log.read_text(encoding='utf-8')
+    assert text.count('import waiting: a gesture is in progress') == 1
+    assert 'Mirror: import waiting' in w.statusBar().currentMessage()
+    w._mirror_pending = None
+    w._close_mirror_log()

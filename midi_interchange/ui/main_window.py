@@ -5,8 +5,8 @@ import os
 from datetime import datetime
 from fractions import Fraction
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSettings, Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPainter, QPen, QStandardItemModel
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSettings, QStandardPaths, Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QAction, QActionGroup, QColor, QKeySequence, QPainter, QPen, QStandardItemModel
 from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMenu,
                                QMessageBox, QPushButton, QSizePolicy, QSplitter, QToolBar, QToolButton,
                                QVBoxLayout, QWidget)
@@ -24,7 +24,7 @@ from . import theme
 from .about_dialog import AboutDialog
 from .controller import SNAP_CHOICES, Controller
 from .export_panel import ExportPanel, start_file_drag
-from .mirror import MirrorWatcher, read_snapshot
+from .mirror import MirrorWatcher, _wall, read_snapshot
 from .timeline import Timeline
 from .track_panel import TrackPanel
 
@@ -203,6 +203,9 @@ class MainWindow(QMainWindow):
         self._mirror_watcher: MirrorWatcher | None = None
         self._mirror_path = ""
         self._mirror_pending = None            # a finished read waiting for a gesture to end
+        self._mirror_log = None                # the open diagnostic log file, while mirroring
+        self._mirror_log_path: str | None = None
+        self._mirror_defer_logged = False
         self._mirror_updated = ""              # "14:02:31"
         self._mirror_failed = False
         self._mirror_tinted = False
@@ -229,6 +232,8 @@ class MainWindow(QMainWindow):
         self.a_mirror.setIconText("Mirror…")            # the toolbar button; the menu says the full name
         self.a_unmirror = self._act("Unmirror", self.unmirror,
                                     tip="Stop watching the file; the workspace stays and editing returns")
+        self.a_mirror_log = self._act("Show Mirror Log", self.show_mirror_log,
+                                      tip="Open the log of what the mirror watcher saw and did (kept until mirroring starts again)")
         self.a_sync_mutes = self._act("Sync Mutes to File", lambda: self.ctl.sync_mutes(),
                                       tip="Put every track's mute and solo back to what the file last saved")
         self.a_save = self._act("Save MIDI…", self.save_midi, QKeySequence.Save, "Export with current settings")
@@ -327,6 +332,7 @@ class MainWindow(QMainWindow):
         m.addAction(self.a_mirror)
         m.addAction(self.a_unmirror)
         m.addAction(self.a_sync_mutes)
+        m.addAction(self.a_mirror_log)
         m.addAction(self.a_save)
         m.addSeparator()
         m.addAction(self._act("Quit", self.close, QKeySequence.Quit))
@@ -715,6 +721,7 @@ class MainWindow(QMainWindow):
             a.setEnabled(not on)
         self.a_unmirror.setEnabled(on)
         self._update_sync_mutes()
+        self.a_mirror_log.setEnabled(bool(self._mirror_log_path and os.path.exists(self._mirror_log_path)))
         self.tempo_menu.setEnabled(not on)
         self.setWindowTitle(f"{APP_NAME} — Mirroring {self._mirror_name()}" if on else APP_NAME)
         button = self.main_toolbar.widgetForAction(self.a_mirror)
@@ -729,12 +736,36 @@ class MainWindow(QMainWindow):
         self._update_mirror_banner()
         self.track_panel.update()
 
+    @staticmethod
+    def default_mirror_log_path() -> str:
+        folder = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
+        return os.path.join(folder, "mirror-log.txt")
+
+    def _mirror_log_write(self, line: str) -> None:
+        """The diagnostic log (docs/plans/mirror-mode.md): one line at a time, flushed, so a crash keeps it."""
+        if self._mirror_log is None:
+            return
+        try:
+            self._mirror_log.write(line + "\n")
+            self._mirror_log.flush()
+        except (OSError, ValueError):
+            self._mirror_log = None
+
+    def _mirror_diag(self, line: str, notable: bool) -> None:
+        self._mirror_log_write(line)
+        if notable:
+            self.statusBar().showMessage("Mirror: " + line.split(" ", 1)[-1], 8000)
+
+    def show_mirror_log(self) -> None:
+        if self._mirror_log_path and os.path.exists(self._mirror_log_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self._mirror_log_path))
+
     def open_and_mirror(self) -> None:
         start = self.settings.value("last_open_dir", os.path.expanduser("~"))
         path, _ = QFileDialog.getOpenFileName(self, "Open & Mirror MIDI/Project File", start, FILE_FILTER)
         if path:
             self.settings.setValue("last_open_dir", os.path.dirname(path))
-            self.start_mirror(path)
+            self.start_mirror(path, log_path=self.default_mirror_log_path())
 
     def _confirm_mirror_replace(self) -> bool:
         box = QMessageBox(self)
@@ -749,7 +780,7 @@ class MainWindow(QMainWindow):
         box.exec()
         return box.clickedButton() is go
 
-    def start_mirror(self, path: str, clock=None, executor=None) -> bool:
+    def start_mirror(self, path: str, clock=None, executor=None, log_path: str | None = None) -> bool:
         """Read the file, ask first when the workspace isn't empty, then mirror it. Returns whether it started."""
         if self.ctl.mirroring:
             return False
@@ -769,7 +800,10 @@ class MainWindow(QMainWindow):
         kwargs = {}
         if clock is not None:
             kwargs["clock"] = clock
+        self._mirror_defer_logged = False
+        self._open_mirror_log(log_path)
         w = self._mirror_watcher = MirrorWatcher(self._mirror_path, executor=executor, parent=self, **kwargs)
+        w.diag.connect(self._mirror_diag)
         w.set_baseline(snap)
         w.imported.connect(self._mirror_imported)
         w.unchanged.connect(self._mirror_unchanged)
@@ -781,9 +815,31 @@ class MainWindow(QMainWindow):
         w.start()
         return True
 
+    def _open_mirror_log(self, log_path: str | None) -> None:
+        self._close_mirror_log()
+        self._mirror_log_path = log_path
+        if not log_path:
+            return
+        try:
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            self._mirror_log = open(log_path, "w", encoding="utf-8")
+        except OSError:
+            self._mirror_log = None
+            return
+        self._mirror_log_write(f"{_wall()} mirror log for {self._mirror_path} (a new log each time mirroring starts)")
+
+    def _close_mirror_log(self) -> None:
+        log, self._mirror_log = self._mirror_log, None
+        if log is not None:
+            try:
+                log.close()
+            except OSError:
+                pass
+
     def unmirror(self) -> None:
         if not self.ctl.mirroring:
             return
+        self._mirror_log_write(f"{_wall()} unmirrored")
         self._stop_mirror_watcher()
         self._mirror_pending = None
         name = self._mirror_name()
@@ -805,10 +861,17 @@ class MainWindow(QMainWindow):
         if self._mirror_pending is None or not self.ctl.mirroring:
             return
         if self.timeline.gesture_active or self.ctl.file_drag_active:
+            if not self._mirror_defer_logged:
+                self._mirror_defer_logged = True
+                self._mirror_diag(f"{_wall()} import waiting: a gesture is in progress "
+                                  f"(timeline gesture {self.timeline.gesture_active}, drag-out {self.ctl.file_drag_active})", True)
             QTimer.singleShot(250, self._apply_mirror_pending)
             return
+        self._mirror_defer_logged = False
         result, self._mirror_pending = self._mirror_pending, None
         counts = self.ctl.apply_mirror(result)
+        self._mirror_log_write(f"{_wall()} applied to the timeline: {counts['tracks']} tracks, "
+                               f"{counts['new']} new, {counts['gone']} gone")
         self._mirror_updated = stamp = datetime.now().strftime("%H:%M:%S")
         self._mirror_failed = False
         detail = ", ".join(x for x in (f"{counts['new']} new" if counts["new"] else "",
@@ -842,6 +905,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, e) -> None:
         self._stop_mirror_watcher()
+        self._close_mirror_log()
         super().closeEvent(e)
 
     # ------------------------------------------------------------------ export

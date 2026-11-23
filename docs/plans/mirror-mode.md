@@ -432,3 +432,13 @@ The owner confirmed the build's other small choices and asked for this change to
 - **Marker:** a track that differs gets an outline in the mirror cyan on its M/S block, with a tooltip saying how it differs ("muted here, not in the file"). The owner asked for a small marker; its look is checked on a render before it is called done.
 - **Tests:** an unmuted track stays unmuted across a save; a track you didn't touch follows the file; sync all and sync one; the marker and tooltip; a new track is unmarked; unmirror forgets the remembered state.
 
+## Diagnostics (added 2026-11-22, after the first studio run)
+
+The owner mirrored `Aug01-01-03.reason` and found clip moves on the Pianoteq track missed about 9 times in 10 while track mutes were always picked up. A replay of a real clip move (bar 68 to 72) through the watcher, written in place, worked, and the reader reads the move correctly, so the cause is in how Reason's real save reaches the watcher. The watcher now logs what it sees:
+
+- every change on disk (size, modification time, inode), every read start, and each outcome: new bytes (with a short checksum and which tracks' clip spans changed, before and after), same bytes, discarded because the file changed during the read, or failed;
+- when an import waits for a gesture, and when it is applied;
+- to `mirror-mode`'s log file `mirror-log.txt` in the app's local data folder (a new one each time mirroring starts), opened by **File ▸ Show Mirror Log**, with the notable lines also in the status bar.
+
+Once a studio run shows what happened on a missed save, the fix is designed from that.
+
