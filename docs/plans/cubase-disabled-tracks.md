@@ -1,6 +1,8 @@
 # Plan: Cubase disabled tracks
 
-Status: **agreed** (2026-11-23), not built. On the roadmap under Agreed, not started. Building is for a separate session from this plan; no code has been written.
+Status: **built** (2026-11-23), on `feature/cubase-disabled-tracks`. Manual checklist 8t passed on the owner's studio Mac with Cubase 16 projects. Still unknown: Cubase 14 (no sample with a disabled track) and what Cubase's export does with a muted-but-not-disabled track.
+
+Built as planned, with these additions agreed during the build: a disabled audio track counts towards the all-disabled message; a mirrored save with no importable tracks empties the workspace and the banner says so (`NoEnabledTracks`), instead of keeping the old version; the mirror banner names the reason for a failed read; and a spot fix that the track header's controller box works while mirroring.
 
 Raised during the mirror-mode checklist: a track disabled in Cubase (Disable Track, which is not mute) still comes into the app. It should not, because Cubase plays nothing from it and leaves it out of its own MIDI export.
 
