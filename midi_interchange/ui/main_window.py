@@ -1,6 +1,7 @@
 """Single-window workspace: toolbar, track panel + timeline, export panel."""
 from __future__ import annotations
 
+import html
 import os
 from datetime import datetime
 from fractions import Fraction
@@ -208,6 +209,7 @@ class MainWindow(QMainWindow):
         self._mirror_defer_logged = False
         self._mirror_updated = ""              # "14:02:31"
         self._mirror_failed = False
+        self._mirror_failed_reason = ''
         self._mirror_tinted = False
         self._update_mirror_ui()
 
@@ -681,6 +683,7 @@ class MainWindow(QMainWindow):
         row.setContentsMargins(12, 4, 8, 4)
         self.mirror_label = QLabel()
         self.mirror_label.setTextFormat(Qt.RichText)
+        self.mirror_label.setWordWrap(True)         # a failure reason can be long
         self.unmirror_btn = QPushButton("Unmirror")
         self.unmirror_btn.setToolTip("Stop watching the file; the workspace stays and editing returns")
         self.unmirror_btn.setStyleSheet(f"QPushButton {{ background: {theme.MIRROR_TEXT.name()}; color: {theme.MIRROR.name()};"
@@ -694,6 +697,11 @@ class MainWindow(QMainWindow):
     def _mirror_name(self) -> str:
         return os.path.basename(self._mirror_path)
 
+    def _mirror_failed_headline(self) -> str:
+        """The first sentence of why the last save couldn't be read, for the banner (the status bar has all of it)."""
+        text = self._mirror_failed_reason.removeprefix("Could not read Cubase project: ")
+        return text.split("; ")[0]
+
     def _update_mirror_banner(self) -> None:
         if not self.ctl.mirroring:
             return
@@ -701,7 +709,7 @@ class MainWindow(QMainWindow):
         if self._mirror_updated:
             parts.append(f"Last updated {self._mirror_updated}")
         if self._mirror_failed:
-            parts.append("Last read failed")
+            parts.append("Last read failed" + (f": {html.escape(self._mirror_failed_headline())}" if self._mirror_failed_reason else ""))
         if self._mirror_watcher is not None and self._mirror_watcher.missing:
             parts.append(f"{self._mirror_name()} not found; waiting for it")
         self.mirror_label.setText(" · ".join(parts))
@@ -796,6 +804,7 @@ class MainWindow(QMainWindow):
         self._mirror_path = os.path.abspath(path)
         self._mirror_pending = None
         self._mirror_failed = False
+        self._mirror_failed_reason = ''
         self._mirror_updated = datetime.now().strftime("%H:%M:%S")
         self._had_tracks = False                    # the first import zooms to fit; later ones keep the view
         kwargs = {}
@@ -876,6 +885,7 @@ class MainWindow(QMainWindow):
                                f"{counts['new']} new, {counts['gone']} gone")
         self._mirror_updated = stamp = datetime.now().strftime("%H:%M:%S")
         self._mirror_failed = False
+        self._mirror_failed_reason = ''
         detail = ", ".join(x for x in (f"{counts['new']} new" if counts["new"] else "",
                                        f"{counts['gone']} gone" if counts["gone"] else "") if x)
         n = counts["tracks"]
@@ -885,6 +895,7 @@ class MainWindow(QMainWindow):
 
     def _mirror_unchanged(self) -> None:
         self._mirror_failed = False
+        self._mirror_failed_reason = ''
         w = self._mirror_watcher
         if w is not None and not w.missing:
             self.statusBar().showMessage(f"Mirror: {self._mirror_name()} saved with the same content; nothing to update", 10000)
@@ -892,6 +903,7 @@ class MainWindow(QMainWindow):
 
     def _mirror_read_failed(self, reason: str) -> None:
         self._mirror_failed = True
+        self._mirror_failed_reason = reason
         w = self._mirror_watcher
         stamp = datetime.now().strftime("%H:%M:%S")
         last = f" from {self._mirror_updated}" if self._mirror_updated else ""

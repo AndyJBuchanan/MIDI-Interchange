@@ -748,6 +748,21 @@ def test_a_failed_read_keeps_the_import_reports_it_and_a_good_save_clears_it(mir
     assert 'Last read failed' not in mirrored.win.mirror_label.text()
 
 
+def test_the_banner_says_why_the_last_save_was_not_imported(mirrored):
+    """A save with no enabled tracks left is a problem: the banner says so, not only the status bar."""
+    from midi_interchange.core.import_cubase import import_cubase
+    from midi_interchange.core.import_smf import ImportError_
+    with pytest.raises(ImportError_) as err:
+        import_cubase(str(DTRACKS / 'd6.cpr'), 'd6.cpr')
+    w = mirrored.win
+    w._mirror_read_failed(str(err.value))
+    text = w.mirror_label.text()
+    assert 'Last read failed: 1 track in the project is disabled in Cubase, and no other track could be imported' in text
+    assert 'Could not read Cubase project' not in text and '<b>MIRRORING</b>' in text
+    mirrored.saved(song(Bass=40, Keys=60, Lead=70))                      # a good save clears the reason
+    assert 'Last read failed' not in w.mirror_label.text()
+
+
 def test_a_missing_file_says_so_and_a_restored_one_is_read(mirrored):
     data = mirrored.path.read_bytes()
     mirrored.path.unlink()
