@@ -917,9 +917,9 @@ def test_track_headers_are_read_only_but_mute_and_solo_work(mirrored):
     for t in ctl.ws.tracks:
         h = w.track_panel.header(t.id)
         assert h.name_edit.isReadOnly()
-        for widget in (h.remove_btn, h.grip, h.color_btn, h.ctl_box):
+        for widget in (h.remove_btn, h.grip, h.color_btn):
             assert not widget.isEnabled()
-        assert h.mute_btn.isEnabled() and h.solo_btn.isEnabled()
+        assert h.mute_btn.isEnabled() and h.solo_btn.isEnabled() and h.ctl_box.isEnabled()
         h.remove_btn.click()
         h.color_btn.click()
         h.name_edit.setText('X')
@@ -930,6 +930,21 @@ def test_track_headers_are_read_only_but_mute_and_solo_work(mirrored):
     assert ctl.ws.tracks[0].muted
     h.solo_btn.click()
     assert ctl.ws.tracks[0].soloed
+
+
+def test_the_header_controller_box_works_while_mirroring_and_the_choice_survives_a_save(mirrored):
+    """The CC box on a track header (not just Controller.set_track_controller) stays usable."""
+    w, ctl = mirrored.win, mirrored.ctl
+    QApplication.processEvents()
+    bass = by_name(ctl.ws, 'Bass')
+    h = w.track_panel.header(bass.id)
+    assert h.ctl_box.isEnabled()
+    choice = next(a for a in h._build_controller_menu().actions() if a.text() == 'None')
+    choice.trigger()                                         # the header menu's own action
+    assert bass.controller == 'none' and not ctl._undo       # a display choice: no undo step
+    ctl.apply_mirror(file_result(Bass=40, Keys=60))
+    assert by_name(ctl.ws, 'Bass').controller == 'none'
+    assert w.track_panel.header(by_name(ctl.ws, 'Bass').id).ctl_box.isEnabled()
 
 
 def test_header_grip_drag_does_not_reorder(mirrored):

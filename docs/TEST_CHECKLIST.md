@@ -353,7 +353,7 @@ Plan: [mirror-mode](plans/mirror-mode.md). Use a Cubase project and a Reason son
 
 ## 8t. Cubase disabled tracks (`feature/cubase-disabled-tracks`)
 
-Plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/` (copy them to the studio Mac). Cubase's Disable Track is not mute.
+Plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/` (already in this checkout). Cubase's Disable Track is not mute.
 
 - [ ] Drag `d1.cpr` in: "Pianoteq 9 B" is absent, A and C are there, and the import notes (and Source Info, Warnings) say `Track "Pianoteq 9 B" is disabled in Cubase; not imported`. Same for `d2.cpr` (B also muted).
 - [ ] Drag `d4.cpr` (B hidden) in: all three tracks arrive and Source Info says B is hidden in Cubase.
@@ -362,6 +362,7 @@ Plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md). Fixtures: `samp
 - [ ] `d9 baseline.cpr` (enabled audio only) fails with the usual "no supported MIDI parts or markers".
 - [ ] Mirror a copy of `d0.cpr` in Cubase's own project: disable a track and save, and it leaves the palette; re-enable and save, and it comes back as a new track. The other tracks keep their ranges, locks and mutes.
 - [ ] Mirror a project, then disable every MIDI/instrument track and save: the status bar reports the all-disabled message and the last version is kept.
+- [ ] **Spot fix (mirror mode):** while mirroring, click the CC box on a track's header: the controller menu opens. Pick a controller, save in Cubase, and the choice is still there after the re-import. (The box was greyed out while mirroring, against the agreed rule; the earlier mirror-mode item for this was failing for that reason.)
 - [ ] Open a big project with many disabled tracks (`orchestral-import-test-01.cpr`, `BBCSO_Woodwinds101`): only the enabled tracks arrive (25 and 16), and they match what Cubase plays.
 
 ## 9. New document

@@ -236,12 +236,12 @@ Range and mute changes make **no undo steps** while mirroring: undo would restor
 | Clip menu: Mute, Duplicate, Butt Against Previous, Restore Full Clip, Move to Track, Delete | `MainWindow.clip_menu` (the menu shows only the track items that stay allowed) |
 | Track menu: Rename, Move Up/Down, Merge Into, Use This Track's Tempo Map, Remove Track | `MainWindow._add_track_actions` |
 | Timing ▸ Tempo Map and the ruler's Tempo Map menu | `_fill_tempo_menu`, `header_menu` |
-| Track header: the name field, the ✕, the ⋮⋮ grip, the colour box (colour and export channel), the controller box | `track_panel.TrackHeader`, `TrackPanel._grip_*` |
+| Track header: the name field, the ✕, the ⋮⋮ grip, the colour box (colour and export channel) | `track_panel.TrackHeader`, `TrackPanel._grip_*` |
 | Undo, Redo | disabled |
 
 **The backstop:** `Controller` gets a `mirroring` flag.
 - While it's set, `checkpoint()` does nothing (the export panel and timeline call it directly for range edits).
-- Every editing method returns without change: `import_payloads`, `new_document`, `move_clip_live`, `trim_clip_live`, `split_clip`, `toggle_clip_mute`, `restore_clip`, `move_clip_to_track`, `delete_clip`, `duplicate_clip`, `snap_clip_to_previous`, `merge_tracks`, `rename_track`, `set_export_channel`, `set_track_color`, `move_track`, `remove_track`, `adopt_tempo`, `set_track_controller`, and `undo` and `redo`.
+- Every editing method returns without change: `import_payloads`, `new_document`, `move_clip_live`, `trim_clip_live`, `split_clip`, `toggle_clip_mute`, `restore_clip`, `move_clip_to_track`, `delete_clip`, `duplicate_clip`, `snap_clip_to_previous`, `merge_tracks`, `rename_track`, `set_export_channel`, `set_track_color`, `move_track`, `remove_track`, `adopt_tempo`, and `undo` and `redo`. `set_track_controller` is not guarded: the track's controller display (the CC box on its header) is a display choice that changes no source state, so it stays usable and `carry_over` keeps it.
 
 So a UI path missed above still can't change the mirror.
 
