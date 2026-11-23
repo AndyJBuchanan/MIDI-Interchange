@@ -131,6 +131,9 @@ def _assign(candidates: list[Track], target: Track, names: list[str], song: str,
     return out
 
 
+assign_tracks = _assign      # public name, for core.mirror
+
+
 def plan_drop(ws: Workspace, files: list[tuple[Source, list[Track]]], placement: Placement) -> DropPlan:
     """Decide where each imported track goes. Changes nothing."""
     target = ws.track(placement.target_track_id) if placement.target_track_id else None

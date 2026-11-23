@@ -6,6 +6,8 @@ Moving MIDI between apps is full of friction: each app drags MIDI in a different
 
 **New in 0.4: open DAW projects directly.** Drop a saved Cubase (`.cpr`) or Reason (`.reason`) project onto the window and its whole arrangement arrives as MIDI: every track and clip in place, with tempo, mutes and controllers, and no export step in the DAW. DAWproject files work too. See [Open DAW projects directly](#open-daw-projects-directly).
 
+**New in 0.5: mirror a project while you work.** Open a project with **Open & Mirror** and the app watches it, re-reading the file each time you save in the DAW. The latest saved state is always on the timeline, ready to export or drag out, with no re-importing in between. See [Mirror a project while you work](#mirror-a-project-while-you-work).
+
 It isn't a DAW or an arranger: there's no playback, no instruments and no note editing. Your source files are never changed.
 
 ## Download
@@ -43,7 +45,7 @@ Ranges are optional, but they're what make this a palette rather than a file shu
 
 ![The main window, annotated](docs/images/01-window.png)
 
-1. **Toolbar:** New, Open, Save MIDI, Undo/Redo, zoom, the Snap list, the **Markers** button, the **Controller** list with its two icon buttons (see [See controller data](#see-controller-data)), Clear All Ranges, and About at the far right.
+1. **Toolbar:** New, Open, **Mirror…** (see [Mirror a project while you work](#mirror-a-project-while-you-work)), Save MIDI, Undo/Redo, zoom, the Snap list, the **Markers** button, the **Controller** list with its two icon buttons (see [See controller data](#see-controller-data)), Clear All Ranges, and About at the far right.
 2. **Ruler and info rows:** bar numbers, then tempo and time signature, then markers. The **marker row** appears only when there is a marker to show: it lists the markers of the tracks an export with no ranges would include (so muting a track removes its markers), each in its track's colour. The **Markers** button (also Timing ▸ Show Markers) turns the row off; markers still show in their lanes and are still exported. The button's setting is remembered between runs.
 3. **Range strip:** your ranges, as amber bars. This is where you make and move them.
 4. **Track headers:** colour, **M**ute, **S**olo, name, and a ✕ to remove. Drag ⋮⋮ to reorder. A small box under the ✕ shows which controller the track displays (CC1, PB, AT), red when the track overrides the toolbar choice.
@@ -206,12 +208,26 @@ Then either:
 
 An export whose clips all come from one song keeps the song's title in its tempo track, so it can be matched again when it comes back.
 
+### Mirror a project while you work
+
+Mirror mode keeps the palette in step with a project you're still working on. Choose **File ▸ Open & Mirror MIDI/Project File…** (or **Mirror…** on the toolbar) and pick one file: a Cubase, Reason or DAWproject project, or a MIDI file. It arrives at bar 1 and the app watches it. Each time you save in the DAW, the app re-reads the file within a second or two, so whatever you last saved is on the timeline, ready to range and drag out.
+
+- **You can't miss it.** The window gets a cyan frame, a cyan banner naming the file with an **Unmirror** button and the time of the last update, a tinted track panel and ruler, and "Mirroring" in the title bar.
+- **It owns the workspace.** If you already hold something, the app asks first, because mirroring replaces it. While mirroring, nothing else can be added or edited: no drops, Open, New, Undo, track or clip edits, tempo changes. The notes, lanes and clips are the project's, shown read-only.
+- **What you can still do:** make, move and lock ranges, choose which tracks a range includes, mute and solo, view controllers, zoom, **drag out** and **Save MIDI…**. Ranges stay put across saves (they're kept by time), and so do range locks, colours, export channels and controller choices. Tracks are matched by name, as when you drop a file onto a track; a track renamed in the DAW arrives as a new track.
+- **Mute and solo.** A track you haven't touched follows the file at each save. A track you mute or solo here keeps your setting, and its M and S buttons get a cyan outline to show it differs from what the file last saved; hover for details. **File ▸ Sync Mutes to File** puts every track back to the file's, and a track's right-click ▸ **Follow File's Mute/Solo** does one track. These make no undo steps, because undo is off while mirroring.
+- **A save that's half-written or can't be read** keeps the last good version and says so in the status bar, then tries again. A file that goes missing is waited for at the same path.
+- **Only saved changes count.** A project changes on disk only when you save it.
+- **Unmirror** (the banner button or File ▸ Unmirror) stops the watch. The workspace stays as the last import, editing returns, and the undo history starts empty. A watch is never resumed: after quitting, the app reopens with an ordinary workspace.
+
 ### Everything you can do (quick reference)
 
 | To… | Do this |
 |---|---|
 | Bring MIDI in | Drag MIDI or `.mid` files/folders onto the window; File ▸ Open (⌘O); Open with… from the Finder/Explorer; command-line paths |
 | Open a DAW project | Drop or open a Cubase `.cpr`, Reason `.reason` or `.dawproject` file: the whole arrangement comes in |
+| Mirror a project while you work | File ▸ Open & Mirror MIDI/Project File… (or **Mirror…** on the toolbar); re-imports on every save, read-only until **Unmirror** |
+| Sync mutes with the file (mirroring) | File ▸ Sync Mutes to File, or a track's right-click ▸ Follow File's Mute/Solo |
 | Place a drop | Drop over a lane (joins a same-named track at that time), a header (bar 1), or empty space (new tracks) |
 | Place several files | Choose End to End or All at Cursor when asked |
 | Move a clip | ⌥-drag it. Shift bypasses snap on the source track and keeps its original time on another track; drag below the last track for a new track |
@@ -260,7 +276,7 @@ The current workspace is restored when you reopen the app, including its MIDI da
 
 The app saves on exit and checkpoints pending changes every two minutes once you have been inactive for at least 15 seconds. Active work can delay a checkpoint. After a crash, changes since the last checkpoint may be lost. If the saved session is incompatible or damaged, the app warns you and starts empty; the rejected file is kept only until you quit. After an unclean exit the app says so when it restores the last checkpoint.
 
-Only one instance runs at a time. Opening MIDI files from Finder/Explorer or another launch adds them to the existing window (they import as in Step 1); launching again with no files just brings that window forward. **New** clears the workspace and Undo can bring it back, but undo history isn't kept: a normal quit saves the empty state, so quitting after New starts empty next time. The Markers button is remembered separately from the session.
+Only one instance runs at a time. Opening MIDI files from Finder/Explorer or another launch adds them to the existing window (they import as in Step 1); launching again with no files just brings that window forward. **New** clears the workspace and Undo can bring it back, but undo history isn't kept: a normal quit saves the empty state, so quitting after New starts empty next time. The Markers button is remembered separately from the session. Mirror mode isn't restored: if you quit while mirroring, the workspace comes back as an ordinary one, with the last import and your ranges, and the watch has to be started again.
 
 ## Works with
 
@@ -294,6 +310,7 @@ For each app check: does the drop import at all (if not, note the formats listed
 - **Drag and drop depends on the other app.** File URLs and any data starting with `MThd` are handled. Qt can't receive **macOS file promises** or **Windows virtual files**; no app tested so far needed them. If a drop carries no usable MIDI, the app lists the formats it was offered, which helps a lot in a bug report. Drag-out offers temp files (in `$TMPDIR/MIDI Interchange Drag`, pruned after 24 h).
 - **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, use the track colour box’s export-channel override, or assemble clips that share a channel.
 - **Marker row and locked ranges:** the marker row follows the global mute and solo, not a locked range's own track choices. A locked range's export can include markers of a globally muted track that the row doesn't show.
+- **Mirror mode** sees only what the DAW has saved, and a track renamed in the DAW arrives as a new track. Mute and solo are carried from project files; a MIDI file holds none.
 - SMPTE-division files are rejected with a clear message.
 
 Everything still to do, agreed or not, is listed in [docs/ROADMAP.md](docs/ROADMAP.md).

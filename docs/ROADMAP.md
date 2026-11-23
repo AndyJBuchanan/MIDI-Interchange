@@ -13,16 +13,6 @@ Updated 2026-11-23.
 
 - **Cubase disabled tracks** (2026-11-23; plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md), draft, decisions made, waiting on fixtures; after mirror mode): a track disabled in Cubase (Disable Track, which is not mute) currently imports like any other, though Cubase plays nothing from it. Leave disabled tracks out of the import with a note, and keep an internal `include_disabled` option (default off, imports them muted) that a settings dialog could expose one day. Separate from mirror mode: it changes only the Cubase reader. Needs fixtures first, because where Cubase stores "disabled", and what its own MIDI export does with such a track, are not yet known.
 
-- **Mirror mode: watch one file** (2026-11-16, agreed 2026-11-22; plan: [mirror-mode](plans/mirror-mode.md), to be written): a separate mode of operation, entered by an explicit "Open & Mirror MIDI/Project File" command, not a toggle on a normal open. One MIDI or project file (any format the app opens directly: MIDI, DAWproject, Cubase, Reason) is locked to the timeline at bar 1 and the app watches it. Whenever the file changes on disk it is re-imported automatically. The aim is to mirror a Cubase (or Reason) project while still working in it, so whatever was last saved is ready to drag out.
-  - **Owns the workspace:** nothing else sits on the timeline while mirroring. Unmirroring keeps the last imported state as a normal workspace and starts a clean undo history.
-  - **Read-only view:** no edits and no drops while mirroring. Allowed: range selections, track locks and probably track mute/solo, carried across reimports (the readers already have `preserve_track_state`; ranges are kept by time; tracks are matched the way the readers already match them).
-  - **Strong visual cue:** the mode must be unmistakable at a glance: a tint of the base UI and/or a red or yellow outline round the whole window, plus a banner with an Unmirror button, and the mode named in the title bar. Edit tools are unavailable.
-  - **Leaving the mode:** the user must unmirror to resume normal operation.
-  - **Failed or half-written reads:** keep the last good import and show a notice in the status bar.
-  - **Session:** relaunch restores the workspace as a normal one; a watch is never resumed automatically.
-  - **Only saved files count:** a project changes on disk only when the user saves, which is acceptable.
-  - **To check, not assume:** how Cubase and Reason actually write on save (in place, or temp file then rename), and so how to detect a finished save and which watch mechanism holds up (`QFileSystemWatcher` loses its watch when a file is replaced by rename; polling the modification time is the simple alternative; undecided). Needs a project saved in each DAW on this Mac while file events are logged.
-
 ## Suggested, not agreed
 
 - **Export/drag filename decoration** (speculative, 2026-11-16: not sure it's needed):

@@ -45,6 +45,22 @@ CONTROLLER_EDGE = QColor(12, 12, 15, 210)       # thin dark edge under an overla
 CONTROLLER_CENTRE = QColor(255, 255, 255, 38)   # pitch bend's centre line
 
 
+def mix(a: QColor, b: QColor, amount: float) -> QColor:
+    """`a` moved `amount` (0..1) of the way toward `b`."""
+    return QColor(round(a.red() + (b.red() - a.red()) * amount),
+                  round(a.green() + (b.green() - a.green()) * amount),
+                  round(a.blue() + (b.blue() - a.blue()) * amount))
+
+
+# Mirror mode (docs/plans/mirror-mode.md): cyan, clear of the amber ACCENT, the red SOLO and the light-blue TEMPO_COL.
+MIRROR = QColor("#1fc3e0")
+MIRROR_TEXT = QColor("#0b1d22")                  # on the banner
+MIRROR_TINT = 0.12                               # chrome backgrounds mixed this far toward MIRROR
+PANEL_BG_MIRROR = mix(PANEL_BG, MIRROR, MIRROR_TINT)
+RULER_BG_MIRROR = mix(RULER_BG, MIRROR, MIRROR_TINT)
+INFO_BG_MIRROR = mix(INFO_BG, MIRROR, MIRROR_TINT)
+
+
 def _luminance(c: QColor) -> float:
     def lin(v: float) -> float:
         return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
@@ -68,15 +84,20 @@ def readable_on_info(color: QColor) -> QColor:
     return c
 
 
-def apply(app: QApplication) -> None:
-    app.setStyle("Fusion")
+def apply(app: QApplication, mirror: bool = False) -> None:
+    """The dark palette. `mirror` tints the chrome (windows, toolbar, menus, buttons) toward MIRROR;
+    the base colour of text fields and the lanes' own colours are left alone."""
+    def tint(c: str) -> QColor:
+        return mix(QColor(c), MIRROR, MIRROR_TINT) if mirror else QColor(c)
+    if app.style().objectName().lower() != "fusion":      # restyling every widget is slow: only when needed
+        app.setStyle("Fusion")
     pal = QPalette()
-    pal.setColor(QPalette.Window, QColor("#2b2d31"))
+    pal.setColor(QPalette.Window, tint("#2b2d31"))
     pal.setColor(QPalette.WindowText, TEXT)
     pal.setColor(QPalette.Base, QColor("#1e1f23"))
-    pal.setColor(QPalette.AlternateBase, QColor("#26282c"))
+    pal.setColor(QPalette.AlternateBase, tint("#26282c"))
     pal.setColor(QPalette.Text, TEXT)
-    pal.setColor(QPalette.Button, QColor("#34363c"))
+    pal.setColor(QPalette.Button, tint("#34363c"))
     pal.setColor(QPalette.ButtonText, TEXT)
     pal.setColor(QPalette.Highlight, QColor("#b5831f"))
     pal.setColor(QPalette.HighlightedText, QColor("#ffffff"))
