@@ -1,6 +1,6 @@
 # Plan: low-effort session persistence
 
-Status: **implemented; review follow-ups 1–6 built** (2026-11-14, uncommitted). Studio verification pending. No application build or release made. Branch: `feature/session-persistence` from `main`.
+Status: **built** (2026-11-14), review follow-ups 1–6 included. Merged by PR #12 and released in v0.3.0-pre; manual checks are in TEST_CHECKLIST section 8j. Branch: `feature/session-persistence`, from `main` (before release branches).
 
 Keep the one current workspace between app runs without introducing project files, workspace Save/Open commands, or session management UI.
 

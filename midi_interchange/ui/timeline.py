@@ -47,6 +47,7 @@ from PySide6.QtGui import (QBrush, QColor, QCursor, QFont, QFontMetrics, QKeyEve
                            QNativeGestureEvent, QPainter, QPainterPath, QPen, QPixmap, QRegion, QWheelEvent)
 from PySide6.QtWidgets import QApplication, QAbstractScrollArea, QMenu
 
+from ..core import controllers as ctlr
 from ..core.document import Clip, Track
 from ..core.events import TEXT_META, display_text, pair_notes
 from ..core.export_smf import clip_window
@@ -130,6 +131,82 @@ def note_rows(area_top: float, area_h: float, pmin: int, pmax: int) -> tuple[flo
     return y_base, row, max(row - (1 if row >= 4 else 0), 1.2)
 
 
+# Controller strip (docs/plans/controller-display.md, "Row heights"): an extra strip under the normal lane
+STRIP_SHARE = 0.30        # of the lane height
+STRIP_MIN = 10            # px
+STRIP_PAD_TOP = 1         # the divider between the notes and the strip
+STRIP_PAD_BOTTOM = 3      # the clip box's bottom inset
+
+
+@dataclass
+class TrackLayout:
+    """Vertical layout of one lane (positions relative to the lane's top when ``top`` is 0)."""
+    note_top: float
+    note_h: float
+    key: str | None = None          # the controller this track shows (None: nothing)
+    has_data: bool = False          # the track has that controller
+    strip_top: float = 0.0          # the strip under the normal lane, when the row has one
+    strip_h: float = 0.0            # its full height (the row is this much taller than the lane)
+    overlay: bool = False           # the line is drawn over the notes
+
+    @property
+    def strip(self) -> bool:
+        return self.strip_h > 0
+
+
+def controller_polyline(times, values, shift: float, ppb: float, a: float, b: float, joined: bool,
+                        x_end: float, width: float, y_of) -> list[tuple[float, float]]:
+    """Screen points of one controller line over the visible span [a, b] (clip time).
+
+    ``x = t * ppb + shift``. Only the points that matter are used (found with bisect), starting from the
+    one before the span. Past one point per pixel, each pixel column is drawn as its min-max span, so
+    the cost follows the view width, not the number of events. The line holds flat to ``x_end``.
+    """
+    n = len(times)
+    if not n:
+        return []
+    i0 = max(bisect.bisect_right(times, a) - 1, 0)
+    i1 = min(bisect.bisect_right(times, b) + (1 if joined else 0), n)
+    if i1 <= i0:
+        return []
+    last_y = y_of(values[i1 - 1])
+    if i1 - i0 > max(width, 1):
+        pts: list[tuple[float, float]] = []
+        col = None
+        lo = hi = 0.0
+        prev = None
+
+        def flush():
+            nonlocal prev
+            first, second = (lo, hi) if prev is None or abs(prev - lo) <= abs(prev - hi) else (hi, lo)
+            pts.append((col, first))
+            pts.append((col + 0.5, second))
+            prev = second
+        for i in range(i0, i1):
+            x = math.floor(times[i] * ppb + shift)
+            y = y_of(values[i])
+            if x != col:
+                if col is not None:
+                    flush()
+                col, lo, hi = x, y, y
+            else:
+                lo, hi = min(lo, y), max(hi, y)
+        flush()
+        pts.append((max(x_end, pts[-1][0]), last_y))
+        return pts
+    pts = []
+    prev_y = None
+    for i in range(i0, i1):
+        x = times[i] * ppb + shift
+        y = y_of(values[i])
+        if not joined and prev_y is not None:
+            pts.append((x, prev_y))
+        pts.append((x, y))
+        prev_y = y
+    pts.append((max(x_end, pts[-1][0]), last_y))
+    return pts
+
+
 class Timeline(QAbstractScrollArea):
     verticalOffsetChanged = Signal(int)
     laneHeightChanged = Signal(int)
@@ -141,6 +218,7 @@ class Timeline(QAbstractScrollArea):
     externalDragMoved = Signal(QPointF, bool)  # viewport position, bypass snap
     headerHeightChanged = Signal(int)          # the marker row appeared or went
     headerMenuRequested = Signal(QPoint)       # right-click on the ruler or the tempo/marker rows
+    rowsChanged = Signal()                     # the row offsets changed (the track panel lays out from this)
 
     def __init__(self, ctl: Controller, parent=None) -> None:
         super().__init__(parent)
@@ -148,6 +226,7 @@ class Timeline(QAbstractScrollArea):
         self.ppb = 28.0          # pixels per quarter note
         self.lane_h = 68
         self._cache: dict[str, ClipRender] = {}
+        self._line_cache: dict[str, tuple] = {}    # clip id -> (events, trims, {(key, merged): lines})
         self._drag: dict | None = None
         self._external_drag = False
         self._drag_reach: float | None = None
@@ -158,11 +237,14 @@ class Timeline(QAbstractScrollArea):
         self._split_preview: tuple[str, Fraction] | None = None
         self._scissors_cursor = clip_cursor()
         self._copy_cursor = clip_cursor(copy=True)
-        QApplication.instance().installEventFilter(self)
         self._press_pos: QPointF | None = None
         self._drop_ind: tuple[int | None, Fraction, str] | None = None   # lane (None = new track), time, label
         self._show_markers = True      # Show Markers (the setting; the row also needs markers to show)
         self._marker_row = False       # whether the marker row is in the header right now
+        self._row_offsets: list[int] = [0]       # prefix sums of the row heights (cached)
+        self._rows_valid = False
+        self._row_ids: list[str] = []
+        self._frozen: dict[str, int] | None = None   # row heights by track id, held during a gesture
 
         self.setFocusPolicy(Qt.StrongFocus)
         self.viewport().setMouseTracking(True)
@@ -181,9 +263,12 @@ class Timeline(QAbstractScrollArea):
         self.font_ruler = QFont(self.font())
         self.font_ruler.setPointSizeF(max(self.font().pointSizeF() - 1.5, 9.0))
 
+        ctl.tracksChanged.connect(self._rows_input_changed)      # first: later slots see fresh rows
+        ctl.controllerViewChanged.connect(self._rows_input_changed)
         ctl.tracksChanged.connect(self._content_changed)
         ctl.rangesChanged.connect(self._content_changed)
         ctl.selectionChanged.connect(self.viewport().update)
+        ctl.mirrorChanged.connect(self.viewport().update)
         ctl.tempoChanged.connect(self._content_changed)
 
     # ------------------------------------------------------------------ header rows
@@ -240,14 +325,99 @@ class Timeline(QAbstractScrollArea):
     def time_at(self, x: float, bypass_snap: bool = False) -> Fraction:
         return self.ctl.snap_time(quantize(max(self.t_of(x), 0.0)), bypass_snap)
 
+    # -- rows: one source of geometry. A row is the lane plus, in Lane mode, the controller strip.
+    def strip_px(self) -> int:
+        return max(STRIP_MIN, round(STRIP_SHARE * self.lane_h))
+
+    def _live_has_strip(self, track: Track) -> bool:
+        ctl = self.ctl
+        key = ctl.shown_controller(track)
+        return (key is not None and not ctl.controller_overlay
+                and any(key in ctl.clip_controller_keys(c) for c in track.clips))
+
+    def _live_heights(self) -> dict[str, int]:
+        strip = self.strip_px()
+        return {t.id: self.lane_h + (strip if self._live_has_strip(t) else 0) for t in self.ctl.ws.tracks}
+
+    def _ensure_rows(self) -> list[int]:
+        if not self._rows_valid or len(self._row_offsets) != len(self.ctl.ws.tracks) + 1:
+            offs = [0]
+            frozen = self._frozen
+            if frozen is None:
+                heights = self._live_heights()
+                for t in self.ctl.ws.tracks:
+                    offs.append(offs[-1] + heights[t.id])
+            else:
+                for t in self.ctl.ws.tracks:
+                    offs.append(offs[-1] + frozen.get(t.id, self.lane_h))
+            self._row_offsets = offs
+            self._rows_valid = True
+        return self._row_offsets
+
+    def row_h(self, i: int) -> int:
+        offs = self._ensure_rows()
+        return offs[i + 1] - offs[i] if 0 <= i < len(offs) - 1 else self.lane_h
+
+    def row_y(self, i: int) -> int:
+        """Content y of a row's top, before scrolling. The row after the last is the total."""
+        offs = self._ensure_rows()
+        n = len(offs) - 1
+        return offs[i] if i <= n else offs[n] + (i - n) * self.lane_h
+
+    def content_rows_h(self) -> int:
+        return self._ensure_rows()[-1]
+
+    def has_strip(self, track: Track) -> bool:
+        """Whether this track's row has a strip right now (frozen heights count during a gesture)."""
+        if self._frozen is not None:
+            return self._frozen.get(track.id, self.lane_h) > self.lane_h
+        return self._live_has_strip(track)
+
+    def _visible_rows(self, y0: float, y1: float) -> range:
+        offs = self._ensure_rows()
+        n = len(offs) - 1
+        base = self.verticalScrollBar().value() - self.header_h()
+        i0 = max(bisect.bisect_right(offs, y0 + base) - 1, 0)
+        i1 = min(bisect.bisect_right(offs, y1 + base), n)
+        return range(i0, i1)
+
+    def _rows_input_changed(self) -> None:
+        self._recalc_rows(anchor=True)
+        self.viewport().update()
+
+    def _recalc_rows(self, anchor: bool) -> None:
+        """Rebuild the row offsets. When they changed, keep the track at the top of the view at the
+        top (same pixel offset into it, clamped to its new height) unless `anchor` is False."""
+        old_offs, old_ids = self._row_offsets, self._row_ids
+        top_id = top_off = None
+        vbar = self.verticalScrollBar()
+        if anchor and self._rows_valid and old_ids:
+            v = vbar.value()
+            i = bisect.bisect_right(old_offs, v) - 1
+            if 0 <= i < len(old_ids):
+                top_id, top_off = old_ids[i], v - old_offs[i]
+        self._rows_valid = False
+        new_offs = self._ensure_rows()
+        self._row_ids = [t.id for t in self.ctl.ws.tracks]
+        if new_offs == old_offs and self._row_ids == old_ids:
+            return
+        self._update_scrollbars()
+        if top_id is not None:
+            j = next((k for k, tid in enumerate(self._row_ids) if tid == top_id), None)
+            if j is not None:
+                vbar.setValue(new_offs[j] + min(top_off, new_offs[j + 1] - new_offs[j] - 1))
+        self.rowsChanged.emit()
+        self.viewport().update()
+
     def lane_top(self, i: int) -> int:
-        return self.header_h() + i * self.lane_h - self.verticalScrollBar().value()
+        return self.header_h() + self.row_y(i) - self.verticalScrollBar().value()
 
     def lane_at(self, y: float) -> int:
         if y < self.header_h():
             return -1
-        i = int((y - self.header_h() + self.verticalScrollBar().value()) // self.lane_h)
-        return i if 0 <= i < len(self.ctl.ws.tracks) else -1
+        offs = self._ensure_rows()
+        i = bisect.bisect_right(offs, y - self.header_h() + self.verticalScrollBar().value()) - 1
+        return i if 0 <= i < len(offs) - 1 else -1
 
     def total_beats(self) -> float:
         ws = self.ctl.ws
@@ -263,6 +433,8 @@ class Timeline(QAbstractScrollArea):
         self._external_drag = external
         self._drag_reach = None
         self._drag_scroll_start = self.horizontalScrollBar().value()
+        if self._frozen is None:
+            self._frozen = self._live_heights()     # rows hold still under the pointer until the gesture ends
 
     def end_drag(self, *, cancel: bool = False) -> int | None:
         """Finish a drag; returns the scroll value from when it began (restored here if `cancel`)."""
@@ -271,6 +443,9 @@ class Timeline(QAbstractScrollArea):
         self._external_drag = False
         self._drag_reach = None
         self._drag_scroll_start = None
+        if self._frozen is not None:
+            self._frozen = None
+            self._recalc_rows(anchor=True)
         self._update_scrollbars()
         self._refresh_header()
         if cancel and scroll_start is not None:
@@ -291,7 +466,7 @@ class Timeline(QAbstractScrollArea):
         hbar.setRange(0, max(0, content_w - vw))
         hbar.setPageStep(vw)
         hbar.setSingleStep(max(int(self.ppb), 8))
-        content_h = self.header_h() + len(self.ctl.ws.tracks) * self.lane_h + 24
+        content_h = self.header_h() + self.content_rows_h() + 24
         vbar.setRange(0, max(0, content_h - vh))
         vbar.setPageStep(max(vh - self.header_h(), 1))
         vbar.setSingleStep(self.lane_h // 3)
@@ -310,6 +485,9 @@ class Timeline(QAbstractScrollArea):
         for cid in list(self._cache):
             if cid not in live:
                 del self._cache[cid]
+        for cid in list(self._line_cache):
+            if cid not in live:
+                del self._line_cache[cid]
         self._refresh_header()
         self._update_scrollbars()
         self._refresh_pointer()
@@ -320,6 +498,37 @@ class Timeline(QAbstractScrollArea):
         if r is None or r.trims != (clip.trim_start, clip.trim_end):
             r = self._cache[clip.id] = build_render(clip)
         return r
+
+    def controller_lines_for(self, track: Track, clip: Clip, key: str) -> list[ctlr.ControllerLine]:
+        """The lines to draw for a clip: one per channel, or one merged line when the track
+        has an export channel set (what the receiving DAW gets). Cached per clip."""
+        merged = track.export_channel is not None
+        stamp = (clip.trim_start, clip.trim_end, clip.length, clip.offset)
+        entry = self._line_cache.get(clip.id)
+        if entry is None or entry[0] is not clip.events or entry[1] != stamp:
+            entry = self._line_cache[clip.id] = (clip.events, stamp, {})
+        lines = entry[2].get((key, merged))
+        if lines is None:
+            lines = entry[2][(key, merged)] = ctlr.controller_lines(clip, key, merged)
+        return lines
+
+    def track_layout(self, track: Track, top: float = 0) -> TrackLayout:
+        """The note area (always laid out from the normal lane height, so it is the same in Lane and
+        Overlay) and, when the track's row has one, the strip under the lane."""
+        lane_h = self.lane_h
+        name_h = 13 if lane_h >= 44 else 0
+        area_top = top + 3 + name_h
+        area_h = lane_h - 7 - name_h - (8 if track.auxiliary or lane_h < 44 else 4)
+        key = self.ctl.shown_controller(track)
+        lay = TrackLayout(area_top, area_h, key)
+        if self.has_strip(track):
+            lay.strip_h = self.strip_px()
+            lay.strip_top = top + lane_h
+        if key is None:
+            return lay
+        lay.has_data = key in self.ctl.track_controllers(track)
+        lay.overlay = self.ctl.controller_overlay
+        return lay
 
     # ------------------------------------------------------------------ zoom
     def set_zoom(self, ppb: float, anchor_x: float | None = None) -> None:
@@ -352,6 +561,7 @@ class Timeline(QAbstractScrollArea):
         h = min(max(h, 28), 220)
         if h != self.lane_h:
             self.lane_h = h
+            self._recalc_rows(anchor=False)       # a lane height change keeps the scroll value
             self._update_scrollbars()
             self._refresh_pointer()
             self.laneHeightChanged.emit(h)
@@ -373,20 +583,18 @@ class Timeline(QAbstractScrollArea):
         p.setClipRect(0, self.header_h(), w, h - self.header_h())
         self._paint_lanes_bg(p, w)
         self._paint_grid(p, t0, t1, self.header_h(), h)
-        for i, track in enumerate(ws.tracks):
-            top = self.lane_top(i)
-            if top + self.lane_h < self.header_h() or top > h:
-                continue
-            self._paint_track_regions(p, track, top, t0, t1, w)
+        for i in self._visible_rows(self.header_h(), h):
+            self._paint_track_regions(p, ws.tracks[i], self.lane_top(i), self.row_h(i), t0, t1, w)
         self._paint_range_overlays(p, self.header_h(), h)
         if self._split_preview is not None:
             cid, time = self._split_preview
             found = ws.find_clip(cid)
             if found is not None:
-                top = self.lane_top(ws.tracks.index(found[0]))
+                i = ws.tracks.index(found[0])
+                top = self.lane_top(i)
                 x = self.x_of(float(time))
                 p.setPen(QPen(theme.ACCENT, 1, Qt.DashLine))
-                p.drawLine(QPointF(x, top + 2), QPointF(x, top + self.lane_h - 3))
+                p.drawLine(QPointF(x, top + 2), QPointF(x, top + self.row_h(i) - 3))
         if self._drop_ind is not None:
             self._paint_drop_indicator(p, w, h)
         p.setClipping(False)
@@ -405,10 +613,10 @@ class Timeline(QAbstractScrollArea):
         p.end()
 
     def _paint_lanes_bg(self, p: QPainter, w: int) -> None:
-        for i, track in enumerate(self.ctl.ws.tracks):
-            top = self.lane_top(i)
-            p.fillRect(0, top, w, self.lane_h, theme.LANE_A if i % 2 == 0 else theme.LANE_B)
-            p.fillRect(0, top + self.lane_h - 1, w, 1, theme.LANE_SEP)
+        for i in self._visible_rows(self.header_h(), self.viewport().height()):
+            top, rh = self.lane_top(i), self.row_h(i)
+            p.fillRect(0, top, w, rh, theme.LANE_A if i % 2 == 0 else theme.LANE_B)
+            p.fillRect(0, top + rh - 1, w, 1, theme.LANE_SEP)
 
     def _grid_levels(self) -> tuple[int, Fraction | None]:
         """(bar label stride, subdivision step in quarters or None)."""
@@ -450,29 +658,30 @@ class Timeline(QAbstractScrollArea):
                         p.drawLine(QPointF(xs, y0), QPointF(xs, y1))
                     s += sub
 
-    def _paint_track_regions(self, p: QPainter, track: Track, top: int, t0: float, t1: float, w: int) -> None:
+    def _paint_track_regions(self, p: QPainter, track: Track, top: int, rh: int, t0: float, t1: float,
+                             w: int) -> None:
         """An off track is greyed except inside the ranges that include it: a
         range shows what it exports."""
-        on = QRegion(0, top, w, self.lane_h) if track in self.ctl.ws.global_tracks() else QRegion()
+        on = QRegion(0, top, w, rh) if track in self.ctl.ws.global_tracks() else QRegion()
         covered, included = QRegion(), QRegion()
         for r in self.ctl.ws.ranges:
             if not r.is_empty:
                 x0, x1 = round(self.x_of(float(r.start))), round(self.x_of(float(r.end)))
-                region = QRegion(x0, top, max(x1 - x0, 0), self.lane_h)
+                region = QRegion(x0, top, max(x1 - x0, 0), rh)
                 covered += region
                 if r.includes(track.id):
                     included += region
         on = (on - covered) + included
-        off = QRegion(0, top, w, self.lane_h) - on
+        off = QRegion(0, top, w, rh) - on
         for region, enabled in ((off, False), (on, True)):
             if region.isEmpty():
                 continue
             p.save()
             p.setClipRegion(region, Qt.IntersectClip)
-            self._paint_track(p, track, top, t0, t1, w, enabled)
+            self._paint_track(p, track, top, rh, t0, t1, w, enabled)
             p.restore()
 
-    def _paint_track(self, p: QPainter, track: Track, top: int, t0: float, t1: float, w: int,
+    def _paint_track(self, p: QPainter, track: Track, top: int, rh: int, t0: float, t1: float, w: int,
                      enabled: bool) -> None:
         base = QColor(track.color)
         if not enabled:
@@ -482,15 +691,14 @@ class Timeline(QAbstractScrollArea):
         pmin = min((self.render_for(c).pmin for c in track.clips), default=60)
         pmax = max((self.render_for(c).pmax for c in track.clips), default=60)
         pmin, pmax = pmin - 1, pmax + 1
-        area_top = top + 3 + name_h
-        area_h = lane_h - 7 - name_h - (8 if track.auxiliary or lane_h < 44 else 4)
-        y_base, note_h, draw_h = note_rows(area_top, area_h, pmin, pmax)
+        lay = self.track_layout(track, top)
+        y_base, note_h, draw_h = note_rows(lay.note_top, lay.note_h, pmin, pmax)
 
         for clip in track.clips:
             x0, x1 = self.x_of(float(clip.start)), self.x_of(float(clip.end))
             if x1 < -2 or x0 > w + 2:
                 continue
-            cr = QRectF(x0, top + 2, max(x1 - x0, 3), lane_h - 5)
+            cr = QRectF(x0, top + 2, max(x1 - x0, 3), rh - 5)       # the box runs down through the strip
             fill = QColor(theme.DISABLED if clip.muted else base)
             fill.setAlpha(46 if enabled else 28)
             border = QColor(base)
@@ -510,6 +718,9 @@ class Timeline(QAbstractScrollArea):
             off = float(clip.offset)
             p.save()
             p.setClipRect(cr.adjusted(1, 1, -1, -1), Qt.IntersectClip)          # notes never paint outside their clip
+            if lay.strip:
+                p.fillRect(QRectF(cr.left(), lay.strip_top, cr.width(), lay.strip_h), theme.CONTROLLER_STRIP)
+                p.fillRect(QRectF(cr.left(), lay.strip_top, cr.width(), STRIP_PAD_TOP), theme.CONTROLLER_CENTRE)
             note_col = base.lighter(135) if enabled else base
             p.setPen(Qt.NoPen)
             a, b = t0 - off, t1 - off
@@ -531,6 +742,8 @@ class Timeline(QAbstractScrollArea):
                 c = QColor(note_col)
                 c.setAlpha(int(140 + vel * 115 / 127) if enabled else 110)
                 p.fillRect(QRectF(nx, ny, nw, draw_h), c)
+            if lay.key is not None and (lay.strip or (lay.overlay and lay.has_data)):
+                self._paint_controller(p, track, clip, lay, cr, base, enabled, t0, t1)
             p.restore()
 
             if render.texts:
@@ -543,8 +756,56 @@ class Timeline(QAbstractScrollArea):
                 x0, x1 = self.x_of(float(lo)), self.x_of(float(hi))
                 if x1 < 0 or x0 > w:
                     continue
-                p.fillRect(QRectF(x0, top + 2, max(x1 - x0, 2), lane_h - 5), theme.OVERLAP_FILL)
+                p.fillRect(QRectF(x0, top + 2, max(x1 - x0, 2), rh - 5), theme.OVERLAP_FILL)
                 p.fillRect(QRectF(x0, top + 2, max(x1 - x0, 2), 2), theme.OVERLAP_EDGE)
+
+    def _paint_controller(self, p: QPainter, track: Track, clip: Clip, lay: TrackLayout, cr: QRectF,
+                          base: QColor, enabled: bool, t0: float, t1: float) -> None:
+        """One clip's controller line(s): a lane strip or an overlay, steps or joined. Drawn only:
+        nothing here reads or changes interaction. The caller has clipped painting to the clip."""
+        lines = self.controller_lines_for(track, clip, lay.key)
+        if not lines:
+            return
+        strip = lay.strip
+        if strip:
+            top = lay.strip_top + STRIP_PAD_TOP
+            height = lay.strip_h - STRIP_PAD_TOP - STRIP_PAD_BOTTOM
+        else:
+            top, height = lay.note_top, lay.note_h
+        bottom = top + height
+        y_of = lambda v: bottom - v * height
+        if lay.key == ctlr.PITCH_BEND:
+            p.fillRect(QRectF(cr.left(), round(top + height / 2), cr.width(), 1), theme.CONTROLLER_CENTRE)
+        off = float(clip.offset)
+        shift = off * self.ppb - self.horizontalScrollBar().value()
+        x_end = self.x_of(float(clip.end))
+        line_col = QColor(base.lighter(150) if enabled else base)
+        joined = self.ctl.controller_joined
+        width = self.viewport().width()
+        for line in lines:
+            times, values = line.series
+            pts = controller_polyline(times, values, shift, self.ppb, t0 - off, t1 - off, joined,
+                                      x_end, width, y_of)
+            if len(pts) < 2:
+                continue
+            path = QPainterPath(QPointF(*pts[0]))
+            for pt in pts[1:]:
+                path.lineTo(QPointF(*pt))
+            if strip:
+                fill = QPainterPath(path)
+                fill.lineTo(pts[-1][0], bottom)
+                fill.lineTo(pts[0][0], bottom)
+                fill.closeSubpath()
+                shade = QColor(line_col)
+                shade.setAlpha(46 if enabled else 28)
+                p.fillPath(fill, shade)
+            else:
+                p.setPen(QPen(theme.CONTROLLER_EDGE, 3, Qt.SolidLine, Qt.FlatCap, Qt.RoundJoin))
+                p.setBrush(Qt.NoBrush)
+                p.drawPath(path)
+            p.setPen(QPen(line_col, 1.2, Qt.SolidLine, Qt.FlatCap, Qt.RoundJoin))
+            p.setBrush(Qt.NoBrush)
+            p.drawPath(path)
 
     def _paint_drop_ruler(self, p: QPainter) -> None:
         """Keep the drop time visible even when the destination lane is off screen."""
@@ -562,7 +823,7 @@ class Timeline(QAbstractScrollArea):
         x = round(self.x_of(float(t))) + 0.5
         n = len(self.ctl.ws.tracks)
         if lane is None:
-            top = self.lane_top(n)
+            top = self.lane_top(n)                       # a new track is the normal height
             box = QRectF(max(x, 0), top + 2, max(w - x, 0), self.lane_h - 5)
             p.setPen(QPen(theme.ACCENT, 1, Qt.DashLine))
             p.setBrush(theme.DROP_NEW_FILL)
@@ -570,8 +831,9 @@ class Timeline(QAbstractScrollArea):
             y0, y1 = top, top + self.lane_h
         else:
             top = self.lane_top(lane)
-            p.fillRect(QRectF(0, top, w, self.lane_h), theme.DROP_LANE_FILL)
-            y0, y1 = top, top + self.lane_h
+            rh = self.row_h(lane)
+            p.fillRect(QRectF(0, top, w, rh), theme.DROP_LANE_FILL)
+            y0, y1 = top, top + rh
         p.setPen(QPen(theme.ACCENT, 2))
         p.drawLine(QPointF(x, y0), QPointF(x, y1))
         p.setFont(self.font_small)
@@ -655,13 +917,12 @@ class Timeline(QAbstractScrollArea):
             return
         hatch = QBrush(theme.EXCLUDED_HATCH, Qt.BDiagPattern)
         accent = QColor((theme.ACCENT if selected else theme.RANGE_TOGGLE) if r.track_locked else theme.DISABLED)
-        for i, track in enumerate(self.ctl.ws.tracks):
+        for i in self._visible_rows(y0, y1):
+            track = self.ctl.ws.tracks[i]
             top = self.lane_top(i)
-            if top + self.lane_h < y0 or top > y1:
-                continue
             on = r.includes(track.id)
             if not on:
-                lane = QRectF(round(x0) + 1, top, max(round(x1) - round(x0) - 2, 0), self.lane_h - 1)
+                lane = QRectF(round(x0) + 1, top, max(round(x1) - round(x0) - 2, 0), self.row_h(i) - 1)
                 p.fillRect(lane, theme.EXCLUDED_FILL)
                 p.fillRect(lane, hatch)
             tr = self.toggle_rect(r, i)
@@ -683,8 +944,9 @@ class Timeline(QAbstractScrollArea):
     def _paint_header(self, p: QPainter, w: int, t0: float, t1: float) -> None:
         ws = self.ctl.ws
         tm = ws.tempo_map
-        p.fillRect(0, 0, w, RULER_H, theme.RULER_BG)
-        p.fillRect(0, RULER_H, w, self.range_top() - RULER_H, theme.INFO_BG)
+        mirror = self.ctl.mirroring
+        p.fillRect(0, 0, w, RULER_H, theme.RULER_BG_MIRROR if mirror else theme.RULER_BG)
+        p.fillRect(0, RULER_H, w, self.range_top() - RULER_H, theme.INFO_BG_MIRROR if mirror else theme.INFO_BG)
         p.fillRect(0, self.range_top(), w, RANGE_H, theme.RANGE_STRIP_BG)
         p.fillRect(0, self.header_h() - 1, w, 1, theme.LANE_SEP)
 
@@ -1076,8 +1338,10 @@ class Timeline(QAbstractScrollArea):
         self._hover_x = None
         self.viewport().update(0, 0, self.viewport().width(), self.header_h())
 
-    @staticmethod
-    def _clip_action(mods) -> str | None:
+    def _clip_action(self, mods) -> str | None:
+        """The clip gesture a modifier selects. None while mirroring: clips are read-only."""
+        if self.ctl.mirroring:
+            return None
         if mods & Qt.AltModifier:
             return "copy" if mods & Qt.ControlModifier else "move"
         return "split" if mods & Qt.ControlModifier else None
@@ -1091,6 +1355,17 @@ class Timeline(QAbstractScrollArea):
         if self._pointer is not None and self._drag is None and not self._external_drag:
             self._update_cursor(self._pointer, self._pointer_mods)
         self.viewport().update()
+
+    def showEvent(self, e) -> None:
+        # The application-wide filter (live modifier keys, window deactivation) runs only while the
+        # timeline is shown. A closed window must not leave one behind: every event passes through
+        # every installed filter, so they pile up (a test suite that opens many windows crawled).
+        QApplication.instance().installEventFilter(self)
+        super().showEvent(e)
+
+    def hideEvent(self, e) -> None:
+        QApplication.instance().removeEventFilter(self)
+        super().hideEvent(e)
 
     def eventFilter(self, obj, e) -> bool:
         if e.type() in (QEvent.KeyPress, QEvent.KeyRelease) and self._pointer is not None:
@@ -1268,6 +1543,8 @@ class Timeline(QAbstractScrollArea):
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         if e.key() == Qt.Key_M and not e.modifiers() & ~Qt.KeypadModifier:
+            if self.ctl.mirroring:
+                return                  # M mutes a clip: read-only while mirroring
             hit = self._lane_hit(self._pointer) if self._pointer is not None else ("empty",)
             if hit[0] == "clip":
                 self.ctl.toggle_clip_mute(hit[2])

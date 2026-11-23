@@ -1,6 +1,6 @@
 # Plan: About box
 
-Status: **agreed** (2026-11-12). Not built. Branch, when built: `feature/about-box` from `main`.
+Status: **built** (2026-11-12). Merged by PR #6 and released in v0.2.2-pre; manual checks are in TEST_CHECKLIST section 8e. Branch: `feature/about-box`, from `main` (before release branches).
 
 An **About** button on the app's toolbar opens a small dialog. The dialog shows the app icon, the program name, the copyright and author, a link to the GitHub page, a short description of what the app does, and an **OK** button.
 

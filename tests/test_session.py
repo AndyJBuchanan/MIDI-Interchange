@@ -14,7 +14,7 @@ from mido.midifiles.meta import UnknownMetaMessage
 from PySide6.QtCore import QEvent, QSettings, QTimer
 from PySide6.QtWidgets import QApplication, QDialog
 
-from helpers import conductor, load, note, smf, to_bytes, track
+from helpers import cc, conductor, load, note, smf, to_bytes, track
 from test_ui_assembly import app
 from midi_interchange.core.document import Workspace
 from midi_interchange.core.export_smf import ExportMode, ExportOptions, build_exports
@@ -99,11 +99,34 @@ def test_schema_v4_upgrade_defaults_source_transpose_and_rejects_bad_values():
     for rec in _records(legacy):
         if rec.get('kind') == 'Track':
             del rec['data']['source_transpose']
+            del rec['data']['controller']
     assert all(t.source_transpose == 0 for t in decode(legacy).workspace['tracks'])
     bad = json.loads(json.dumps(current))
     next(r for r in _records(bad) if r.get('kind') == 'Track')['data']['source_transpose'] = 200
     with pytest.raises(ValueError):
         decode(bad)
+
+
+def test_schema_v5_loads_with_controller_defaults_and_v6_roundtrips_controller():
+    """Schema 6 adds Track.controller. A schema-5 track has none, so it follows the view."""
+    ws = Workspace()
+    ws.add_import(*import_smf_bytes(smf([conductor(480), track([*note(0, 60, 0, 480), (0, cc(0, 7, 9))], 'A')]), 'a.mid'))
+    ws.add_import(*import_smf_bytes(smf([conductor(480), track([*note(0, 62, 0, 480), (0, cc(0, 1, 9))], 'B')]), 'b.mid'))
+    ws.tracks[0].controller = 'cc7'
+    ws.tracks[1].controller = 'none'
+    current = encode(Session(ws.snapshot(), {}))
+    restored = decode(json.loads(json.dumps(current))).workspace
+    assert [t.controller for t in restored['tracks']] == ['cc7', 'none']
+    legacy = json.loads(json.dumps(current))
+    legacy['schema_version'] = 5
+    for rec in _records(legacy):
+        if rec.get('kind') == 'Track':
+            del rec['data']['controller']
+    assert [t.controller for t in decode(legacy).workspace['tracks']] == [None, None]
+    stray = json.loads(json.dumps(current))
+    stray['schema_version'] = 5      # a schema-5 track must not carry the new field
+    with pytest.raises(ValueError):
+        decode(stray)
 
 
 def _records(obj):
@@ -164,7 +187,7 @@ def test_schema_v1_upgrade_preserves_workspace_and_reference_exports(tmp_path):
         assert [[label, data.hex()] for label, data in export_bytes(restored, mode)] == expected[mode.value]
     store.save(session)
     saved = json.loads(store.path.read_text())
-    assert saved['schema_version'] == SCHEMA_VERSION == 5
+    assert saved['schema_version'] == SCHEMA_VERSION == 6
     assert all(s['data']['raw']['data'] == '' for s in saved['workspace']['sources'])
     assert encode(store.load()) == encode(session)
 
@@ -224,6 +247,11 @@ def test_app_version_is_provenance_schema_is_compatibility_gate(tmp_path):
     lambda d: d['workspace']['tracks'][0]['data'].__setitem__('muted', 'false'),
     lambda d: d['workspace']['tracks'][0]['data'].__setitem__('export_channel', 17),
     lambda d: d['workspace']['tracks'][0]['data'].__setitem__('color', 'invalid'),
+    lambda d: d['workspace']['tracks'][0]['data'].__setitem__('controller', 'cc200'),
+    lambda d: d['workspace']['tracks'][0]['data'].__setitem__('controller', 'cc0'),
+    lambda d: d['workspace']['tracks'][0]['data'].__setitem__('controller', 7),
+    lambda d: d['workspace']['tracks'][0]['data'].__setitem__('controller', ''),
+    lambda d: d['workspace']['tracks'][0]['data'].pop('controller'),
     lambda d: d['workspace']['tracks'][1]['data'].__setitem__('id', d['workspace']['tracks'][0]['data']['id']),
     lambda d: d['workspace'].__setitem__('tempo_source_id', 'missing'),
     lambda d: d['workspace']['tracks'][0]['data']['clips'][0]['data'].__setitem__('source_id', 'missing'),
@@ -265,7 +293,7 @@ def window(app, tmp_path):
     QApplication.processEvents()
 
 
-def pump_until(predicate, timeout=5):
+def pump_until(predicate, timeout=15):
     deadline = time.monotonic() + timeout
     while not predicate():
         QApplication.processEvents()
@@ -300,7 +328,11 @@ def lifecycle(window, tmp_path):
 
 
 def finish_write(manager):
-    pump_until(lambda: manager._future is not None and manager._future.done())
+    # On this machine, CrowdStrike Falcon (a kernel-level file-I/O filter) can
+    # stall an individual save's fsync/replace well past the default pump
+    # timeout during a long full-suite run; it is not a hang, just slow, so
+    # give it more room here than other waits get.
+    pump_until(lambda: manager._future is not None and manager._future.done(), timeout=30)
     manager.tick()
 
 
@@ -333,13 +365,54 @@ def test_settings_view_and_fresh_undo_then_new(window, lifecycle, tmp_path):
 @pytest.mark.parametrize('key,value', [('zoom', float('nan')), ('zoom', float('inf')),
                                       ('lane_height', -1), ('export_mode', 'broken'),
                                       ('trim', 1), ('snap', True), ('selected_range_id', 'absent'),
-                                      ('vertical_scroll', 2**40)])
+                                      ('vertical_scroll', 2**40),
+                                      ('controller_view', None), ('controller_view', {}),
+                                      ('controller_view', {'show': 'cc7', 'overlay': False}),
+                                      ('controller_view', {'show': 'cc0', 'overlay': False, 'joined': False}),
+                                      ('controller_view', {'show': 'cc07', 'overlay': False, 'joined': False}),
+                                      ('controller_view', {'show': 7, 'overlay': False, 'joined': False}),
+                                      ('controller_view', {'show': 'pb', 'overlay': 1, 'joined': False}),
+                                      ('controller_view', {'show': None, 'overlay': False, 'joined': 'yes'})])
 def test_bad_settings_rejected_before_model_applied(window, key, value):
     session = capture(window)
     session.settings[key] = value
     with pytest.raises((ValueError, TypeError)):
         apply_session(window, session)
     assert not window.ctl.ws.tracks
+
+
+def test_controller_view_and_track_override_roundtrip_through_a_saved_session(window):
+    ws = Workspace()
+    ws.add_import(*import_smf_bytes(smf([conductor(480), track([*note(0, 60, 0, 480), (0, cc(0, 7, 9)),
+                                                                (0, cc(0, 1, 9))], 'A')]), 'a.mid'))
+    ws.tracks[0].controller = 'cc1'
+    window.ctl.restore_session(ws.snapshot(), None)
+    window.ctl.set_controller_show('cc7')
+    window.ctl.set_controller_overlay(True)
+    window.ctl.set_controller_joined(True)
+    expected = capture(window)
+    assert expected.settings['controller_view'] == {'show': 'cc7', 'overlay': True, 'joined': True}
+    saved = roundtrip(expected)
+    assert saved.settings['controller_view'] == expected.settings['controller_view']
+    assert saved.workspace['tracks'][0].controller == 'cc1'
+    window.ctl.new_document()
+    window.ctl.set_controller_show(None)
+    window.ctl.set_controller_overlay(False)
+    window.ctl.set_controller_joined(False)
+    apply_session(window, saved)
+    assert (window.ctl.controller_show, window.ctl.controller_overlay, window.ctl.controller_joined) == ('cc7', True, True)
+    assert window.ctl.ws.tracks[0].controller == 'cc1'
+    assert not window.ctl.can_undo()
+
+
+def test_session_without_controller_view_loads_with_defaults(window):
+    window.ctl.set_controller_show('pb')
+    window.ctl.set_controller_overlay(True)
+    window.ctl.set_controller_joined(True)
+    session = capture(window)
+    del session.settings['controller_view']          # as saved by 0.4.0 and the 0.5.0 builds before schema 6
+    apply_session(window, session)
+    assert (window.ctl.controller_show, window.ctl.controller_overlay, window.ctl.controller_joined) == (None, False, False)
 
 
 @pytest.mark.parametrize("bad", [b'{"schema_version": 888}', b'{"schema_version":', b"not JSON"])

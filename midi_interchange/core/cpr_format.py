@@ -32,6 +32,7 @@ precedes the body.
 from __future__ import annotations
 
 import re
+import math
 import struct
 from dataclasses import dataclass, field
 
@@ -68,7 +69,7 @@ class Container:
 
 def _pstring(b: bytes, pos: int) -> tuple[str, int]:
     """u32 length | bytes. Archive strings end '\\0' + UTF-8 BOM (EF BB BF);
-    ROOT names end '\\0' only. Both are stripped."""
+    ROOT names have no terminator at all. Both forms are stripped."""
     n = int.from_bytes(b[pos:pos + 4], 'big')
     raw = b[pos + 4:pos + 4 + n]
     if raw.endswith(b'\0\xef\xbb\xbf'):
@@ -280,7 +281,8 @@ CLASS_STATUS = {'MMidiNote': 0x90, 'MMidiPolyPressure': 0xA0, 'MMidiAfterTouch':
 # Bytes between the f64 position and the u32 that precedes the property
 # count: channel then two MIDI data bytes. Confirmed: note (pitch, velocity),
 # controller (number, value), pitch bend (LSB, MSB; tier 3 c24), program
-# change (program, 0; c25). Poly and channel pressure assumed, no fixture yet.
+# change (program, 0; c25). Channel pressure is decoded in the orchestral project
+# (1,853 events). Poly pressure is assumed, no fixture yet.
 # Sysex is variable-length and not decoded.
 DATA_BYTES = {0x90: 3, 0xB0: 3, 0xE0: 3, 0xC0: 3, 0xA0: 3, 0xD0: 3}
 
@@ -316,7 +318,7 @@ def _props(wk: Walker, q: int, limit: int) -> tuple[dict[str, object], int]:
     low byte is the kind, higher bits look like flags: 1 = i64, 4 = f64;
     other kinds hold an embedded NEW/REF object (2: e.g. a controller curve
     shape MParamEventCurveRationalBezier; 0x22: tempo-track 'TVCi', note
-    'ScAr' holding Omnivocal lyric attributes; 0x0408: a string object), or for
+    'ScAr' (reader key 'rAcS') holding Omnivocal lyric attributes; 0x0408: a string object), or for
     kind 8 possibly a plain string.
     """
     d = wk.d
@@ -375,7 +377,9 @@ def iter_midi_parts(wk: Walker, objs: list[Obj]):
 def decode_part_events(wk: Walker, part: Obj) -> tuple[list[CprEvent], list[str], dict]:
     """Decode an MMidiPart body.
 
-    Layout: string name | uW, u32, uW (unknown) | u32 eventCount | u8 classCount
+    Layout: string name | u32 time base, then musical: 2 x W-byte tempo and
+    signature references, or linear (1): f64 1.0 (12 bytes instead of 4 + 2W;
+    event positions and note lengths are then seconds) | u32 eventCount | u8 classCount
     | classCount x (NEW/REF class tag + uW length 0) | eventCount events.
     The u8 classCount is absent when eventCount is 0.
     Each event: u8 status, then a compact body; status 0 means a NEW/REF
@@ -385,16 +389,21 @@ def decode_part_events(wk: Walker, part: Obj) -> tuple[list[CprEvent], list[str]
     events: list[CprEvent] = []
     problems: list[str] = []
     name, p = _pstring(d, part.body_at)
-    hdr = [int.from_bytes(d[p:p + w], 'big'), int.from_bytes(d[p + w:p + w + 4], 'big'),
-           int.from_bytes(d[p + w + 4:p + 2 * w + 4], 'big')]
-    p += 2 * w + 4
+    linear = int.from_bytes(d[p:p + 4], 'big') == 1
+    if linear:
+        hdr = [1, struct.unpack('>d', d[p + 4:p + 12])[0]]
+        p += 12
+    else:
+        hdr = [int.from_bytes(d[p:p + 4], 'big'), int.from_bytes(d[p + 4:p + 4 + w], 'big'),
+               int.from_bytes(d[p + 4 + w:p + 4 + 2 * w], 'big')]
+        p += 4 + 2 * w
     count = int.from_bytes(d[p:p + 4], 'big')
     p += 4
     nclasses = 0
     if count:                                  # absent in an empty part
         nclasses = d[p]
         p += 1
-    info = {'name': name, 'header': hdr, 'count': count}
+    info = {'name': name, 'header': hdr, 'count': count, 'linear': linear}
     for _ in range(nclasses):
         o = wk.try_object(p, part.end)
         if o is None or o.length != 0:
@@ -446,7 +455,7 @@ class PartEvent:
     copy a W-byte back-reference to an existing one. Musical time base: all
     in ticks (480 PPQ) from the project's absolute zero; a note's absolute
     time is start - offset + note position. Linear time base stores seconds
-    instead (tier 3 c26) and is not decoded yet.
+    instead (tier 3 c26, d8 baseline).
     """
     obj: Obj
     flags: int
@@ -509,6 +518,37 @@ def tempo_points(wk: Walker, ev: Obj) -> tuple[list[TempoPoint], float]:
         p += 22
     fixed, = struct.unpack('>f', d[p:p + 4])
     return pts, fixed
+
+
+def part_is_linear(wk: Walker, part: Obj) -> bool:
+    """The part's own time base: the u32 after its name (1 = linear, seconds)."""
+    _, p = _pstring(wk.d, part.body_at)
+    return int.from_bytes(wk.d[p:p + 4], 'big') == 1
+
+
+def seconds_to_ticks(points: list[TempoPoint], seconds: float) -> float:
+    """Convert a time in seconds to f64 ticks (480 PPQ) through the tempo
+    points. Constant tempo between points; into a ramp point the tempo is
+    linear in beats, so with B beats from bpm0 to bpm1, t(x) = 60 B / (bpm1 -
+    bpm0) * ln(bpm(x) / bpm0), inverted here. Before the first point and after
+    the last, the nearest point's tempo continues."""
+    if not points:
+        return seconds / 0.5 * 480          # no tempo track: 120 BPM
+    i = 0
+    for k, pt in enumerate(points):
+        if pt.seconds <= seconds:
+            i = k
+    a = points[i]
+    b = points[i + 1] if i + 1 < len(points) else None
+    t = seconds - a.seconds
+    if b is not None and b.ramp and b.ticks > a.ticks:
+        bpm0, bpm1 = a.bpm, b.bpm
+        beats = (b.ticks - a.ticks) / 480
+        if abs(bpm1 - bpm0) < 1e-9:
+            return a.ticks + t / a.seconds_per_beat * 480
+        bpm = bpm0 * math.exp(t * (bpm1 - bpm0) / (60 * beats))
+        return a.ticks + beats * (bpm - bpm0) / (bpm1 - bpm0) * 480
+    return a.ticks + t / a.seconds_per_beat * 480
 
 
 def signature_points(wk: Walker, ev: Obj) -> list[tuple[int, int, int]]:
@@ -609,7 +649,7 @@ def state_flags_offset(b: bytes, cls: str) -> int | None:
       u16 count, optional name string, padding and FF x 8; BBCSO 15.0.10 has a
       u32 count and the track's own name; Beat003vs ends FF FF FF FF 00 00 00
       00), so only the flags value itself is checked (state bits only).
-    - MMidiTrack (v8): the body starts with the output port (u16 3, id, 4
+    - MMidiTrack (v7 and v8, the same layout): the body starts with the output port (u16 3, id, 4
       bytes, name), then the input port record, a u32 (1 in the fixtures, a
       track on channel 2: possibly the channel), then the flags.
     """
@@ -636,7 +676,8 @@ MODIFIER_PARAMS = ('Transpose', 'Velocity Shift', 'Delay')
 
 def _param_value(blob: bytes, name: str) -> int | None:
     """An integer parameter in a MIDI Modifiers block: u32 name length (with
-    its NUL) | name | 00 | u16 0x0206 | u32 3 | u32 6 'Value' 00 | u16 1 | i64."""
+    its NUL) | name | 00 (the NUL) | u16 2 (container) | u16 6 (sub-kind) | u32 3 (count) |
+    u32 6 'Value' 00 | u16 1 | i64."""
     key = len(name.encode()) + 1
     pat = (struct.pack('>I', key) + name.encode() + b'\x00\x00\x02\x00\x06\x00\x00\x00\x03'
            + b'\x00\x00\x00\x06Value\x00\x00\x01')
@@ -683,6 +724,41 @@ def track_state_flags(wk: Walker, track_event: Obj) -> int | None:
     return None if at is None else int.from_bytes(body[at:at + 4], 'big')
 
 
+def _own_bytes(wk: Walker, ev: Obj) -> bytes:
+    """The event's body with its direct children's byte ranges removed."""
+    out, at = [], ev.body_at
+    for ch in sorted(ev.children, key=lambda c: c.tag_at):
+        if ch.tag_at >= at:
+            out.append(wk.d[at:ch.tag_at])
+            at = max(at, ch.end)
+    out.append(wk.d[at:ev.end])
+    return b''.join(out)
+
+
+def track_disabled_hidden(wk: Walker, track_event: Obj) -> tuple[bool, bool]:
+    """(disabled, hidden) from the track event's property list (section 4.3).
+
+    The list sits straight after the MListNode child (2 bytes, then the
+    properties) and ends exactly where the mixer object starts. Disabled is
+    'noit' (reader key 'tion') EQUAL TO 1: a track that was disabled and
+    re-enabled keeps it at 0, one never toggled has none. Hidden is 'dihT'
+    (reader key 'Thid') equal to 1. If the list does not parse, the same
+    markers are searched for in the event's own bytes (never inside a child).
+    """
+    node = next((ch for ch in track_event.children if ch.cls.name == 'MListNode'), None)
+    if node is not None:
+        try:
+            props, end = _props(wk, node.end + 2, track_event.end)
+            mixer = next((ch for ch in sorted(track_event.children, key=lambda c: c.tag_at)
+                          if ch.tag_at >= end and ch.cls.name in ('MInstrumentTrack', 'MMidiTrack', 'MAudioTrack')), None)
+            if mixer is None or mixer.tag_at == end:
+                return props.get('tion') == 1, props.get('Thid') == 1
+        except (ValueError, IndexError, struct.error):
+            pass
+    own = _own_bytes(wk, track_event)
+    return b'noit\x00\x01' + bytes(7) + b'\x01' in own, b'dihT\x00\x01' + bytes(7) + b'\x01' in own
+
+
 def track_solo_flag(wk: Walker, track_event: Obj) -> int | None:
     """Mixer channel record 'SoloFlag' (i64), present with value 1 when an
     instrument track is muted (alongside a 'Solo' record when soloed). The
@@ -706,9 +782,10 @@ def folder_path(wk: Walker, track_event: Obj) -> list[str]:
     instrument folders hold device tracks too; neither normally holds MIDI
     parts, so they only appear here if the user put a MIDI track inside.
     Tempo, signature, marker and chord tracks are loose by default and can be
-    moved anywhere, including into folders (GA has them loose; the other
-    fixtures have tempo and signature inside the I/O folder); they are found
-    by class wherever they are. An instrument stack (Cubase 16) is also an
+    moved anywhere, including into folders. Where one sits in the file says
+    nothing about where the user put it: it is written inline at the first
+    node that references it (GA: the chord track node; the other fixtures:
+    'Stereo Out' in the I/O folder). They are found by class wherever they are. An instrument stack (Cubase 16) is also an
     MFolderTrack (tier 2 c18is). Folder state flags: folder_state_flags().
     """
     return [folder_name(wk, f) for f in sorted(

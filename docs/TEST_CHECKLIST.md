@@ -1,6 +1,6 @@
 # Manual Test Checklist
 
-Hand tests for the clip-assembly feature (`feature/clip-assembly`), plus a short regression pass. Reuse it for later features: add a section, keep the regression pass.
+Hand tests: sections 1–8 cover the core workflow, and each feature adds its own section (8a, 8b, …) before section 9, headed with its branch. Section 9 checks New, section 10 is a quick regression pass, and section 11 is the Windows pass at release time.
 
 Wherever a step changes something, also check that one ⌘Z undoes the whole step.
 
@@ -282,6 +282,99 @@ Use your own Reason 13/14 songs as well as `samples/reason-probe` and `samples/r
 - [x] A song still open in Reason imports without disturbing it; the `.reason` is unchanged afterwards.
 - [x] A song saved by Reason 12 or earlier fails with the re-save message; a damaged file fails cleanly. The workspace is unchanged either way.
 - [x] Save, quit and relaunch with a Reason import: clips, mute states and source details survive.
+
+## 8p. Simplify controller data (`feature/simplify-controller-data`)
+
+Plan: [simplify-controller-data](plans/simplify-controller-data.md). Use a Reason project with dense mod wheel or pitch bend curves.
+
+- [x] The **Simplify controller data** box sits beside Trim in the export panel, is off by default, and its tooltip says it changes the data.
+- [x] Export with it off, then on, and open both in Reason: off gives the staircase of points, on gives a few clean points, and the curve looks and sounds the same.
+- [x] Same into Cubase: the curve is the same, with far fewer points.
+- [x] Drag out with it on, and compare with **Save MIDI…**: the same data.
+- [x] Notes, sustain, program changes and tempo are unchanged by the option, in every export mode, with and without ranges.
+- [x] With ranges, the controller value at the start of each range is still carried in.
+- [x] A deliberate big jump in a controller (a switch-like change) is still a jump.
+- [x] Untick it: the export is the same as before it was ever on.
+
+## 8q. Session sources dialog (`feature/session-sources`)
+
+Plan: [session-sources](plans/session-sources.md). Use two or three imports, including a Cubase or Reason project.
+
+- [x] A bright white **(i)** in a circle sits beside the track count, top left, clear of the M and S boxes. It has the tooltip "Sources in this session". Make the track panel as narrow as it goes, and check it with a three-digit track count, if you have one.
+- [x] Click it: a modal dialog lists every source in import order. Each shows its path (Show in Folder works), format and version, import time, tempo and any import warnings.
+- [x] **Used by** shows the right tracks with clip counts. Move a clip onto another source's track, and reopen: the counts follow.
+- [x] Select a source and press **Solo all source tracks**: the dialog closes and exactly the tracks that source feeds are soloed, all others unsoloed. Undo brings the previous solo state back.
+- [x] **Close** and Esc leave everything unchanged.
+- [x] A source with no clips (kept as the tempo source) says "No clips (kept for its tempo map)" and its solo button is greyed out.
+- [x] With nothing imported, the dialog says "Nothing imported yet."
+- [x] Right-click a track ▸ Source Info… still works exactly as before.
+- [x] No menu or toolbar entry for Sources: the (i) is the only way in.
+
+## 8r. Controller display (`feature/controller-display`)
+
+Plan: [controller-display](plans/controller-display.md). Use a Reason song with mod-wheel and pitch-bend curves and a Cubase project with CC data, if you have them.
+
+- [x] The toolbar has a **Controller** list after Markers, set to **Off**, and two icon buttons that are greyed while nothing is shown. View ▸ Controller mirrors the list, with "Overlay on Notes" and "Joined Lines" ticks.
+- [x] The list shows exactly what the imports hold: Pitch Bend, Aftertouch, then CCs by number with names. No bank select, RPN/NRPN or mode messages.
+- [x] Pick each controller in turn. Curves are drawn as steps and look like the DAW's own lanes. Pitch bend shows a faint centre line.
+- [x] The first icon button switches between a lane under the notes and an overlay on them. In Lane mode only the tracks that show the controller grow taller, by a strip under their notes (about 30% of the lane height); the other tracks and their headers keep the normal height. Overlay returns every track to the normal height. The track at the top of the view stays where it is when heights change. The second button switches steps and joined lines. Tooltips name the current state.
+- [x] Each track header has a small box under its ✕. It shows CC1, PB or AT for what the track displays, and is empty when the picker is Off.
+- [x] Click a track's box: **Follow view (…)**, **None**, then that track's controllers. Choose one: only that track changes, and its box turns red. Undo puts it back, and the picker and buttons don't make undo steps.
+- [x] A track without the chosen controller shows nothing.
+- [x] Trim a clip in the middle of a curve: the line starts at the held value at the new edge. Export the clip: that first value matches in the DAW.
+- [x] A controller that only has data before a clip's trimmed start is still listed and drawn from its carried value.
+- [x] Change the lane height (⌥-wheel, ⌘⇧= / ⌘⇧-), including the shortest: tracks showing a controller in Lane mode stay taller than the rest, and their headers grow with them. The box under the ✕ hides on any row under 45 px, so plain tracks can lose theirs at short heights while a track with a strip keeps it.
+- [x] Zoom fully out on a long, dense song and scroll: it stays responsive.
+- [x] Quit and reopen: picker, both buttons and overrides come back. Choose a controller, delete the only track holding it: the list keeps it greyed as "(none in workspace)", and undo brings it back.
+- [x] Export or drag out with the display on and off: the files are the same.
+- [x] Right-click a colour box: the menu is unchanged, with no controller entry.
+
+## 8s. Mirror mode (`feature/mirror-mode`)
+
+Plan: [mirror-mode](plans/mirror-mode.md). Use a Cubase project and a Reason song, a small one and a large one of each. Save in the DAW, then wait a couple of seconds; the status bar should name the time of each re-import. Mirroring writes a log of what the watcher saw and did: **File ▸ Show Mirror Log** opens it (it is `mirror-log.txt` in the app's local data folder, replaced each time mirroring starts). If a save is missed or a clip move doesn't show, note roughly when it happened and keep that file from this run, and copy it across.
+
+- [x] With something in the workspace, **File ▸ Open & Mirror MIDI/Project File…** (and the **Mirror…** toolbar button) pick a Cubase project. The confirmation "Mirroring replaces the workspace." offers Replace Workspace and Cancel; Cancel changes nothing.
+- [x] After accepting, the mode is obvious at a glance: cyan frame, cyan banner naming the file with an Unmirror button and a last-updated time, tinted track panel and ruler, the lanes unchanged, "Mirroring …" in the title bar, and the toolbar button filled cyan. The tracks are at bar 1.
+- [x] Make two ranges, lock one with a track left out, and mute a track here. In Cubase move a part and save: within about two seconds the timeline updates, the status bar says "re-imported at HH:MM:SS", and the ranges, the lock and the mute are all still there.
+- [x] Mute a track here: its M and S buttons get a cyan outline and the tooltip says how it differs from the file. Save in Cubase: the muted track stays muted. Unmute a track the project had muted: it stays unmuted after the next save.
+- [x] A track you haven't touched follows Cubase: mute it in Cubase, save, and it mutes here.
+- [x] **File ▸ Sync Mutes to File** is greyed when nothing differs. With a difference it resets every track to what Cubase last saved and the outlines go. A track's right-click ▸ **Follow File's Mute/Solo** does just that track, and is greyed when it already matches. Neither makes an undo step.
+- [x] Rename a track in Cubase and save: it arrives as a new track and the old one goes (the expected limitation). Add a track and save: it appears, is included in the unlocked range, and has no outline.
+- [x] **Drag out** a range into Cubase, and **Save MIDI…**. Both work while mirroring and match a normal workspace.
+- [x] Try to edit: Alt-drag a clip, split a clip, ✕ on a track, rename, move a track, a file drop, Open, New, the tempo menus. All are unavailable or do nothing, and Undo and Redo are greyed. Mute, solo, ranges, zoom and the controller list still work.
+- [x] Save a large Cubase project and watch: no half-read state appears, and at worst the status bar says it couldn't read it and keeps the last version, then recovers by itself.
+- [x] Rename the project file in Finder, then rename it back: "not found; waiting", then a re-import.
+- [x] **Unmirror** (the banner button, and File ▸ Unmirror): the workspace stays, editing works, Undo is empty, and further saves in Cubase change nothing here.
+- [x] Repeat the save, range and mute checks with a Reason song. Reason writes in place, so also touch the file without changing it (open and save the song without edits): nothing should change here.
+- [x] Open & Mirror a plain `.mid` file and re-save it from another app: it re-imports.
+- [x] Quit while mirroring and relaunch: an ordinary workspace with the last import and your ranges, not mirroring.
+- [ ] Leave it mirroring for a long session (an hour of normal work in the DAW, with a dozen saves): the app stays responsive and its memory stays steady. *(Deferred by the owner to release-time testing, 2026-11-23.)*
+- [x] A track's controller display (the CC box on its header) can be changed while mirroring, and the choice survives the next save.
+
+## 8t. Cubase disabled tracks (`feature/cubase-disabled-tracks`)
+
+Plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/` (already in this checkout). Cubase's Disable Track is not mute.
+
+- [x] Drag `d1.cpr` in: "Pianoteq 9 B" is absent, A and C are there, and the import notes (and Source Info, Warnings) say `Track "Pianoteq 9 B" is disabled in Cubase; not imported`. Same for `d2.cpr` (B also muted).
+- [x] Drag `d4.cpr` (B hidden) in: all three tracks arrive and Source Info says B is hidden in Cubase.
+- [x] Drag `d0.cpr` and `d5.cpr` (B enabled, d5 after being disabled): all three tracks, no disabled note.
+- [x] Drag `d6.cpr`, `d7.cpr`, `d8.cpr`, `d9.cpr`, `d10.cpr` and `d11.cpr` in: each fails with "N track(s) in the project is/are disabled in Cubase, and no other track could be imported, so nothing was imported" (N is 2 for d10, which has a disabled audio and instrument track; 1 for the others), with the other notes (Pattern Editor for d7, audio for d10) after it. `d8` says disabled, not linear time base. Nothing is added to the workspace.
+- [x] `d9 baseline.cpr` (enabled audio only) fails with the usual "no supported MIDI parts or markers".
+- [x] Mirror a copy of `d0.cpr` in Cubase's own project: disable a track and save, and it leaves the palette; re-enable and save, and it comes back as a new track. The other tracks keep their ranges, locks and mutes.
+- [x] Mirror a project, then disable every MIDI/instrument track and save: the palette empties (no tracks is a true mirror of that save), the banner says "No importable tracks in the current save" (not "Last read failed"), and the status bar says no importable tracks. Re-enable a track and save: the tracks come back as new tracks and the banner text goes.
+- [x] **Spot fix (mirror mode):** while mirroring, click the CC box on a track's header: the controller menu opens. Pick a controller, save in Cubase, and the choice is still there after the re-import. (The box was greyed out while mirroring, against the agreed rule; the earlier mirror-mode item for this was failing for that reason.)
+- [x] Open a big project with many disabled tracks (`orchestral-import-test-01.cpr`, `BBCSO_Woodwinds101`): only the enabled tracks arrive (25 and 17, each including the Markers track), and they match what Cubase plays.
+
+## 8u. Cubase linear time-base tracks (`feature/cubase-linear-tracks`)
+
+Plan: [cubase-linear-tracks](plans/cubase-linear-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/d8 baseline.cpr` (with `d8 baseline.midi`) and `Tier 3/Cubase16/c26.cpr`, already in this checkout. A linear track stores seconds; Cubase's MIDI export converts them at the project's tempo as saved.
+
+- [x] Drag `d8 baseline.cpr` in: two tracks, "linear" and "musical", each with **two clips** (no third clip on "musical"). Set side by side with the Cubase window, the linear track's clips are shorter than the musical track's, and its second clip starts earlier (about three beats before the musical track's second clip). In Cubase's window the same two differences show.
+- [x] Source Info for `d8 baseline.cpr`, Warnings: `Track "linear" was on Cubase's linear time base; its positions are converted at the project's tempo` appears once, and nothing like it for "musical".
+- [x] Drag `c26.cpr` in: the Lead track now arrives (it was skipped before), four notes after the tempo ramp, and Source Info has the same note for "Lead" only. The Tempo ramp note is still there.
+- [x] Export `d8 baseline.cpr`'s two tracks as a MIDI file and open it next to `d8 baseline.midi` (Cubase's own export, from the same project) in a DAW: the two files look the same, track for track, notes and clips lining up.
+- [x] Drag `d8.cpr` in: still fails saying the track is disabled, not linear.
+- [x] Mirror a copy of `d8 baseline.cpr`: both tracks arrive; if you change the project tempo in Cubase and save, the linear track's clips move and the musical track's do not.
 
 ## 9. New document
 

@@ -67,7 +67,8 @@ these files.
 - **Class names seen in the arrangement:** `MMidiTrack`, `MMidiTrackEvent`,
   `MInstrumentTrack`, `MInstrumentTrackEvent`, `MFolderTrack`, `MMidiPart`,
   `MMidiPartEvent`, `MMidiNote`, `MMidiEvent`, `MTempoTrackEvent`,
-  `MTimeSignatureEvent`, `MSignatureTrackEvent`, `MMarkerTrackEvent`,
+  `MTimeSignatureEvent` (a class name inside the signature track's named
+  records only, not a binary object), `MSignatureTrackEvent`, `MMarkerTrackEvent`,
   `MMarkerEvent`, `MRangeMarkerEvent`, `MChordTrackEvent`, `MAutomationTrack`,
   `MAudioTrackEvent`, `MHitPointEvent`.
 - **indy contains `MPatternEvent`** next to its "Drum Core" track. The
@@ -149,8 +150,11 @@ the track's `MListNode` (track name at its start) → `MMidiPartEvent` →
   far) · u16 property count · properties · type-specific fields.
 - **Properties:** reversed FourCC · u16 type · value. Type 1 is i64, type 4
   f64, type 2 an embedded NEW/REF object. Seen: `OffV` release velocity as
-  (v − 1) / 126 (64 → 0.5); `HRDT` velocity in the same form; `GLFX`,
-  `relP`, `ncda`, `VOCE`, `cuTy` (unknown); `cuOb` on controllers holds a
+  (v − 1) / 126 (64 → 0.5); `HRDT` velocity (note-on velocity is scaled the
+  same way in some places and value / 128 in others, even within one file; the
+  reader doesn't use it); `XFLG`, `relP`, `ncda`, `VOCE`, `cuTy` (unknown).
+  The spellings here are the reader's keys, the reverse of the bytes on disk
+  (`XFLG` is `GLFX` on disk, and the score-attribute key `rAcS` is `ScAr`); `cuOb` on controllers holds a
   `MParamEventCurveRationalBezier`. **Cubase stores controller curve shapes
   between points**, so its MIDI export renders more CC messages than are
   stored; phase 2 must compare against the export with that in mind.
@@ -222,7 +226,7 @@ and signature points. 42 regression tests in `tests/test_cpr_inspect.py`.
     Groove Agent track names its loaded pattern, "Feel How Sweet It Is - Groove
     Agent SE [1]") · 14 bytes · i64 −1 (`FF` × 8). Cubase 16 (v11) appends a
     short `FAttributes` object after that.
-  - `MMidiTrack` (v8, Cubase 16 fixtures only): the body starts with the
+  - `MMidiTrack` (v7 in Cubase 13 and 15, v8 in 16; both decode the same way): the body starts with the
     output port (u16 3 · id · 4 bytes · name, e.g. "Input 1"), then the input
     port record, a u32 (1 for c17's channel-2 track; possibly the channel,
     unconfirmed), then the flags.
@@ -352,7 +356,7 @@ committed; tests skip when absent) exposed decoder assumptions:
   stepped over (their length is explicit) and reported; previously decoding
   stopped and those parts' notes were lost.
 - **Property types are a kind byte plus flags.** 1 = i64, 4 = f64; other kinds
-  hold objects (0x22 `ScAr` with **Omnivocal lyric attributes** such as
+  hold objects (0x22 `ScAr` on disk, `rAcS` as the reader's key, with **Omnivocal lyric attributes** such as
   "Kettles[k eh]"; 0x0408 a string object). A future lyrics feature could
   import these.
 - **Out-of-range stored values.** The orchestral project stores one

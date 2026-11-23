@@ -1,13 +1,15 @@
 """Left track panel: one header per timeline lane, vertically locked to the timeline."""
 from __future__ import annotations
 
+import bisect
 import sys
 
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QMouseEvent, QPainter, QPen, QWheelEvent
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QMouseEvent, QPainter, QPen, QWheelEvent
 from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QWidgetAction,
                                QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
+from ..core import controllers as ctlr
 from ..core.document import TRACK_COLORS, Track
 from . import theme
 from .controller import Controller
@@ -16,6 +18,8 @@ from .timeline import Timeline
 
 CONTROL_SIZE = 22
 CONTROL_GAP = 4
+BOX_W, BOX_H = 34, 16           # the track's controller box, under the delete button
+BOX_MIN_LANE = 45               # the box is hidden in lanes shorter than this
 
 
 def channel_text_color(color: QColor) -> str:
@@ -96,6 +100,15 @@ class TrackHeader(QFrame):
         f.setPointSizeF(max(f.pointSizeF() - 2, 8))
         self.info.setFont(f)
 
+        self.ctl_box = QToolButton(self)
+        self.ctl_box.setFixedSize(BOX_W, BOX_H)
+        self.ctl_box.clicked.connect(self._show_controller_menu)
+        self.info_row = QHBoxLayout()
+        self.info_row.setContentsMargins(0, 0, 0, 0)
+        self.info_row.setSpacing(CONTROL_GAP)
+        self.info_row.addWidget(self.info, 1)
+        self.info_row.addWidget(self.ctl_box, 0, Qt.AlignRight | Qt.AlignTop)
+
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(CONTROL_GAP)
@@ -113,7 +126,7 @@ class TrackHeader(QFrame):
         col.setContentsMargins(6, 4, 4, 4)
         col.setSpacing(1)
         col.addLayout(row)
-        col.addWidget(self.info)
+        col.addLayout(self.info_row)
         col.addStretch(1)
 
     def refresh(self, track: Track, source_desc: str, source_label: str) -> None:
@@ -122,9 +135,15 @@ class TrackHeader(QFrame):
             self.name_edit.setCursorPosition(0)
         self.mute_btn.setChecked(track.muted)
         self.solo_btn.setChecked(track.soloed)
+        # Mirroring: an outline on the M/S block marks a setting that differs from what the file last saved.
+        differs = self.ctl.ms_differs(track.id)
+        outline = f"QToolButton {{ border: 2px solid {theme.MIRROR.name()}; border-radius: 3px; }}" if differs else ""
         self.mute_btn.setStyleSheet(
-            f"QToolButton:checked {{ background: {(theme.DISABLED if track.soloed else theme.ACCENT).name()}; }}")
-        self.solo_btn.setStyleSheet(f"QToolButton:checked {{ background: {theme.SOLO.name()}; }}")
+            outline + f"QToolButton:checked {{ background: {(theme.DISABLED if track.soloed else theme.ACCENT).name()}; }}")
+        self.solo_btn.setStyleSheet(outline + f"QToolButton:checked {{ background: {theme.SOLO.name()}; }}")
+        note = self.ctl.ms_note(track.id) if differs else ""
+        self.mute_btn.setToolTip(("Mute; Alt/Option-click: set all mutes" + ("\n" + note if note else "")))
+        self.solo_btn.setToolTip(("Solo; Alt/Option-click: exclusive solo" + ("\n" + note if note else "")))
         self.color_btn.setText("" if track.export_channel is None else str(track.export_channel))
         channel_label = "Original channels" if track.export_channel is None else f"Export MIDI channel {track.export_channel}"
         self.color_btn.setToolTip(f"Track colour / export MIDI channel\n{channel_label}")
@@ -134,12 +153,81 @@ class TrackHeader(QFrame):
         chans = ",".join(str(c + 1) for c in track.channels)
         kind = "meta" if track.auxiliary else (f"ch {chans}" if chans else "")
         text = " · ".join(x for x in (source_label, kind) if x)
-        self.info.setText(self.info.fontMetrics().elidedText(text, Qt.ElideMiddle, max(self.width() - 20, 40)))
+        self._refresh_controller_box(track)
+        room = BOX_W + CONTROL_GAP if self.ctl_box.isVisibleTo(self) else 0
+        self.info.setText(self.info.fontMetrics().elidedText(text, Qt.ElideMiddle, max(self.width() - 20 - room, 40)))
         self.info.setToolTip(source_desc + (f"\nOriginal track name: {track.original_name}" if track.original_name else ""))
         self.name_edit.setEnabled(True)
+        self._apply_mirror_state()
         self.name_edit.setStyleSheet(
             "QLineEdit { background: transparent; font-weight: 600; color: %s; }"
             "QLineEdit:focus { background: #1b1c1f; }" % (theme.TEXT.name() if track in self.ctl.ws.global_tracks() else theme.TEXT_DIM.name()))
+
+    def _apply_mirror_state(self) -> None:
+        """While mirroring the header is read-only: no rename, remove, reorder or colour/channel choice.
+        Mute and solo stay, and so does the controller box: it is a display choice that changes no source
+        state, and carry_over keeps it across re-imports."""
+        editable = not self.ctl.mirroring
+        self.name_edit.setReadOnly(not editable)
+        for w in (self.remove_btn, self.grip, self.color_btn):
+            w.setEnabled(editable)
+        self.ctl_box.setEnabled(True)
+
+    def resizeEvent(self, e) -> None:
+        super().resizeEvent(e)
+        self.ctl_box.setVisible(self.height() >= BOX_MIN_LANE)     # where the info line is already clipped
+
+    # -- controller box ------------------------------------------------------------
+    def _refresh_controller_box(self, track: Track) -> None:
+        """The box shows the controller this track displays. Red only when the track overrides the view."""
+        shown = self.ctl.shown_controller(track)
+        overridden = track.controller is not None
+        view = self.ctl.controller_show
+        self.ctl_box.setText("–" if track.controller == "none" else "" if shown is None else ctlr.short_label(shown))
+        if overridden:
+            self.ctl_box.setStyleSheet(
+                f"QToolButton {{ background: {theme.SOLO.name()}; color: #1b1c1f; border: 1px solid {theme.SOLO.name()};"
+                f" border-radius: 3px; padding: 0; font-size: 10px; font-weight: 600; }}")
+        else:
+            has = shown is not None and shown in self.ctl.track_controllers(track)
+            color = theme.TEXT_DIM if (has or shown is None) else theme.TEXT_FAINT    # dimmed: follows, but has none
+            self.ctl_box.setStyleSheet(
+                f"QToolButton {{ color: {color.name()}; border: 1px solid {theme.TEXT_FAINT.name()};"
+                f" border-radius: 3px; padding: 0; font-size: 10px; }}")
+        if track.controller is None:
+            state = f"follows view ({ctlr.label(view) if view else 'Off'})"
+        elif track.controller == "none":
+            state = "none (this track; click to change)"
+        else:
+            state = f"{ctlr.label(track.controller)} (this track; click to change)"
+        self.ctl_box.setToolTip(f"Controller: {state}")
+
+    def _build_controller_menu(self) -> QMenu:
+        menu = QMenu(self)
+        track = self.ctl.ws.track(self.track_id)
+        if track is None:
+            return menu
+        view = self.ctl.controller_show
+        choices = [(f"Follow view ({ctlr.label(view) if view else 'Off'})", None), ("None", "none")]
+        for i, (text, value) in enumerate(choices):
+            action = menu.addAction(text)
+            action.setCheckable(True)
+            action.setChecked(track.controller == value)
+            action.triggered.connect(lambda _checked=False, v=value: self.ctl.set_track_controller(self.track_id, v))
+        menu.addSeparator()
+        for key in self.ctl.track_controllers(track):
+            action = menu.addAction(ctlr.label(key))
+            action.setCheckable(True)
+            action.setChecked(track.controller == key)
+            action.triggered.connect(lambda _checked=False, v=key: self.ctl.set_track_controller(self.track_id, v))
+        return menu
+
+    def _show_controller_menu(self) -> None:
+        previous = getattr(self, "_controller_menu", None)
+        if previous is not None:
+            previous.deleteLater()
+        self._controller_menu = self._build_controller_menu()
+        self._controller_menu.popup(self.ctl_box.mapToGlobal(QPoint(0, self.ctl_box.height())))
 
     def _mute_clicked(self) -> None:
         track = self.ctl.ws.track(self.track_id)
@@ -211,8 +299,38 @@ class TrackHeader(QFrame):
         self.name_edit.selectAll()
 
 
+class InfoButton(QToolButton):
+    """A clickable bright white "i" in a circle (opens the session Sources dialog)."""
+    SIZE = 14
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(self.SIZE, self.SIZE)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setAutoRaise(True)
+        self.setToolTip("Sources in this session")
+        self.setAccessibleName("Sources in this session")
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        color = QColor(theme.WHITE)
+        if not self.underMouse():
+            color.setAlpha(225)
+        p.setPen(QPen(color, 1.2))
+        p.setBrush(QColor(255, 255, 255, 40) if self.underMouse() else Qt.NoBrush)
+        r = self.rect().adjusted(1, 1, -1, -1)
+        p.drawEllipse(r)
+        f = QFont(self.font())
+        f.setBold(True)
+        f.setPixelSize(self.SIZE - 4)
+        p.setFont(f)
+        p.drawText(self.rect(), Qt.AlignCenter, "i")
+
+
 class TrackPanel(QWidget):
     trackContextMenuRequested = Signal(str, QPoint)
+    sourcesRequested = Signal()
 
     def __init__(self, ctl: Controller, timeline: Timeline, parent=None) -> None:
         super().__init__(parent)
@@ -222,7 +340,6 @@ class TrackPanel(QWidget):
         self._voffset = 0
         self._drag_tid: str | None = None
         self._drop_index: int | None = None
-        self.setMinimumWidth(170)
         self.setAcceptDrops(False)
 
         # headers live in a container below the title band, which clips them
@@ -231,6 +348,17 @@ class TrackPanel(QWidget):
         self.title = QLabel("TRACKS", self)
         self.title.setStyleSheet(f"color: {theme.TEXT_DIM.name()}; font-weight: 600; letter-spacing: 1px;")
 
+        # Measured rather than a fixed guess: text metrics (bold weight, widest
+        # count "120/120") vary enough between platform font renderers that a
+        # single hardcoded width fit on one OS clipped the title on another.
+        title_font = QFont(self.title.font())
+        title_font.setBold(True)
+        widest_title = QFontMetrics(title_font).horizontalAdvance("TRACKS  120/120")
+        self.setMinimumWidth(10 + widest_title + 6 + CONTROL_GAP + InfoButton.SIZE + 2
+                              + 2 * CONTROL_SIZE + CONTROL_GAP + 10)
+
+        self.info_btn = InfoButton(self)
+        self.info_btn.clicked.connect(self.sourcesRequested)
         self.clear_m = QToolButton(self)
         self.clear_s = QToolButton(self)
         for button, label, slot, tip in ((self.clear_m, "M", ctl.clear_mutes, "Clear all mutes"),
@@ -244,8 +372,10 @@ class TrackPanel(QWidget):
             button.clicked.connect(self.rebuild)
         ctl.tracksChanged.connect(self.rebuild)
         ctl.tempoChanged.connect(self.rebuild)
+        ctl.controllerViewChanged.connect(self.rebuild)
+        ctl.mirrorChanged.connect(self.rebuild)
         timeline.verticalOffsetChanged.connect(self._set_offset)
-        timeline.laneHeightChanged.connect(lambda _h: self._layout())
+        timeline.rowsChanged.connect(self._layout)
         timeline.headerHeightChanged.connect(lambda _h: self._layout())
 
     def _set_offset(self, v: int) -> None:
@@ -280,20 +410,25 @@ class TrackPanel(QWidget):
         self._layout()
 
     def _layout(self) -> None:
-        lane_h = self.timeline.lane_h
         w = self.width()
+        tl = self.timeline
         self.lanes.setGeometry(0, self.timeline.header_h(), w, max(self.height() - self.timeline.header_h(), 0))
         for i, t in enumerate(self.ctl.ws.tracks):
             h = self.headers.get(t.id)
             if h is None:
                 continue
-            y = i * lane_h - self._voffset
-            h.setGeometry(0, y, w, lane_h)
-            h.setVisible(y + lane_h > 0 and y < self.lanes.height())
+            y, rh = tl.row_y(i) - self._voffset, tl.row_h(i)
+            h.setGeometry(0, y, w, rh)
+            h.setVisible(y + rh > 0 and y < self.lanes.height())
         self.title.setGeometry(10, 0, w - 70, self.timeline.header_h())
         self.clear_m.setGeometry(w - 2 * CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
         self.clear_s.setGeometry(w - CONTROL_SIZE - CONTROL_GAP, 16, CONTROL_SIZE, CONTROL_SIZE)
+        m_x = w - 2 * CONTROL_SIZE - CONTROL_GAP
+        info_x = min(10 + self.title.sizeHint().width() + 6, m_x - CONTROL_GAP - InfoButton.SIZE - 2)
+        self.info_btn.setGeometry(info_x, (self.timeline.header_h() - InfoButton.SIZE) // 2,
+                                  InfoButton.SIZE, InfoButton.SIZE)
         self.title.raise_()
+        self.info_btn.raise_()
         self.update()
 
     def resizeEvent(self, e) -> None:
@@ -304,15 +439,16 @@ class TrackPanel(QWidget):
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
         w, h = self.width(), self.height()
-        p.fillRect(0, 0, w, h, theme.PANEL_BG)
-        for i, _t in enumerate(self.ctl.ws.tracks):
-            y = self.timeline.header_h() + i * self.timeline.lane_h - self._voffset
-            p.fillRect(0, y + self.timeline.lane_h - 1, w, 1, theme.LANE_SEP)
-        p.fillRect(0, 0, w, self.timeline.header_h(), theme.RULER_BG)
+        mirror = self.ctl.mirroring
+        p.fillRect(0, 0, w, h, theme.PANEL_BG_MIRROR if mirror else theme.PANEL_BG)
+        tl = self.timeline
+        for i in tl._visible_rows(tl.header_h(), h):
+            p.fillRect(0, tl.lane_top(i) + tl.row_h(i) - 1, w, 1, theme.LANE_SEP)
+        p.fillRect(0, 0, w, self.timeline.header_h(), theme.RULER_BG_MIRROR if mirror else theme.RULER_BG)
         p.fillRect(0, self.timeline.header_h() - 1, w, 1, theme.LANE_SEP)
         p.fillRect(w - 1, 0, 1, h, theme.LANE_SEP)
         if self._drop_index is not None:
-            y = self.timeline.header_h() + self._drop_index * self.timeline.lane_h - self._voffset
+            y = self.timeline.lane_top(self._drop_index)
             p.setPen(QPen(theme.ACCENT, 2))
             p.drawLine(0, y, w, y)
         p.end()
@@ -329,8 +465,13 @@ class TrackPanel(QWidget):
     # -- drag to reorder --------------------------------------------------------
     def _index_at_global(self, gp: QPoint) -> int:
         y = self.mapFromGlobal(gp).y() + self._voffset - self.timeline.header_h()
-        n = len(self.ctl.ws.tracks)
-        return max(0, min(n, round(y / self.timeline.lane_h)))
+        offs = self.timeline._ensure_rows()
+        i = bisect.bisect_right(offs, y) - 1          # the row under the point; the nearer boundary wins
+        if i < 0:
+            return 0
+        if i >= len(offs) - 1:
+            return len(offs) - 1
+        return i + 1 if y - offs[i] >= offs[i + 1] - y else i
 
     def _grip_press(self, tid: str, gp: QPoint) -> None:
         self._drag_tid = tid
@@ -342,7 +483,7 @@ class TrackPanel(QWidget):
         self._drop_index = self._index_at_global(gp)
         self.update()
         # Draw indicator above child headers.
-        self._indicator().setGeometry(QRect(0, self._drop_index * self.timeline.lane_h
+        self._indicator().setGeometry(QRect(0, self.timeline.row_y(self._drop_index)
                                             - self._voffset - 1, self.width(), 2))
         self._indicator().show()
         self._indicator().raise_()
