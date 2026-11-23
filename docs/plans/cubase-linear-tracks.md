@@ -1,6 +1,6 @@
 # Plan: Cubase linear time-base tracks
 
-Status: **agreed** (2026-11-23), not built. Roadmap entry: "Cubase linear-time-base tracks" (Agreed, not started). Building is for a separate session from this plan.
+Status: **built** (2026-11-23), on `feature/cubase-linear-tracks`. Manual checklist 8u passed on the owner's studio Mac with Cubase 16 projects (d8 baseline, c26). Built as planned, with one addition agreed during the build: parts inside an inactive track version are left out, so the import matches Cubase's export (the app imports only what is active). Still unknown: a linear part spanning a tempo change in the project's own tempo, positions inside a ramp (tested only against the formula), an extended or looped linear part, a linear track in a folder or with a muted part, and Cubase 14.
 
 ## The problem
 

@@ -369,13 +369,12 @@ Plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md). Fixtures: `samp
 
 Plan: [cubase-linear-tracks](plans/cubase-linear-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/d8 baseline.cpr` (with `d8 baseline.midi`) and `Tier 3/Cubase16/c26.cpr`, already in this checkout. A linear track stores seconds; Cubase's MIDI export converts them at the project's tempo as saved.
 
-- [ ] Drag `d8 baseline.cpr` in: two tracks, "linear" and "musical". The linear track's notes sit at 0.875 (140/160) of the musical track's positions (the second note at tick 560 against 640), and its second part starts at tick 10080 (bar 6, beat 2 in 4/4).
-- [ ] Source Info for `d8 baseline.cpr`, Warnings: `Track "linear" was on Cubase's linear time base; its positions are converted at the project's tempo` appears once, and nothing like it for "musical".
-- [ ] Drag `c26.cpr` in: the Lead track now arrives (it was skipped before), four notes after the tempo ramp, and Source Info has the same note for "Lead" only. The Tempo ramp note is still there.
-- [ ] Export `d8 baseline.cpr`'s tracks and compare with `d8 baseline.midi` in a DAW or the app: the linear track lines up with the export.
-- [ ] Known open point (see the build report): "musical" in `d8 baseline.cpr` has an extra clip (a Cubase track version holding a linear part at 2.0 s); Cubase's export leaves it out. Note whether you want it left out.
-- [ ] Drag `d8.cpr` in: still fails saying the track is disabled, not linear.
-- [ ] Mirror a copy of `d8 baseline.cpr`: both tracks arrive; if you change the project tempo in Cubase and save, the linear track's clips move and the musical track's do not.
+- [x] Drag `d8 baseline.cpr` in: two tracks, "linear" and "musical", each with **two clips** (no third clip on "musical"). Set side by side with the Cubase window, the linear track's clips are shorter than the musical track's, and its second clip starts earlier (about three beats before the musical track's second clip). In Cubase's window the same two differences show.
+- [x] Source Info for `d8 baseline.cpr`, Warnings: `Track "linear" was on Cubase's linear time base; its positions are converted at the project's tempo` appears once, and nothing like it for "musical".
+- [x] Drag `c26.cpr` in: the Lead track now arrives (it was skipped before), four notes after the tempo ramp, and Source Info has the same note for "Lead" only. The Tempo ramp note is still there.
+- [x] Export `d8 baseline.cpr`'s two tracks as a MIDI file and open it next to `d8 baseline.midi` (Cubase's own export, from the same project) in a DAW: the two files look the same, track for track, notes and clips lining up.
+- [x] Drag `d8.cpr` in: still fails saying the track is disabled, not linear.
+- [x] Mirror a copy of `d8 baseline.cpr`: both tracks arrive; if you change the project tempo in Cubase and save, the linear track's clips move and the musical track's do not.
 
 ## 9. New document
 
