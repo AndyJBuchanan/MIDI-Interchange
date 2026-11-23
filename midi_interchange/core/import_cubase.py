@@ -27,7 +27,7 @@ SUPPORTED_MAJOR = (15, 16)
 TICKS = 480                 # Cubase positions: ticks per quarter note
 MAX_TIME = 1_000_000        # quarter notes; session/workspace bound
 DEFAULT_RELEASE = 64
-SKIPPED_OBJECTS = {'MScoreEvent': 'Score Editor symbols and text in parts are not imported'}
+SKIPPED_OBJECTS = {'MScoreEvent': 'Score Editor symbols and text in parts (including expression-map articulation texts) are not imported'}
 
 
 def _ticks(value: float) -> F:
@@ -127,6 +127,8 @@ def _clip_events(wk: cf.Walker, part: cf.Obj, label: str, warn, counter, transpo
                 raise ValueError(f'{label}: invalid note length')
             off = e.props.get('OffV')
             release = round(1 + 126 * off) if isinstance(off, float) and 0 <= off <= 1 else DEFAULT_RELEASE
+            if off == 0 and e.tail[-1:] == b'\x00':
+                release = 0          # (v - 1) / 126 can't hold a release of 0: Cubase stores OffV 0.0 and a 0 tail byte
             out.append((at, mido.Message('note_on', channel=e.channel, note=e.data[0], velocity=max(1, e.data[1]))))
             out.append((at + _ticks(e.length), mido.Message('note_off', channel=e.channel, note=e.data[0],
                                                             velocity=max(0, min(127, release)))))

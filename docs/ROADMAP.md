@@ -13,6 +13,8 @@ Updated 2026-11-23.
 
 - **Cubase disabled tracks** (2026-11-23; plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md), draft, decisions made, waiting on fixtures; after mirror mode): a track disabled in Cubase (Disable Track, which is not mute) currently imports like any other, though Cubase plays nothing from it. Leave disabled tracks out of the import with a note, and keep an internal `include_disabled` option (default off, imports them muted) that a settings dialog could expose one day. Separate from mirror mode: it changes only the Cubase reader. Needs fixtures first, because where Cubase stores "disabled", and what its own MIDI export does with such a track, are not yet known.
 
+- **Cubase linear-time-base tracks** (agreed 2026-11-23, deferred; to be a `feature/cubase-linear-tracks`): tracks that use Cubase's linear (seconds) time base are skipped today, with a warning. The format notes say only the part header differs and the events then decode in seconds (fixture c26 and its MIDI export exist). They would be imported against the **source timebase and not rescaled by later timebase changes**. See [the format notes](formats/CUBASE_FILE_FORMAT.md) once they are on this branch, and [the Cubase plan](plans/cubase-import.md).
+
 ## Suggested, not agreed
 
 - **Export/drag filename decoration** (speculative, 2026-11-16: not sure it's needed):

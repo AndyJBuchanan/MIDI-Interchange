@@ -68,7 +68,7 @@ class Container:
 
 def _pstring(b: bytes, pos: int) -> tuple[str, int]:
     """u32 length | bytes. Archive strings end '\\0' + UTF-8 BOM (EF BB BF);
-    ROOT names end '\\0' only. Both are stripped."""
+    ROOT names have no terminator at all. Both forms are stripped."""
     n = int.from_bytes(b[pos:pos + 4], 'big')
     raw = b[pos + 4:pos + 4 + n]
     if raw.endswith(b'\0\xef\xbb\xbf'):
@@ -280,7 +280,8 @@ CLASS_STATUS = {'MMidiNote': 0x90, 'MMidiPolyPressure': 0xA0, 'MMidiAfterTouch':
 # Bytes between the f64 position and the u32 that precedes the property
 # count: channel then two MIDI data bytes. Confirmed: note (pitch, velocity),
 # controller (number, value), pitch bend (LSB, MSB; tier 3 c24), program
-# change (program, 0; c25). Poly and channel pressure assumed, no fixture yet.
+# change (program, 0; c25). Channel pressure is decoded in the orchestral project
+# (1,853 events). Poly pressure is assumed, no fixture yet.
 # Sysex is variable-length and not decoded.
 DATA_BYTES = {0x90: 3, 0xB0: 3, 0xE0: 3, 0xC0: 3, 0xA0: 3, 0xD0: 3}
 
@@ -316,7 +317,7 @@ def _props(wk: Walker, q: int, limit: int) -> tuple[dict[str, object], int]:
     low byte is the kind, higher bits look like flags: 1 = i64, 4 = f64;
     other kinds hold an embedded NEW/REF object (2: e.g. a controller curve
     shape MParamEventCurveRationalBezier; 0x22: tempo-track 'TVCi', note
-    'ScAr' holding Omnivocal lyric attributes; 0x0408: a string object), or for
+    'ScAr' (reader key 'rAcS') holding Omnivocal lyric attributes; 0x0408: a string object), or for
     kind 8 possibly a plain string.
     """
     d = wk.d
@@ -609,7 +610,7 @@ def state_flags_offset(b: bytes, cls: str) -> int | None:
       u16 count, optional name string, padding and FF x 8; BBCSO 15.0.10 has a
       u32 count and the track's own name; Beat003vs ends FF FF FF FF 00 00 00
       00), so only the flags value itself is checked (state bits only).
-    - MMidiTrack (v8): the body starts with the output port (u16 3, id, 4
+    - MMidiTrack (v7 and v8, the same layout): the body starts with the output port (u16 3, id, 4
       bytes, name), then the input port record, a u32 (1 in the fixtures, a
       track on channel 2: possibly the channel), then the flags.
     """
@@ -636,7 +637,8 @@ MODIFIER_PARAMS = ('Transpose', 'Velocity Shift', 'Delay')
 
 def _param_value(blob: bytes, name: str) -> int | None:
     """An integer parameter in a MIDI Modifiers block: u32 name length (with
-    its NUL) | name | 00 | u16 0x0206 | u32 3 | u32 6 'Value' 00 | u16 1 | i64."""
+    its NUL) | name | 00 (the NUL) | u16 2 (container) | u16 6 (sub-kind) | u32 3 (count) |
+    u32 6 'Value' 00 | u16 1 | i64."""
     key = len(name.encode()) + 1
     pat = (struct.pack('>I', key) + name.encode() + b'\x00\x00\x02\x00\x06\x00\x00\x00\x03'
            + b'\x00\x00\x00\x06Value\x00\x00\x01')
@@ -706,9 +708,10 @@ def folder_path(wk: Walker, track_event: Obj) -> list[str]:
     instrument folders hold device tracks too; neither normally holds MIDI
     parts, so they only appear here if the user put a MIDI track inside.
     Tempo, signature, marker and chord tracks are loose by default and can be
-    moved anywhere, including into folders (GA has them loose; the other
-    fixtures have tempo and signature inside the I/O folder); they are found
-    by class wherever they are. An instrument stack (Cubase 16) is also an
+    moved anywhere, including into folders. Where one sits in the file says
+    nothing about where the user put it: it is written inline at the first
+    node that references it (GA: the chord track node; the other fixtures:
+    'Stereo Out' in the I/O folder). They are found by class wherever they are. An instrument stack (Cubase 16) is also an
     MFolderTrack (tier 2 c18is). Folder state flags: folder_state_flags().
     """
     return [folder_name(wk, f) for f in sorted(

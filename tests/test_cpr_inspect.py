@@ -362,7 +362,8 @@ def _loose(wk, folders, cls):
     (SETS / 'GA & Padshop 2-(alt instr 2)-01.cpr', 'Input/Output Channels', True),
 ])
 def test_tempo_track_found_inside_or_outside_folders(path, io_folder, loose_tempo):
-    """Tempo/signature tracks can sit anywhere; no folder is special."""
+    """Tempo/signature tracks are found by class wherever they sit; no folder is special.
+    (loose_tempo is a fact about byte position, not about where the user put the track.)"""
     wk, _ = _walk(path)
     folders = [f for f in wk.objects.values() if f.cls.name == 'MFolderTrack']
     assert io_folder in [ci.folder_name(wk, f) for f in folders]
