@@ -268,6 +268,7 @@ class Timeline(QAbstractScrollArea):
         ctl.tracksChanged.connect(self._content_changed)
         ctl.rangesChanged.connect(self._content_changed)
         ctl.selectionChanged.connect(self.viewport().update)
+        ctl.mirrorChanged.connect(self.viewport().update)
         ctl.tempoChanged.connect(self._content_changed)
 
     # ------------------------------------------------------------------ header rows
@@ -943,8 +944,9 @@ class Timeline(QAbstractScrollArea):
     def _paint_header(self, p: QPainter, w: int, t0: float, t1: float) -> None:
         ws = self.ctl.ws
         tm = ws.tempo_map
-        p.fillRect(0, 0, w, RULER_H, theme.RULER_BG)
-        p.fillRect(0, RULER_H, w, self.range_top() - RULER_H, theme.INFO_BG)
+        mirror = self.ctl.mirroring
+        p.fillRect(0, 0, w, RULER_H, theme.RULER_BG_MIRROR if mirror else theme.RULER_BG)
+        p.fillRect(0, RULER_H, w, self.range_top() - RULER_H, theme.INFO_BG_MIRROR if mirror else theme.INFO_BG)
         p.fillRect(0, self.range_top(), w, RANGE_H, theme.RANGE_STRIP_BG)
         p.fillRect(0, self.header_h() - 1, w, 1, theme.LANE_SEP)
 
@@ -1336,8 +1338,10 @@ class Timeline(QAbstractScrollArea):
         self._hover_x = None
         self.viewport().update(0, 0, self.viewport().width(), self.header_h())
 
-    @staticmethod
-    def _clip_action(mods) -> str | None:
+    def _clip_action(self, mods) -> str | None:
+        """The clip gesture a modifier selects. None while mirroring: clips are read-only."""
+        if self.ctl.mirroring:
+            return None
         if mods & Qt.AltModifier:
             return "copy" if mods & Qt.ControlModifier else "move"
         return "split" if mods & Qt.ControlModifier else None
@@ -1539,6 +1543,8 @@ class Timeline(QAbstractScrollArea):
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         if e.key() == Qt.Key_M and not e.modifiers() & ~Qt.KeypadModifier:
+            if self.ctl.mirroring:
+                return                  # M mutes a clip: read-only while mirroring
             hit = self._lane_hit(self._pointer) if self._pointer is not None else ("empty",)
             if hit[0] == "clip":
                 self.ctl.toggle_clip_mute(hit[2])

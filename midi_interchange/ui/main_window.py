@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import os
-
+from datetime import datetime
 from fractions import Fraction
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSettings, Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPainter, QPen, QStandardItemModel
-from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox,
-                               QSizePolicy, QSplitter, QToolBar, QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSettings, QStandardPaths, Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QAction, QActionGroup, QColor, QKeySequence, QPainter, QPen, QStandardItemModel
+from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMenu,
+                               QMessageBox, QPushButton, QSizePolicy, QSplitter, QToolBar, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from ..core import controllers as ctlr
 
@@ -23,6 +24,7 @@ from . import theme
 from .about_dialog import AboutDialog
 from .controller import SNAP_CHOICES, Controller
 from .export_panel import ExportPanel, start_file_drag
+from .mirror import MirrorWatcher, _wall, read_snapshot
 from .timeline import Timeline
 from .track_panel import TrackPanel
 
@@ -41,6 +43,38 @@ class DropOverlay(QWidget):
         p.setPen(theme.ACCENT)
         p.drawRect(self.rect().adjusted(1, 1, -2, -2))
         p.end()
+
+
+class MirrorFrame(QWidget):
+    """A frame in the mirror colour round the central area; the mouse passes through it."""
+    WIDTH = 4
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.hide()
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        w = self.WIDTH
+        r = self.rect()
+        for edge in (QRectF(0, 0, r.width(), w), QRectF(0, r.height() - w, r.width(), w),
+                     QRectF(0, 0, w, r.height()), QRectF(r.width() - w, 0, w, r.height())):
+            p.fillRect(edge, theme.MIRROR)
+        p.end()
+
+
+class _Central(QWidget):
+    """The central area: keeps the mirror frame the size of the area."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.frame: MirrorFrame | None = None
+
+    def resizeEvent(self, e) -> None:
+        super().resizeEvent(e)
+        if self.frame is not None:
+            self.frame.setGeometry(self.rect())
 
 
 class ControllerIconButton(QToolButton):
@@ -122,14 +156,17 @@ class MainWindow(QMainWindow):
         splitter.setHandleWidth(1)
         splitter.setChildrenCollapsible(False)
 
-        central = QWidget()
+        central = _Central()
         lay = QVBoxLayout(central)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
+        self.mirror_banner = self._build_mirror_banner()
+        lay.addWidget(self.mirror_banner)
         lay.addWidget(splitter, 1)
         lay.addWidget(self.export_panel)
         self.setCentralWidget(central)
         self.overlay = DropOverlay(central)
+        self.mirror_frame = central.frame = MirrorFrame(central)
 
         self.hover_label = QLabel()
         self.tempo_label = QLabel()
@@ -145,6 +182,8 @@ class MainWindow(QMainWindow):
         self.export_panel.message.connect(lambda m: self.statusBar().showMessage(m, 8000))
         self.export_panel.saveRequested.connect(self.save_midi)
         self.ctl.undoStateChanged.connect(self._update_undo_actions)
+        self.ctl.mirrorChanged.connect(self._update_mirror_ui)
+        self.ctl.tracksChanged.connect(self._update_sync_mutes)
         self.ctl.tempoChanged.connect(self._update_tempo_label)
         self.ctl.tracksChanged.connect(self._first_import_fit)
         self.timeline.hoverTextChanged.connect(self.hover_label.setText)
@@ -161,6 +200,16 @@ class MainWindow(QMainWindow):
         self._drag_payloads: list[Payload] = []
         self._drag_diagnostics: list[str] = []
         self._drag_parsed: list | None = None   # the dragged files, parsed (None = not readable yet)
+        self._mirror_watcher: MirrorWatcher | None = None
+        self._mirror_path = ""
+        self._mirror_pending = None            # a finished read waiting for a gesture to end
+        self._mirror_log = None                # the open diagnostic log file, while mirroring
+        self._mirror_log_path: str | None = None
+        self._mirror_defer_logged = False
+        self._mirror_updated = ""              # "14:02:31"
+        self._mirror_failed = False
+        self._mirror_tinted = False
+        self._update_mirror_ui()
 
     # ------------------------------------------------------------------ actions
     def _act(self, text: str, slot, shortcut=None, tip: str | None = None) -> QAction:
@@ -177,6 +226,16 @@ class MainWindow(QMainWindow):
         self.a_new = self._act("New", self.ctl.new_document, QKeySequence.New,
                                "Clear the workspace and start again (undoable)")
         self.a_open = self._act("Open…", self.open_files, QKeySequence.Open, "Import MIDI or DAWproject files (accumulative)")
+        self.a_mirror = self._act("Open && Mirror MIDI/Project File…", self.open_and_mirror,
+                                  tip="Watch one MIDI or project file and re-import it every time it is saved "
+                                      "(read-only until you unmirror)")
+        self.a_mirror.setIconText("Mirror…")            # the toolbar button; the menu says the full name
+        self.a_unmirror = self._act("Unmirror", self.unmirror,
+                                    tip="Stop watching the file; the workspace stays and editing returns")
+        self.a_mirror_log = self._act("Show Mirror Log", self.show_mirror_log,
+                                      tip="Open the log of what the mirror watcher saw and did (kept until mirroring starts again)")
+        self.a_sync_mutes = self._act("Sync Mutes to File", lambda: self.ctl.sync_mutes(),
+                                      tip="Put every track's mute and solo back to what the file last saved")
         self.a_save = self._act("Save MIDI…", self.save_midi, QKeySequence.Save, "Export with current settings")
         self.a_undo = self._act("Undo", self.ctl.undo, QKeySequence.Undo)
         self.a_redo = self._act("Redo", self.ctl.redo, QKeySequence.Redo)
@@ -219,12 +278,13 @@ class MainWindow(QMainWindow):
         AboutDialog(self).exec()
 
     def _build_toolbar(self) -> None:
-        tb = QToolBar("Main")
+        tb = self.main_toolbar = QToolBar("Main")
         tb.setMovable(False)
         tb.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self.addToolBar(tb)
         tb.addAction(self.a_new)
         tb.addAction(self.a_open)
+        tb.addAction(self.a_mirror)
         tb.addAction(self.a_save)
         tb.addSeparator()
         tb.addAction(self.a_undo)
@@ -269,6 +329,10 @@ class MainWindow(QMainWindow):
         m = mb.addMenu("&File")
         m.addAction(self.a_new)
         m.addAction(self.a_open)
+        m.addAction(self.a_mirror)
+        m.addAction(self.a_unmirror)
+        m.addAction(self.a_sync_mutes)
+        m.addAction(self.a_mirror_log)
         m.addAction(self.a_save)
         m.addSeparator()
         m.addAction(self._act("Quit", self.close, QKeySequence.Quit))
@@ -386,6 +450,9 @@ class MainWindow(QMainWindow):
         """The one place the Tempo Map choices are built (Timing menu, timeline right-click)."""
         m.clear()
         ws = self.ctl.ws
+        if self.ctl.mirroring:
+            m.addAction("Tempo map follows the mirrored file").setEnabled(False)
+            return
         sources = [s for s in ws.sources if not s.tempo_map.is_empty]
         if not sources:
             a = m.addAction("No imported tempo maps (using 120 BPM, 4/4)")
@@ -404,8 +471,9 @@ class MainWindow(QMainWindow):
             a.triggered.connect(lambda _c=False, sid=s.id: self.ctl.adopt_tempo(sid))
 
     def _update_undo_actions(self) -> None:
-        self.a_undo.setEnabled(self.ctl.can_undo())
-        self.a_redo.setEnabled(self.ctl.can_redo())
+        mirroring = self.ctl.mirroring
+        self.a_undo.setEnabled(self.ctl.can_undo() and not mirroring)
+        self.a_redo.setEnabled(self.ctl.can_redo() and not mirroring)
 
     def _update_tempo_label(self) -> None:
         tm = self.ctl.ws.tempo_map
@@ -431,6 +499,9 @@ class MainWindow(QMainWindow):
             self.import_paths(paths)
 
     def import_paths(self, paths: list[str]) -> None:
+        if self.ctl.mirroring:
+            self.statusBar().showMessage("Mirroring: unmirror to import", 10000)
+            return
         payloads = []
         errors = []
         for p in paths:
@@ -447,6 +518,10 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ drop placement
     def dragEnterEvent(self, e) -> None:
+        if self.ctl.mirroring:
+            e.ignore()
+            self.statusBar().showMessage("Mirroring: unmirror to import", 10000)
+            return
         mime = e.mimeData()
         if not (mime.hasUrls() or mime.formats()):
             return
@@ -467,6 +542,9 @@ class MainWindow(QMainWindow):
         self._update_drop_indicator(e)
 
     def dragMoveEvent(self, e) -> None:
+        if self.ctl.mirroring:
+            e.ignore()
+            return
         e.acceptProposedAction()
         self._update_drop_indicator(e)
 
@@ -530,6 +608,12 @@ class MainWindow(QMainWindow):
         self.timeline.set_drop_indicator((lane, pl.time, label))
 
     def dropEvent(self, e) -> None:
+        if self.ctl.mirroring:
+            e.ignore()
+            self.overlay.hide()
+            self.timeline.set_drop_indicator(None)
+            self.statusBar().showMessage("Mirroring: unmirror to import", 10000)
+            return
         self.overlay.hide()
         self.timeline.set_drop_indicator(None)
         if e.source() is not None:  # our own drag-out tile
@@ -586,6 +670,244 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("  ·  ".join(diagnostics), 10000)
         self._report_errors(errors)
 
+    # ------------------------------------------------------------------ mirror mode
+    def _build_mirror_banner(self) -> QWidget:
+        banner = QWidget()
+        banner.setObjectName("mirrorBanner")
+        banner.setAttribute(Qt.WA_StyledBackground, True)
+        banner.setStyleSheet(f"#mirrorBanner {{ background: {theme.MIRROR.name()}; }}"
+                             f"#mirrorBanner QLabel {{ color: {theme.MIRROR_TEXT.name()}; }}")
+        row = QHBoxLayout(banner)
+        row.setContentsMargins(12, 4, 8, 4)
+        self.mirror_label = QLabel()
+        self.mirror_label.setTextFormat(Qt.RichText)
+        self.unmirror_btn = QPushButton("Unmirror")
+        self.unmirror_btn.setToolTip("Stop watching the file; the workspace stays and editing returns")
+        self.unmirror_btn.setStyleSheet(f"QPushButton {{ background: {theme.MIRROR_TEXT.name()}; color: {theme.MIRROR.name()};"
+                                        f" border: none; border-radius: 3px; padding: 3px 12px; font-weight: 600; }}")
+        self.unmirror_btn.clicked.connect(self.unmirror)
+        row.addWidget(self.mirror_label, 1)
+        row.addWidget(self.unmirror_btn)
+        banner.hide()
+        return banner
+
+    def _mirror_name(self) -> str:
+        return os.path.basename(self._mirror_path)
+
+    def _update_mirror_banner(self) -> None:
+        if not self.ctl.mirroring:
+            return
+        parts = [f"<b>MIRRORING</b> {self._mirror_name()}", "read-only", "updates when the file is saved"]
+        if self._mirror_updated:
+            parts.append(f"Last updated {self._mirror_updated}")
+        if self._mirror_failed:
+            parts.append("Last read failed")
+        if self._mirror_watcher is not None and self._mirror_watcher.missing:
+            parts.append(f"{self._mirror_name()} not found; waiting for it")
+        self.mirror_label.setText(" · ".join(parts))
+        self.mirror_banner.setToolTip(self._mirror_path)
+
+    def _update_sync_mutes(self) -> None:
+        self.a_sync_mutes.setEnabled(self.ctl.ms_differs())
+
+    def _update_mirror_ui(self) -> None:
+        on = self.ctl.mirroring
+        self.mirror_banner.setVisible(on)
+        self.mirror_frame.setVisible(on)
+        if on:
+            self.mirror_frame.setGeometry(self.centralWidget().rect())
+            self.mirror_frame.raise_()
+        for a in (self.a_new, self.a_open, self.a_mirror):
+            a.setEnabled(not on)
+        self.a_unmirror.setEnabled(on)
+        self._update_sync_mutes()
+        self.a_mirror_log.setEnabled(bool(self._mirror_log_path and os.path.exists(self._mirror_log_path)))
+        self.tempo_menu.setEnabled(not on)
+        self.setWindowTitle(f"{APP_NAME} — Mirroring {self._mirror_name()}" if on else APP_NAME)
+        button = self.main_toolbar.widgetForAction(self.a_mirror)
+        if button is not None:
+            button.setStyleSheet(f"QToolButton {{ background: {theme.MIRROR.name()}; color: {theme.MIRROR_TEXT.name()}; }}"
+                                 if on else "")
+        app = QApplication.instance()
+        if app is not None and on != self._mirror_tinted:
+            self._mirror_tinted = on
+            theme.apply(app, mirror=on)             # the chrome takes a cool tint; the lanes keep their colours
+        self._update_undo_actions()
+        self._update_mirror_banner()
+        self.track_panel.update()
+
+    @staticmethod
+    def default_mirror_log_path() -> str:
+        folder = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
+        return os.path.join(folder, "mirror-log.txt")
+
+    def _mirror_log_write(self, line: str) -> None:
+        """The diagnostic log (docs/plans/mirror-mode.md): one line at a time, flushed, so a crash keeps it."""
+        if self._mirror_log is None:
+            return
+        try:
+            self._mirror_log.write(line + "\n")
+            self._mirror_log.flush()
+        except (OSError, ValueError):
+            self._mirror_log = None
+
+    def _mirror_diag(self, line: str, notable: bool) -> None:
+        self._mirror_log_write(line)
+        if notable:
+            self.statusBar().showMessage("Mirror: " + line.split(" ", 1)[-1], 8000)
+
+    def show_mirror_log(self) -> None:
+        if self._mirror_log_path and os.path.exists(self._mirror_log_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self._mirror_log_path))
+
+    def open_and_mirror(self) -> None:
+        start = self.settings.value("last_open_dir", os.path.expanduser("~"))
+        path, _ = QFileDialog.getOpenFileName(self, "Open & Mirror MIDI/Project File", start, FILE_FILTER)
+        if path:
+            self.settings.setValue("last_open_dir", os.path.dirname(path))
+            self.start_mirror(path, log_path=self.default_mirror_log_path())
+
+    def _confirm_mirror_replace(self) -> bool:
+        box = QMessageBox(self)
+        box.setWindowTitle("Mirror a file")
+        box.setIcon(QMessageBox.Question)
+        box.setText("Mirroring replaces the workspace.")
+        box.setInformativeText("What is in the workspace now will be cleared, and this can't be undone. "
+                               "Mirroring keeps the workspace as the file's tracks, read-only, until you unmirror.")
+        go = box.addButton("Replace Workspace", QMessageBox.AcceptRole)
+        box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(QMessageBox.Cancel)
+        box.exec()
+        return box.clickedButton() is go
+
+    def start_mirror(self, path: str, clock=None, executor=None, log_path: str | None = None) -> bool:
+        """Read the file, ask first when the workspace isn't empty, then mirror it. Returns whether it started."""
+        if self.ctl.mirroring:
+            return False
+        try:
+            snap = read_snapshot(path)
+        except Exception as exc:  # noqa: BLE001 - any reader failure is reported, nothing changes
+            QMessageBox.warning(self, "Couldn't mirror the file", f"{os.path.basename(path)}: {exc}")
+            return False
+        ws = self.ctl.ws
+        if (ws.tracks or ws.ranges or ws.sources) and not self._confirm_mirror_replace():
+            return False
+        self._mirror_path = os.path.abspath(path)
+        self._mirror_pending = None
+        self._mirror_failed = False
+        self._mirror_updated = datetime.now().strftime("%H:%M:%S")
+        self._had_tracks = False                    # the first import zooms to fit; later ones keep the view
+        kwargs = {}
+        if clock is not None:
+            kwargs["clock"] = clock
+        self._mirror_defer_logged = False
+        self._open_mirror_log(log_path)
+        w = self._mirror_watcher = MirrorWatcher(self._mirror_path, executor=executor, parent=self, **kwargs)
+        w.diag.connect(self._mirror_diag)
+        w.set_baseline(snap)
+        w.imported.connect(self._mirror_imported)
+        w.unchanged.connect(self._mirror_unchanged)
+        w.failed.connect(self._mirror_read_failed)
+        w.missingChanged.connect(self._mirror_missing_changed)
+        self.ctl.enter_mirror(snap.result)
+        n = len(self.ctl.ws.tracks)
+        self.statusBar().showMessage(f"Mirroring {self._mirror_name()}: {n} track{'s' if n != 1 else ''} at bar 1", 10000)
+        w.start()
+        return True
+
+    def _open_mirror_log(self, log_path: str | None) -> None:
+        self._close_mirror_log()
+        self._mirror_log_path = log_path
+        if not log_path:
+            return
+        try:
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            self._mirror_log = open(log_path, "w", encoding="utf-8")
+        except OSError:
+            self._mirror_log = None
+            return
+        self._mirror_log_write(f"{_wall()} mirror log for {self._mirror_path} (a new log each time mirroring starts)")
+
+    def _close_mirror_log(self) -> None:
+        log, self._mirror_log = self._mirror_log, None
+        if log is not None:
+            try:
+                log.close()
+            except OSError:
+                pass
+
+    def unmirror(self) -> None:
+        if not self.ctl.mirroring:
+            return
+        self._mirror_log_write(f"{_wall()} unmirrored")
+        self._stop_mirror_watcher()
+        self._mirror_pending = None
+        name = self._mirror_name()
+        self.ctl.leave_mirror()
+        self.statusBar().showMessage(f"Unmirrored {name}: the workspace stays, editing is back, undo history is empty", 10000)
+
+    def _stop_mirror_watcher(self) -> None:
+        w, self._mirror_watcher = self._mirror_watcher, None
+        if w is not None:
+            w.stop()
+            w.deleteLater()
+
+    def _mirror_imported(self, result) -> None:
+        self._mirror_pending = result
+        self._apply_mirror_pending()
+
+    def _apply_mirror_pending(self) -> None:
+        """Apply a finished read; deferred while a range drag, external drag or drag-out is in progress."""
+        if self._mirror_pending is None or not self.ctl.mirroring:
+            return
+        if self.timeline.gesture_active or self.ctl.file_drag_active:
+            if not self._mirror_defer_logged:
+                self._mirror_defer_logged = True
+                self._mirror_diag(f"{_wall()} import waiting: a gesture is in progress "
+                                  f"(timeline gesture {self.timeline.gesture_active}, drag-out {self.ctl.file_drag_active})", True)
+            QTimer.singleShot(250, self._apply_mirror_pending)
+            return
+        self._mirror_defer_logged = False
+        result, self._mirror_pending = self._mirror_pending, None
+        counts = self.ctl.apply_mirror(result)
+        self._mirror_log_write(f"{_wall()} applied to the timeline: {counts['tracks']} tracks, "
+                               f"{counts['new']} new, {counts['gone']} gone")
+        self._mirror_updated = stamp = datetime.now().strftime("%H:%M:%S")
+        self._mirror_failed = False
+        detail = ", ".join(x for x in (f"{counts['new']} new" if counts["new"] else "",
+                                       f"{counts['gone']} gone" if counts["gone"] else "") if x)
+        n = counts["tracks"]
+        self.statusBar().showMessage(f"Mirror: {self._mirror_name()} re-imported at {stamp}: "
+                                     f"{n} track{'s' if n != 1 else ''}" + (f" ({detail})" if detail else ""), 10000)
+        self._update_mirror_banner()
+
+    def _mirror_unchanged(self) -> None:
+        self._mirror_failed = False
+        w = self._mirror_watcher
+        if w is not None and not w.missing:
+            self.statusBar().showMessage(f"Mirror: {self._mirror_name()} saved with the same content; nothing to update", 10000)
+        self._update_mirror_banner()
+
+    def _mirror_read_failed(self, reason: str) -> None:
+        self._mirror_failed = True
+        w = self._mirror_watcher
+        stamp = datetime.now().strftime("%H:%M:%S")
+        last = f" from {self._mirror_updated}" if self._mirror_updated else ""
+        tail = "retrying." if w is not None and w.retrying else "waiting for the next save."
+        self.statusBar().showMessage(f"Mirror: {self._mirror_name()} couldn't be read at {stamp} ({reason}). "
+                                     f"Keeping the version{last}; {tail}", 0)
+        self._update_mirror_banner()
+
+    def _mirror_missing_changed(self, missing: bool) -> None:
+        if missing:
+            self.statusBar().showMessage(f"Mirror: {self._mirror_name()} not found; waiting for it", 0)
+        self._update_mirror_banner()
+
+    def closeEvent(self, e) -> None:
+        self._stop_mirror_watcher()
+        self._close_mirror_log()
+        super().closeEvent(e)
+
     # ------------------------------------------------------------------ export
     def save_midi(self, track_ids: list[str] | None = None) -> None:
         if not isinstance(track_ids, list):
@@ -623,7 +945,8 @@ class MainWindow(QMainWindow):
     def header_menu(self) -> QMenu:
         """Right-click on the ruler or the tempo/marker rows."""
         m = QMenu(self)
-        self._fill_tempo_menu(m.addMenu("Tempo Map"))
+        if not self.ctl.mirroring:
+            self._fill_tempo_menu(m.addMenu("Tempo Map"))
         return m
 
     def clip_menu(self, track_id: str, clip_id: str, global_pos: QPoint) -> None:
@@ -635,6 +958,11 @@ class MainWindow(QMainWindow):
         m = QMenu(self)
         title = m.addAction(f"Clip: {clip.name or track.name}")
         title.setEnabled(False)
+        if self.ctl.mirroring:          # clips are read-only: only the track items that stay allowed
+            m.addSeparator()
+            self._add_track_actions(m.addMenu(f"Track: {track.name}"), track_id)
+            m.exec(global_pos)
+            return
         m.addAction("Unmute Clip\tM" if clip.muted else "Mute Clip\tM", lambda: self.ctl.toggle_clip_mute(clip_id))
         m.addAction("Duplicate Clip (after it)", lambda: self.ctl.duplicate_clip(clip_id))
         a = m.addAction("Butt Against Previous Clip", lambda: self.ctl.snap_clip_to_previous(clip_id))
@@ -662,6 +990,13 @@ class MainWindow(QMainWindow):
         idx = ws.tracks.index(t)
         m.addAction("Unmute" if t.muted and not t.soloed else "Mute",
                     lambda: self.ctl.set_mute(track_id, True if t.soloed else not t.muted))
+        if self.ctl.mirroring:          # only what stays allowed
+            follow = m.addAction("Follow File's Mute/Solo", lambda: self.ctl.sync_mutes(track_id))
+            follow.setEnabled(self.ctl.ms_differs(track_id))
+            m.addSeparator()
+            m.addAction("Save This Track…", lambda: self.save_midi([track_id]))
+            m.addAction("Source Info…", lambda: self._source_info(track_id))
+            return True
         m.addAction("Rename", lambda: self.track_panel.header(track_id) and self.track_panel.header(track_id).focus_name())
         m.addSeparator()
         a = m.addAction("Move Up", lambda: self.ctl.move_track(track_id, idx - 1))

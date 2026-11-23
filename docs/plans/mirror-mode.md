@@ -1,6 +1,6 @@
 # Plan: mirror mode, watching one file
 
-Status: **plan agreed (2026-11-22); step 0 save logs are in; settle time agreed (0.5 s). Ready to build.** Branch, when built: `feature/mirror-mode` from `release/0.5.0`.
+Status: **built and tested (2026-11-23) on `feature/mirror-mode`: the owner's Reason and Cubase checks in TEST_CHECKLIST 8s pass; the one-hour session check is deferred to release-time testing.** Branch: `feature/mirror-mode` from `release/0.5.0`.
 
 A separate mode in which the app watches one MIDI or project file and re-imports it every time it's saved. You keep working in Cubase or Reason; whatever you last saved is on the timeline, ready to drag out.
 
@@ -410,7 +410,7 @@ A new `tests/test_mirror_mode.py`, using `from test_ui_assembly import app, win`
 All the recommendations were agreed:
 
 1. **Entering over a non-empty workspace:** ask first, then replace it.
-2. **Mute and solo across saves:** a track muted or soloed in the app keeps that setting until unmirror; other tracks follow what the DAW saved.
+2. **Mute and solo across saves:** superseded by the refinement below (2026-11-22, after the build). Originally: a track muted or soloed in the app keeps that setting until unmirror; other tracks follow what the DAW saved.
 3. **Renamed tracks in the DAW:** arrive as new tracks for now. Reordering is harmless.
 4. **File moved or deleted:** keep the last import and wait at the same path, showing "not found; waiting". Moves aren't followed.
 5. **Unmirror:** no confirmation.
@@ -418,3 +418,27 @@ All the recommendations were agreed:
 7. **Settle time:** 0.5 s after the last change, polling every 250 ms (agreed after step 0).
 
 **Step 0 is done** (results above). Settle time agreed 2026-11-22: **0.5 s** after the last change, polling every 250 ms, so a save shows up in about 0.75 to 1.5 s.
+
+## Refinement: remembering the file's mute and solo, and syncing (agreed 2026-11-22, after the build)
+
+The owner confirmed the build's other small choices and asked for this change to decision 2.
+
+- **The app remembers each track's mute and solo as the file last saved them** (kept by the controller, per track id; not part of the document or the session; cleared on unmirror). It is taken when mirroring starts and at every re-import.
+- **A track's setting is the owner's when it differs from that remembered state.** On a re-import a track the owner changed keeps their setting; any other track follows the new file. So unmuting a track the file had muted is kept, where the first build re-muted it at the next save.
+- **New tracks** take the file's state and are never marked.
+- **Sync commands** (no undo steps, like every change while mirroring):
+  - `File ▸ Sync Mutes to File` resets every track to the file's remembered state. Greyed when not mirroring or when nothing differs.
+  - `Follow File's Mute/Solo` in the track's right-click menu (the header menu, which the M/S buttons pass through) resets just that track. Greyed when it already matches.
+- **Marker:** a track that differs gets an outline in the mirror cyan on its M/S block, with a tooltip saying how it differs ("muted here, not in the file"). The owner asked for a small marker; its look is checked on a render before it is called done.
+- **Tests:** an unmuted track stays unmuted across a save; a track you didn't touch follows the file; sync all and sync one; the marker and tooltip; a new track is unmarked; unmirror forgets the remembered state.
+
+## Diagnostics (added 2026-11-22, after the first studio run)
+
+The owner mirrored `Aug01-01-03.reason` and found clip moves on the Pianoteq track missed about 9 times in 10 while track mutes were always picked up. A replay of a real clip move (bar 68 to 72) through the watcher, written in place, worked, and the reader reads the move correctly, so the cause is in how Reason's real save reaches the watcher. The watcher now logs what it sees:
+
+- every change on disk (size, modification time, inode), every read start, and each outcome: new bytes (with a short checksum and which tracks' clip spans changed, before and after), same bytes, discarded because the file changed during the read, or failed;
+- when an import waits for a gesture, and when it is applied;
+- to `mirror-mode`'s log file `mirror-log.txt` in the app's local data folder (a new one each time mirroring starts), opened by **File ▸ Show Mirror Log**, with the notable lines also in the status bar.
+
+Once a studio run shows what happened on a missed save, the fix is designed from that.
+
