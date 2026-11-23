@@ -1,6 +1,6 @@
 # Plan: mirror mode, watching one file
 
-Status: **built on `feature/mirror-mode` (2026-11-22); awaiting the owner's manual test (TEST_CHECKLIST 8s).** Branch: `feature/mirror-mode` from `release/0.5.0`.
+Status: **built and tested (2026-11-23) on `feature/mirror-mode`: the owner's Reason and Cubase checks in TEST_CHECKLIST 8s pass; the one-hour session check is deferred to release-time testing.** Branch: `feature/mirror-mode` from `release/0.5.0`.
 
 A separate mode in which the app watches one MIDI or project file and re-imports it every time it's saved. You keep working in Cubase or Reason; whatever you last saved is on the timeline, ready to drag out.
 
