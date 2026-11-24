@@ -1,6 +1,6 @@
 # Plan: Cubase chord track as chord names
 
-Status: **plan** (2026-11-16). Agreed in principle on 2026-11-15 ([roadmap](../ROADMAP.md), [Cubase plan, decision 1](cubase-import.md#decisions-2026-11-15)): don't render chords as notes; show the chord names on a marker-style track. This plan covers decoding, the model, display, export, and the open questions.
+Status: **plan** (2026-11-16). Agreed in principle on 2026-11-15 ([roadmap](../../ROADMAP.md), [Cubase plan, decision 1](cubase-import.md#decisions-2026-11-15)): don't render chords as notes; show the chord names on a marker-style track. This plan covers decoding, the model, display, export, and the open questions.
 
 ## What we know already
 
@@ -60,7 +60,7 @@ This differs from the earlier decision only in that the user asks for it explici
 
 - **From Cubase:** dragged parts carry MIDI only, and the MIDI export has no chords. If you try dragging chord-track events out of Cubase and it produces a file, we'll see what's in it.
 - **Received MIDI files** with chord text events (our own exports, for example) would show up as chords if they land on a Chords track. Recognising other conventions, such as Yamaha XF chord events, could come later.
-- **Logic** has a chord track too (secondary priority, see the [desk research](daw-desk-research.md)); this design would serve it.
+- **Logic** has a chord track too (secondary priority, see the [desk research](../../investigation/daw-desk-research.md)); this design would serve it.
 
 ## Fixtures (Cubase 16, saved as for the c-series)
 

@@ -13,8 +13,8 @@ Source: the studio test of checklist section 8d. Every item passed. The notes ra
 | With the right edge at its limit, the pointer carried on to the window edge and the timeline scrolled | **Bug.** Once the edge can't move any further, the drag should have no further effect | 1 |
 | An off-grid trimmed edge is kept only with Shift; moving a trimmed clip tends to snap it | **Working as designed** (plan answer 6: move the clip to get back on the grid; Shift keeps the time) | 2, docs |
 | Duplicate puts the copy straight after the original, touching it | **Working as designed**, and right for a trimmed clip (it uses the visible end) | 2, docs |
-| Dragging MIDI in from another app doesn't scroll the timeline at the right edge | **Missing feature** | Later: [next features](next-drag-in-scroll-and-mute-solo.md) |
-| Make the include tickbox a mute control, add solo and a cancel-all | **Feature** | Later: [next features](next-drag-in-scroll-and-mute-solo.md) |
+| Dragging MIDI in from another app doesn't scroll the timeline at the right edge | **Missing feature** | Later: [next features](../next-drag-in-scroll-and-mute-solo.md) |
+| Make the include tickbox a mute control, add solo and a cancel-all | **Feature** | Later: [next features](../next-drag-in-scroll-and-mute-solo.md) |
 
 ## Build
 

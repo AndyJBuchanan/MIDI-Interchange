@@ -4,7 +4,7 @@ Hand tests: sections 1–8 cover the core workflow, and each feature adds its ow
 
 Wherever a step changes something, also check that one ⌘Z undoes the whole step.
 
-Record interop results (does a drag work with an app at all) in the README checklist, and the detail in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md). Don't claim compatibility until it has actually been tested.
+Record interop results (does a drag work with an app at all) in the README checklist, and the detail in [INTEROP_FINDINGS.md](../investigation/INTEROP_FINDINGS.md). Don't claim compatibility until it has actually been tested.
 
 ## 1. Drop placement (single file, one track)
 
@@ -141,7 +141,7 @@ The default export mode is now **Ranges · rebase & concatenate** (2026-11-10). 
 - [x] Drop late in the song: the clip lands at the indicated time, stays in view, and the timeline ends at the content end plus normal padding. Scroll far right, then back left before dropping: the timeline doesn't keep the furthest drag reach.
 - [x] Repeat the long drag and leave the window: scrolling stops, timeline length and horizontal scroll return to where they were before the drag. Re-enter and check a fresh drag works.
 
-Esc cancellation failed in the studio and is deferred to [future work](ROADMAP.md#later-after-more-real-world-use) by agreement (2026-11-12), outside this feature's completion checks. Finder → Finder cancels; Finder → MIDI Interchange, Cubase → Finder and Cubase → MIDI Interchange do not. The automated drag-leave test doesn't cover native Esc cancellation.
+Esc cancellation failed in the studio and is deferred to [future work](../ROADMAP.md#later-after-more-real-world-use) by agreement (2026-11-12), outside this feature's completion checks. Finder → Finder cancels; Finder → MIDI Interchange, Cubase → Finder and Cubase → MIDI Interchange do not. The automated drag-leave test doesn't cover native Esc cancellation.
 
 - [x] Drag a file whose destination lane is above or below the visible tracks: the fixed timeline ruler still shows the drop time with an amber line and triangle. Move the pointer and auto-scroll; the ruler marker follows. Drop or leave the window: the marker disappears. (Studio retest passed, 2026-11-12.)
 - [x] Move the pointer over the track headers or export panel during the drag: auto-scroll stops and the usual drop placement applies.
@@ -249,7 +249,7 @@ Automated tests cover exact MIDI boundaries, note ordering, all four export mode
 
 ## 8m. DAWproject import (`feature/direct-daw-import-dawproject`)
 
-Partially done; the rest is deferred by agreement (2026-11-14). Steps that were only partly checked stay unticked. Implementation and known limitations: [the DAWproject plan](plans/dawproject-import.md).
+Partially done; the rest is deferred by agreement (2026-11-14). Steps that were only partly checked stay unticked. Implementation and known limitations: [the DAWproject plan](../plans/0.4.0/dawproject-import.md).
 
 - [x] Open and drag each of the three supplied Cubase project sets (`samples/project-sets`) into an empty workspace. Inspect clip positions, Source Info (format, application, size, tempo changes) and the warnings for skipped content.
 - [x] Ditty's disabled clips stay visible and silent, drawn with thin crosses through them. Toggle with the right-click Mute/Unmute Clip and with the M key while the pointer is over a clip; duplicate, split, move and trim a muted clip; check undo/redo.
@@ -259,7 +259,7 @@ Partially done; the rest is deferred by agreement (2026-11-14). Steps that were 
 
 ## 8n. Cubase project import (`feature/direct-daw-import-cubase`)
 
-Use your own Cubase 15/16 projects as well as `samples/project-sets` and `samples/project-cubase-phases`. Implementation, evidence and limitations: [the Cubase plan](plans/cubase-import.md).
+Use your own Cubase 15/16 projects as well as `samples/project-sets` and `samples/project-cubase-phases`. Implementation, evidence and limitations: [the Cubase plan](../plans/0.4.0/cubase-import.md).
 
 - [x] Open and drag a `.cpr` into an empty workspace, and into one with tracks. Parts land where Cubase shows them (on Cubase's absolute timeline), with their trims, names and channels. Source Info shows "Cubase project", the version and the warnings; a project with blank bars before bar 1 shows a "Display" line and is not shifted.
 - [x] Muted parts stay visible and silent; muted and soloed tracks keep their state; tracks in a muted folder arrive muted.
@@ -272,7 +272,7 @@ Use your own Cubase 15/16 projects as well as `samples/project-sets` and `sample
 
 ## 8o. Reason song import (`feature/direct-daw-import-reason`)
 
-Use your own Reason 13/14 songs as well as `samples/reason-probe` and `samples/reason-check`. Implementation, evidence and limitations: [the Reason plan](plans/reason-import.md).
+Use your own Reason 13/14 songs as well as `samples/reason-probe` and `samples/reason-check`. Implementation, evidence and limitations: [the Reason plan](../plans/0.4.0/reason-import.md).
 
 - [x] Open and drag a `.reason` into an empty workspace, and into one with tracks. Clips land where Reason shows them, one track per sequencer track (lanes merged). Source Info shows "Reason song", the version and the warnings.
 - [x] Muted clips, muted lanes and muted Block placements arrive as muted clips (crossed through); a muted track arrives muted.
@@ -285,7 +285,7 @@ Use your own Reason 13/14 songs as well as `samples/reason-probe` and `samples/r
 
 ## 8p. Simplify controller data (`feature/simplify-controller-data`)
 
-Plan: [simplify-controller-data](plans/simplify-controller-data.md). Use a Reason project with dense mod wheel or pitch bend curves.
+Plan: [simplify-controller-data](../plans/0.5.0/simplify-controller-data.md). Use a Reason project with dense mod wheel or pitch bend curves.
 
 - [x] The **Simplify controller data** box sits beside Trim in the export panel, is off by default, and its tooltip says it changes the data.
 - [x] Export with it off, then on, and open both in Reason: off gives the staircase of points, on gives a few clean points, and the curve looks and sounds the same.
@@ -298,7 +298,7 @@ Plan: [simplify-controller-data](plans/simplify-controller-data.md). Use a Reaso
 
 ## 8q. Session sources dialog (`feature/session-sources`)
 
-Plan: [session-sources](plans/session-sources.md). Use two or three imports, including a Cubase or Reason project.
+Plan: [session-sources](../plans/0.5.0/session-sources.md). Use two or three imports, including a Cubase or Reason project.
 
 - [x] A bright white **(i)** in a circle sits beside the track count, top left, clear of the M and S boxes. It has the tooltip "Sources in this session". Make the track panel as narrow as it goes, and check it with a three-digit track count, if you have one.
 - [x] Click it: a modal dialog lists every source in import order. Each shows its path (Show in Folder works), format and version, import time, tempo and any import warnings.
@@ -312,7 +312,7 @@ Plan: [session-sources](plans/session-sources.md). Use two or three imports, inc
 
 ## 8r. Controller display (`feature/controller-display`)
 
-Plan: [controller-display](plans/controller-display.md). Use a Reason song with mod-wheel and pitch-bend curves and a Cubase project with CC data, if you have them.
+Plan: [controller-display](../plans/0.5.0/controller-display.md). Use a Reason song with mod-wheel and pitch-bend curves and a Cubase project with CC data, if you have them.
 
 - [x] The toolbar has a **Controller** list after Markers, set to **Off**, and two icon buttons that are greyed while nothing is shown. View ▸ Controller mirrors the list, with "Overlay on Notes" and "Joined Lines" ticks.
 - [x] The list shows exactly what the imports hold: Pitch Bend, Aftertouch, then CCs by number with names. No bank select, RPN/NRPN or mode messages.
@@ -331,7 +331,7 @@ Plan: [controller-display](plans/controller-display.md). Use a Reason song with 
 
 ## 8s. Mirror mode (`feature/mirror-mode`)
 
-Plan: [mirror-mode](plans/mirror-mode.md). Use a Cubase project and a Reason song, a small one and a large one of each. Save in the DAW, then wait a couple of seconds; the status bar should name the time of each re-import. Mirroring writes a log of what the watcher saw and did: **File ▸ Show Mirror Log** opens it (it is `mirror-log.txt` in the app's local data folder, replaced each time mirroring starts). If a save is missed or a clip move doesn't show, note roughly when it happened and keep that file from this run, and copy it across.
+Plan: [mirror-mode](../plans/0.5.0/mirror-mode.md). Use a Cubase project and a Reason song, a small one and a large one of each. Save in the DAW, then wait a couple of seconds; the status bar should name the time of each re-import. Mirroring writes a log of what the watcher saw and did: **File ▸ Show Mirror Log** opens it (it is `mirror-log.txt` in the app's local data folder, replaced each time mirroring starts). If a save is missed or a clip move doesn't show, note roughly when it happened and keep that file from this run, and copy it across.
 
 - [x] With something in the workspace, **File ▸ Open & Mirror MIDI/Project File…** (and the **Mirror…** toolbar button) pick a Cubase project. The confirmation "Mirroring replaces the workspace." offers Replace Workspace and Cancel; Cancel changes nothing.
 - [x] After accepting, the mode is obvious at a glance: cyan frame, cyan banner naming the file with an Unmirror button and a last-updated time, tinted track panel and ruler, the lanes unchanged, "Mirroring …" in the title bar, and the toolbar button filled cyan. The tracks are at bar 1.
@@ -353,7 +353,7 @@ Plan: [mirror-mode](plans/mirror-mode.md). Use a Cubase project and a Reason son
 
 ## 8t. Cubase disabled tracks (`feature/cubase-disabled-tracks`)
 
-Plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/` (already in this checkout). Cubase's Disable Track is not mute.
+Plan: [cubase-disabled-tracks](../plans/0.5.0/cubase-disabled-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/` (already in this checkout). Cubase's Disable Track is not mute.
 
 - [x] Drag `d1.cpr` in: "Pianoteq 9 B" is absent, A and C are there, and the import notes (and Source Info, Warnings) say `Track "Pianoteq 9 B" is disabled in Cubase; not imported`. Same for `d2.cpr` (B also muted).
 - [x] Drag `d4.cpr` (B hidden) in: all three tracks arrive and Source Info says B is hidden in Cubase.
@@ -367,7 +367,7 @@ Plan: [cubase-disabled-tracks](plans/cubase-disabled-tracks.md). Fixtures: `samp
 
 ## 8u. Cubase linear time-base tracks (`feature/cubase-linear-tracks`)
 
-Plan: [cubase-linear-tracks](plans/cubase-linear-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/d8 baseline.cpr` (with `d8 baseline.midi`) and `Tier 3/Cubase16/c26.cpr`, already in this checkout. A linear track stores seconds; Cubase's MIDI export converts them at the project's tempo as saved.
+Plan: [cubase-linear-tracks](../plans/0.5.0/cubase-linear-tracks.md). Fixtures: `samples/project-cubase-phases/DTracks/d8 baseline.cpr` (with `d8 baseline.midi`) and `Tier 3/Cubase16/c26.cpr`, already in this checkout. A linear track stores seconds; Cubase's MIDI export converts them at the project's tempo as saved.
 
 - [x] Drag `d8 baseline.cpr` in: two tracks, "linear" and "musical", each with **two clips** (no third clip on "musical"). Set side by side with the Cubase window, the linear track's clips are shorter than the musical track's, and its second clip starts earlier (about three beats before the musical track's second clip). In Cubase's window the same two differences show.
 - [x] Source Info for `d8 baseline.cpr`, Warnings: `Track "linear" was on Cubase's linear time base; its positions are converted at the project's tempo` appears once, and nothing like it for "musical".
@@ -392,6 +392,6 @@ Plan: [cubase-linear-tracks](plans/cubase-linear-tracks.md). Fixtures: `samples/
 
 ## 11. Windows (release time only)
 
-Windows is a secondary platform: it isn't tested during normal development, only before a release (RELEASING.md, step 3). Leave this section unticked until then.
+Windows is a secondary platform: it isn't tested during normal development, only before a release (release skill, step 3). Leave this section unticked until then.
 
 - [x] Use **Alt** in place of Option and **Ctrl** in place of ⌘ for the clip drags. Check the drop cursor and the multi-file dialog.

@@ -2,7 +2,7 @@
 
 How to set up, run, test and build MIDI Interchange on a new machine, from the terminal or from Visual Studio Code.
 
-For what the app is and why it's built this way, see [DESIGN_BRIEF.md](DESIGN_BRIEF.md) (the original spec) and [DESIGN_NOTES.md](DESIGN_NOTES.md) (decisions, status and gaps).
+For what the app is and why it's built this way, see [DESIGN_BRIEF.md](../design/DESIGN_BRIEF.md) (the original spec) and [DESIGN_NOTES.md](../design/DESIGN_NOTES.md) (decisions, status and gaps).
 
 ## Prerequisites
 
@@ -48,7 +48,7 @@ git config --local user.email "<id>+<your-github-username>@users.noreply.github.
 
 Check it with `git config user.email`: it must print that address, not the machine's global email.
 
-**2. GitHub CLI login.** The GitHub CLI (`gh`) is used for pushing and for releases ([RELEASING.md](RELEASING.md)). Install it from [cli.github.com](https://cli.github.com), then run:
+**2. GitHub CLI login.** The GitHub CLI (`gh`) is used for pushing and for releases ([release skill](../../.claude/skills/release/SKILL.md)). Install it from [cli.github.com](https://cli.github.com), then run:
 
 ```bash
 gh auth login --hostname github.com --git-protocol https --web
@@ -305,7 +305,7 @@ Notes:
 
 - The first signing run triggers a keychain prompt to allow `codesign` to use the private key. Choose **Always Allow**. While the prompt is open, the build waits, and if it waits too long the timestamp request fails with "timestamps differ by N seconds". Rerun after allowing access.
 - Only the DMG is submitted. Its notarisation ticket also covers the app inside, which is why the script can staple the app in `dist/`. The copy *inside* the DMG isn't stapled, so if a user drags it out while offline, Gatekeeper checks it online the first time it opens.
-- Before shipping a new release, bump `__version__` in `midi_interchange/__init__.py`. It sets `CFBundleShortVersionString`, `CFBundleVersion` and the Windows version. The full process is in [RELEASING.md](RELEASING.md).
+- Before shipping a new release, bump `__version__` in `midi_interchange/__init__.py`. It sets `CFBundleShortVersionString`, `CFBundleVersion` and the Windows version. The full process is in the [release skill](../../.claude/skills/release/SKILL.md).
 
 **macOS build status (2026-11-09):**
 - Built on Apple silicon with Python 3.12 and PyInstaller 6.x. The DMG is about 39 MB and the app about 100 MB.
@@ -325,14 +325,21 @@ tools/make_demo_midi.py        regenerates samples/
 scripts/                       build scripts; installer.iss (Windows installer); entitlements.plist; signing.env.example (copy to git-ignored signing.local.env)
 midi_interchange.spec          PyInstaller spec (bundle metadata, version, signing identity from env)
 .vscode/                       VS Code extensions, launch configs, tasks, settings
-docs/                          brief, design notes, this guide, RELEASING.md, releases/ (release notes)
+docs/design/                   brief, design notes (DESIGN_BRIEF, DESIGN_NOTES)
+docs/investigation/            interop findings, DAW file-format notes, desk research
+docs/development/              this guide, test checklist, release history
+docs/plans/<release>/          feature plans, grouped by the release that shipped them
+docs/releases/                 release notes
+docs/ROADMAP.md                what is agreed and what is only suggested
+AGENTS.md                      working rules for every session (CLAUDE.md imports it)
+.claude/skills/release/        the release checklist, as a Claude Code skill
 ```
 
-- Working process (pick, plan, implement, manual test, commit, push), branches, git hygiene, test rules and how to describe the app: [CLAUDE.md](../CLAUDE.md) at the repo root. Read it first. The full branch rules are in [RELEASING.md, Branches](RELEASING.md#branches).
+- Working process (pick, plan, implement, manual test, commit, push), branches, git hygiene, test rules and how to describe the app: [AGENTS.md](../../AGENTS.md) at the repo root, which also holds the branch rules. Read it first. Releasing is in the [release skill](../../.claude/skills/release/SKILL.md).
 - Keep `midi_interchange/core` free of Qt so it can be tested without a GUI.
 - Widgets change the workspace only through `ui/controller.py`. Call `checkpoint()` before a change you want to be undoable.
 - Round-trip and boundary tests, where import and export regression tests usually go, are in `tests/test_roundtrip.py` and `tests/test_export.py`.
-- **Mirror mode** ([plan](plans/mirror-mode.md)):
+- **Mirror mode** ([plan](../plans/0.5.0/mirror-mode.md)):
   - The watch polls the file (every 250 ms), not `QFileSystemWatcher`: Cubase saves to a temp file and renames it over the project, which loses a file watch, and Reason writes in place and sometimes only touches the modification time. A change is read after the file has been still for 0.5 s; a read that fails is retried every 2 s, three times; the file counts as missing after 3 s. The evidence for these numbers is in the plan's step 0 results.
   - A read runs on a worker thread, and its result is applied from `MirrorWatcher.poll()` on the main thread. A generation counter drops a result that a newer change has made stale, and a content hash skips a save that changed nothing.
   - Diagnostics: `MirrorWatcher.diag` emits a wall-clock stamped line for every change it sees (size, modification time, inode), every read, discard and failure, and which tracks' clip positions changed between reads. `MainWindow` writes them to `mirror-log.txt` in the app's local data folder (only when `start_mirror` is given a `log_path`, so tests write nothing) and shows the notable ones in the status bar. File ▸ Show Mirror Log opens it. Added to find why Reason saves were missed in the first studio run.
@@ -341,9 +348,9 @@ docs/                          brief, design notes, this guide, RELEASING.md, re
   - `theme.apply(app, mirror=True)` tints the chrome app-wide, so a test that mirrors must restore the application palette afterwards. It calls `setStyle("Fusion")` only when the style isn't already Fusion, because setting it every time is very slow.
   - Tests use an injected clock and an inline or manual executor, never real waits. `QMenu.exec` can't be monkeypatched in PySide6: subclass `QMenu` and patch `main_window.QMenu`.
   - Anything that installs an application-wide event filter must remove it when it is hidden or closed: every event passes through every installed filter, and leaked ones once made the test suite take 11 minutes instead of 40 seconds (`Timeline` does this in `showEvent` and `hideEvent`).
-- Record decisions or changes of direction in `docs/DESIGN_NOTES.md`. Don't edit `docs/DESIGN_BRIEF.md`.
+- Record decisions or changes of direction in `docs/design/DESIGN_NOTES.md`. Don't edit `docs/design/DESIGN_BRIEF.md`.
 - Record DAW interop results in the README checklist. Only tick a box once that drag has actually been tested.
-- A feature's plan links to its section of [TEST_CHECKLIST.md](TEST_CHECKLIST.md) (see CLAUDE.md, step 4) and doesn't keep its own copy of the checklist.
+- A feature's plan links to its section of [TEST_CHECKLIST.md](TEST_CHECKLIST.md) (see AGENTS.md, step 4) and doesn't keep its own copy of the checklist.
 
 ## Session persistence and compatibility
 

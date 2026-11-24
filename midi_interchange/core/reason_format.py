@@ -1,7 +1,7 @@
 """Decode Reason song files (.reason saved by Reason 13 and 14).
 
 Pure format decoding, no workspace model. tools/reason_inspect.py is the
-research CLI; findings and evidence are in docs/plans/reason-import.md.
+research CLI; findings and evidence are in docs/plans/0.4.0/reason-import.md.
 Input files are only read.
 
 Container ("X15_FILE"): a small paged store. Big-endian throughout.
@@ -22,7 +22,7 @@ stay until their pages are reused, so a file can hold two complete,
 hash-verified songs. Each save also writes the next generation number into the
 header slot it is not using: the slot with the higher generation names the
 current save's index page (see current_song and
-docs/formats/REASON_FILE_FORMAT.md).
+docs/investigation/formats/REASON_FILE_FORMAT.md).
 
 Song FORM: CAT WWWI (metadata) | CAT ApVC | FORM REMB | BODY | ...
 BODY: a 128-byte header whose first six bytes name the format generation,
@@ -188,7 +188,7 @@ def current_song(data: bytes) -> tuple[SongCopy, list[str]]:
     copy whose index is on the highest page. A file with one verified copy
     just uses it.
 
-    Evidence: docs/formats/REASON_FILE_FORMAT.md. Not yet confirmed: that
+    Evidence: docs/investigation/formats/REASON_FILE_FORMAT.md. Not yet confirmed: that
     Reason itself picks this way, and what it does when the newer slot is damaged."""
     h = read_header(data)
     copies = verified_songs(data, h)

@@ -131,7 +131,7 @@ def note_rows(area_top: float, area_h: float, pmin: int, pmax: int) -> tuple[flo
     return y_base, row, max(row - (1 if row >= 4 else 0), 1.2)
 
 
-# Controller strip (docs/plans/controller-display.md, "Row heights"): an extra strip under the normal lane
+# Controller strip (docs/plans/0.5.0/controller-display.md, "Row heights"): an extra strip under the normal lane
 STRIP_SHARE = 0.30        # of the lane height
 STRIP_MIN = 10            # px
 STRIP_PAD_TOP = 1         # the divider between the notes and the strip

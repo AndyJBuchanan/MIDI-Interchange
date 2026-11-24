@@ -6,7 +6,7 @@
   reason_inspect.py tracks FILE          decoded tracks, lanes, clips, notes
   reason_inspect.py diff A B [FILTER]    leaf chunks that differ between two songs
 
-Findings: docs/plans/reason-import.md. Decoding: midi_interchange/core/reason_format.py.
+Findings: docs/plans/0.4.0/reason-import.md. Decoding: midi_interchange/core/reason_format.py.
 """
 from __future__ import annotations
 

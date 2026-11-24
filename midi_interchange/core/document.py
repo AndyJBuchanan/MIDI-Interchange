@@ -151,7 +151,7 @@ class Track:
     # import (Cubase MIDI Modifiers). Already applied to the events, as the
     # DAW's own MIDI export does; kept so it can be shown or undone later.
     source_transpose: int = 0
-    # Controller this track displays (display only; docs/plans/controller-display.md):
+    # Controller this track displays (display only; docs/plans/0.5.0/controller-display.md):
     # None follows the view's choice, "none" shows nothing, otherwise a key ("cc7", "pb", "at").
     controller: str | None = None
 

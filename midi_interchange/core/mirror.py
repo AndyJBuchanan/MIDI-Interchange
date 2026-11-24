@@ -4,7 +4,7 @@ The new import replaces the sources, tracks and tempo map. Tracks are matched
 to the old ones by the rule placement uses for drops (placement.assign_tracks),
 so a matched track keeps its id: range selections and locks (``Range.excluded``
 holds track ids) keep applying. Ranges are kept by time. Design:
-docs/plans/mirror-mode.md.
+docs/plans/0.5.0/mirror-mode.md.
 """
 from __future__ import annotations
 

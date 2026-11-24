@@ -4,7 +4,7 @@ Branch: `feature/direct-daw-import-cubase`, based on and targeting
 `feature/direct-daw-import`.
 
 Status: **phase 3 implemented** (2026-11-15): the reader is in the app;
-manual checks are in [TEST_CHECKLIST section 8n](../TEST_CHECKLIST.md#8n-cubase-project-import-feature-direct-daw-import-cubase).
+manual checks are in [TEST_CHECKLIST section 8n](../../development/TEST_CHECKLIST.md#8n-cubase-project-import-feature-direct-daw-import-cubase).
 Phase 2 complete, go (2026-11-15). Phase 1 (object framing, MIDI
 part events) is complete for Cubase 15 and 16, `RIFF` and `RIF2`. Phase 2 has
 decoded part windows, trims, mute, shared copies, track mute and solo,
@@ -13,7 +13,7 @@ offset, and indy matches Cubase's MIDI export; see
 [Phase 2 findings](#phase-2-findings-2026-11-15) and [Phase 3](#phase-3-the-reader-2026-11-15). Cubase was chosen as the first native reader after
 DAWproject. Reason follows, after a short feasibility probe.
 
-The scope and rules come from the [roadmap entry](../ROADMAP.md) and the
+The scope and rules come from the [roadmap entry](../../ROADMAP.md) and the
 [direct DAW import plan](direct-daw-import.md). They aren't repeated here. In
 short: drop a saved `.cpr` in and get the current arrangement as MIDI through
 the normal import. Keep track and clip mute. Never modify the project. The
@@ -76,8 +76,8 @@ these files.
   644 drum notes. This is a strong lead that they are Pattern Editor data.
 - **Ditty contains `PMidiArpeggiator` / `Arpache 5`**, and all three files have
   many "Transpose" strings. These match the rendered differences recorded in
-  the [Ditty](../DAWPROJECT_DITTY_FINDINGS.md) and
-  [other-pair](../DAWPROJECT_OTHER_PAIRS_FINDINGS.md) findings.
+  the [Ditty](../../investigation/DAWPROJECT_DITTY_FINDINGS.md) and
+  [other-pair](../../investigation/DAWPROJECT_OTHER_PAIRS_FINDINGS.md) findings.
 
 ### Fixture caveats
 

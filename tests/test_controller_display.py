@@ -1,4 +1,4 @@
-"""Controller display (docs/plans/controller-display.md): the pure line builder, the picker, the mode
+"""Controller display (docs/plans/0.5.0/controller-display.md): the pure line builder, the picker, the mode
 and style buttons, the track's controller box, the lane layout, painting, and the guarantee that it is
 display only: export, save and drag-out bytes never change."""
 import time

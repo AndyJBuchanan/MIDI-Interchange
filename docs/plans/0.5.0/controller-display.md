@@ -229,10 +229,10 @@ The display follows the same rule:
 
 Not edited by this plan. These sentences become wrong or incomplete with the change:
 
-- **`docs/TEST_CHECKLIST.md` 8r:** "Make the lanes as short as they go: the strip gives way to the overlay and the box under the ✕ hides. Make them taller and both return."
+- **`docs/development/TEST_CHECKLIST.md` 8r:** "Make the lanes as short as they go: the strip gives way to the overlay and the box under the ✕ hides. Make them taller and both return."
   - This is wrong now: there's no fallback.
   - Replace it with: tracks showing a controller in Lane mode are taller than the rest, at every lane height; Overlay returns them to the normal height; note where the box hides.
-- **`docs/TEST_CHECKLIST.md` 8r:** "The first icon button switches every track between a lane under the notes and an overlay on them."
+- **`docs/development/TEST_CHECKLIST.md` 8r:** "The first icon button switches every track between a lane under the notes and an overlay on them."
   - This is incomplete. Add: tracks that show a controller grow when the lane appears, and the track at the top of the view stays put.
 - **`README.md`, "See controller data":** "The first icon button draws the curve in a **lane** under the notes, or **over** the notes."
   - This is still true, but should add that the lane makes those tracks taller, and only those that have the controller.

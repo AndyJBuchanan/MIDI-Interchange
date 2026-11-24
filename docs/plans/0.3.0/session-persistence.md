@@ -21,7 +21,7 @@ Keep the one current workspace between app runs without introducing project file
 - Single-instance enforcement and file handoff remain active regardless of the persistence setting. Normal imports, exports and existing app preferences continue to work when persistence is disabled.
 - Startup restores the previous session automatically. No saved session means the usual empty workspace.
 - Keep tracks and their order, names, colours, mute/solo (including remembered mutes), export-channel overrides and source-channel information.
-- Keep every clip, its source association, position, events, full extent and edge trims. Keep source provenance and derived input metadata, the workspace tempo map and selected tempo source. **Updated 2026-11-14:** the reserved source bytes field remains available but new imports leave it empty; original input size is recorded separately. See [the source-data consolidation](direct-daw-import.md).
+- Keep every clip, its source association, position, events, full extent and edge trims. Keep source provenance and derived input metadata, the workspace tempo map and selected tempo source. **Updated 2026-11-14:** the reserved source bytes field remains available but new imports leave it empty; original input size is recorded separately. See [the source-data consolidation](../0.4.0/direct-daw-import.md).
 - Keep ranges, order, names, exact boundaries, included/excluded tracks and track-lock states. Preserve IDs so relationships remain intact.
 - The session is self-contained: reopening never depends on the original file paths or DAW drag temp files still existing. Paths remain provenance, not required data dependencies.
 - Also restore export mode, trim-silence setting, snap, selected range, horizontal zoom, lane height and scroll. Restore view positions after content and geometry are ready, clamping to valid bounds.
@@ -81,7 +81,7 @@ Keep the one current workspace between app runs without introducing project file
 - The schema version, not the writing app version, gates loading. Rejected files are moved aside before a new save can replace them; a failed preservation blocks writes rather than losing the original.
 - Validation checks effective clip source relationships. A track's original source ID and a locked range's exclusions can legitimately retain IDs removed from the current model; these inert historical IDs are preserved, matching existing model behaviour.
 - Source/event/tempo data are immutable under existing snapshot semantics. Snapshot capture copies editable track/clip/range state on the UI thread; encoding and writing run on the worker.
-- Tests exercise exact MIDI/export round trips (including the Cubase lyric fixture), settings/view, fresh undo, bad data and unsupported schemas, failed/overlapping writes, idle gates, process handoff and crash recovery, and the real application entry point with isolated storage. Manual checks move to `docs/TEST_CHECKLIST.md` (see follow-up 5).
+- Tests exercise exact MIDI/export round trips (including the Cubase lyric fixture), settings/view, fresh undo, bad data and unsupported schemas, failed/overlapping writes, idle gates, process handoff and crash recovery, and the real application entry point with isolated storage. Manual checks move to `docs/development/TEST_CHECKLIST.md` (see follow-up 5).
 
 Automated verification: **307 tests passed** for the first implementation, including 48 new session/instance checks. After the review follow-ups (5d7eaef): **328 tests**. All 328 pass on Windows; on macOS 325 pass and the 3 Windows-only tests are skipped. `tests/test_roundtrip.py` adds one test per `.mid` file in `samples/`, so untracked sample files raise the local count. Existing Qt deprecation warnings only. Native studio checks remain pending.
 
@@ -117,7 +117,7 @@ Two review checks found no rejections. Every repository MIDI file was saved and 
 5. **Remove the transient checklist file.**
    - Delete `test-results-delete-me.md` from the branch. Files named `*delete-me*` are the user's transient notes and are never committed.
    - Add `*delete-me*` to `.gitignore`.
-   - Put the manual session checks, including follow-ups 1–4 and 6, in `docs/TEST_CHECKLIST.md` as section 8j (`feature/session-persistence`).
+   - Put the manual session checks, including follow-ups 1–4 and 6, in `docs/development/TEST_CHECKLIST.md` as section 8j (`feature/session-persistence`).
 6. **Windows coverage.**
    - **Automated:** keep tests cross-platform wherever they can be, and mark Windows-only tests with `pytest.mark.skipif(sys.platform != "win32", ...)` so they run only there.
      - Cross-platform: several second launches started at once while the owner starts up. Each request imports once, and no second owner appears.
@@ -137,4 +137,4 @@ Two review checks found no rejections. Every repository MIDI file was saved and 
 - A close during restore, a gesture, a file drag-out or a pending handoff sets `close_deferred`; the status bar shows the message and `tick()` runs the normal close once not blocked. The timer now runs even when persistence is disabled, so a deferred close is released in both states. The release also waits while a modal dialog or popup is open (`dialog_open()`), so a drop's "Place dropped files" dialog or a startup notice is never closed underneath; fresh close requests and the close-failure Retry/Exit dialog are unaffected.
 - `SessionStore.kept` lists this run's rejected files. `purge_rejected()` removes earlier runs' leftovers at startup (only when persistence is enabled) and this run's files after a clean shutdown; failures are ignored. Exiting without saving keeps them; the next startup removes them.
 - One `startup_message()` builds the single notice. An unclean run with no session file and nothing rejected shows no notice (agreed with the user: nothing was lost that matters, and nothing is claimed).
-- `*delete-me*` is ignored; `test-results-delete-me.md` is removed from the index; manual checks are in `docs/TEST_CHECKLIST.md` section 8j.
+- `*delete-me*` is ignored; `test-results-delete-me.md` is removed from the index; manual checks are in `docs/development/TEST_CHECKLIST.md` section 8j.

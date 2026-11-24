@@ -22,9 +22,9 @@ Byte offsets are from the start of the structure named. All integers are **big-e
 | `midi_interchange/core/import_reason.py` | How a decoded song becomes MIDI clips |
 | `tools/reason_inspect.py` | Research CLI: `copies`, `tree`, `tracks`, `diff` (run as `PYTHONPATH=. .venv/bin/python tools/reason_inspect.py ...`) |
 | `tests/test_reason_format.py`, `tests/test_import_reason.py` | Synthetic-file tests, plus every fixture with a Reason MIDI export checked against it |
-| `docs/plans/reason-import.md` | The investigation record: phases 0 to 2, decisions, evidence |
-| `docs/plans/mirror-mode.md` | Step 0: how Reason writes a file on save |
-| `docs/INTEROP_FINDINGS.md`, `docs/ROADMAP.md` | Clipboard capture; open Reason items |
+| `docs/plans/0.4.0/reason-import.md` | The investigation record: phases 0 to 2, decisions, evidence |
+| `docs/plans/0.5.0/mirror-mode.md` | Step 0: how Reason writes a file on save |
+| `docs/investigation/INTEROP_FINDINGS.md`, `docs/ROADMAP.md` | Clipboard capture; open Reason items |
 | `samples/reason-probe/` | The r-series (r01 to r27, one change per file) and `mute-tests`, `rampy`, mostly with Reason MIDI exports |
 | `samples/reason-check/` | Real songs with Reason MIDI exports. **`Aug01-01-03.reason` is live** (the owner's Reason saves to it) and was not used: scratch copies were used instead |
 | `samples/_archive/reason-probe-songs/` | Songs saved by Reason 6, 9, 10, 11, 12, 13 and 14, several songs in more than one version |
@@ -53,12 +53,12 @@ The `BODY` begins with a 128-byte plain header. Its first six bytes name the for
 
 - **VERIFIED** (the generation and Hash tally above; a scan of every song stream named by any index page in the 104 files): `RSN600` to `RS1200` payloads are not IFF, and those copies have no `Hash` chunk; `RS1250` and `RS1300` copies have one and it verifies.
 - **VERIFIED, new in this study** (`samples/_archive/reason-probe-songs/Reason12/T004-3.2(A hundred Steps)-3(11)(Self).reason`, index page 21): the `RS1250` body is **plain**. Bytes 128 on read `CAT … RS10 APPV`. In-process, with the generation check relaxed, the existing decoder parsed 21 `RS10` children, 12 tracks and 542 notes. There is no Reason export of this song, so the decode is not checked against ground truth.
-  - This contradicts `docs/plans/reason-import.md` (Phase 0 and decision 6), which group `RS1250` with the encrypted generations. It agrees with the Reason Studios statement quoted there, that songs were encrypted from Reason 6 to 12.5 and are not from 12.6 (**INFERRED**: 12.6 is when encryption ended and the `Hash` chunk arrived).
+  - This contradicts `docs/plans/0.4.0/reason-import.md` (Phase 0 and decision 6), which group `RS1250` with the encrypted generations. It agrees with the Reason Studios statement quoted there, that songs were encrypted from Reason 6 to 12.5 and are not from 12.6 (**INFERRED**: 12.6 is when encryption ended and the `Hash` chunk arrived).
   - Whether to read `RS1250` songs is a decision for the owner. Only one song is available.
 - **VERIFIED** (`reason_format.read_song`, `import_reason.import_reason`): the reader parses `CAT RS10` only for `RS1300`. For other generations it reads the metadata (`CAT WWWI`) and refuses with the version, taken from `PROGRAMVERSION` or, failing that, from the magic (`generation_version`: `RS1200` → 12, `RSN999` → 9.5).
 - **VERIFIED** (Phase 0 of the plan; the `Grandfathered/` fixtures): opening an old song in Reason 14 and saving it again produces `RS1300`.
 - **VERIFIED** (Phase 0): `.rns` files (Reason 5) are a different format, uniformly high-entropy from the first byte. Out of scope.
-- **INFERRED** (`docs/INTEROP_FINDINGS.md`, "Reason 14: proprietary, compressed or encrypted"; the `REMB` chunk, section 3): Reason's **clipboard** payload and the song file's `REMB` chunk share a layout: the text `Propellerheads Reason …` then `0x1A`, zeros to offset `0x78`, then the words `e7 1f de 31` and `00 00 40 00`, then high-entropy bytes. The clipboard is not readable; the song body (from 12.6) is.
+- **INFERRED** (`docs/investigation/INTEROP_FINDINGS.md`, "Reason 14: proprietary, compressed or encrypted"; the `REMB` chunk, section 3): Reason's **clipboard** payload and the song file's `REMB` chunk share a layout: the text `Propellerheads Reason …` then `0x1A`, zeros to offset `0x78`, then the words `e7 1f de 31` and `00 00 40 00`, then high-entropy bytes. The clipboard is not readable; the song body (from 12.6) is.
 
 **Confidence and evidence:** high for the generation split and for `RS1300` (113 copies, every Reason export matches). Medium for `RS1250`: one song, structurally decoded, no ground truth.
 
@@ -415,14 +415,14 @@ Known differences from Reason's own MIDI export (**VERIFIED** unless marked):
 
 ## 6. How Reason writes the file on save
 
-From `docs/plans/mirror-mode.md`, step 0 (owner-run on the development MacBook, 2026-11-22; Reason version not recorded; files `Aug01-01-03.reason` 3.1 MB and `DumDum001-9_mix2(14)-folders.reason` 9.4 MB; folder polled every 50 ms):
+From `docs/plans/0.5.0/mirror-mode.md`, step 0 (owner-run on the development MacBook, 2026-11-22; Reason version not recorded; files `Aug01-01-03.reason` 3.1 MB and `DumDum001-9_mix2(14)-folders.reason` 9.4 MB; folder polled every 50 ms):
 
 - **In place.** The inode never changed, and no temp, backup or extra files appeared. **VERIFIED** (step 0 log).
 - **Fast.** Each write showed as a single change within one 50 ms poll at these sizes. Because it is in place, a reader could in principle catch a write half-done. **VERIFIED** observation; the risk is INFERRED.
 - **mtime-only changes happen:** Aug01 changed its mtime four times with the size unchanged; DumDum once, then once more with a size change (9,437,236 → 8,650,804 bytes, about five seconds later). **VERIFIED**. Whether Reason rewrote identical bytes or only touched the file is **UNKNOWN**.
 - **Combined with section 2** (**INFERRED**): a save writes new song pages and a new index page into free pages, rewrites one header slot, and sometimes shortens the file. **UNKNOWN**: the order of these writes (the safe order would be data, then index, then slot) and whether a reader racing a save can see a slot that names an index not yet written. A torn song stream would fail its `Hash`.
 
-**A consequence worth knowing** (**INFERRED**): a reader that picks the highest index page, as `current_song` does today, gets the **previous** save whenever the new one lands on the lower page set. In Aug01 that is every other save. Whether this accounts for all of the misses reported in the mirror-mode studio run (`docs/plans/mirror-mode.md`, "Diagnostics") is not established here.
+**A consequence worth knowing** (**INFERRED**): a reader that picks the highest index page, as `current_song` does today, gets the **previous** save whenever the new one lands on the lower page set. In Aug01 that is every other save. Whether this accounts for all of the misses reported in the mirror-mode studio run (`docs/plans/0.5.0/mirror-mode.md`, "Diagnostics") is not established here.
 
 ---
 

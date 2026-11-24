@@ -28,7 +28,7 @@ from .timing import TempoChange, TempoMap, TimeSigChange
 
 # BUMP for incompatible model/field-meaning/invariant changes, not every release.
 # Update the explicit records, validators and round-trip tests together. See
-# docs/DEVELOPMENT.md. Versions 1-5 have explicit upgrades below;
+# docs/development/DEVELOPMENT.md. Versions 1-5 have explicit upgrades below;
 # all other unsupported versions are preserved and skipped.
 SCHEMA_VERSION = 6
 

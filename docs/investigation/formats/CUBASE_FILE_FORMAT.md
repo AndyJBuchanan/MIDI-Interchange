@@ -22,9 +22,9 @@ Offsets are decimal unless written `0x…`. "Archive offset" means a byte offset
 | `midi_interchange/core/import_cubase.py` | Maps decoded data onto MIDI tracks and clips |
 | `tools/cpr_inspect.py` | Research CLI: `roots`, `tree`, `classes`, `notes`, `timeline`, `diff`, `hex` |
 | `tests/test_cpr_inspect.py`, `tests/test_import_cubase.py` | Regression tests pinning the findings to fixtures |
-| `docs/plans/cubase-import.md` | The investigation record and decisions (phases 1 to 4) |
-| `docs/DAWPROJECT_DITTY_FINDINGS.md`, `docs/DAWPROJECT_OTHER_PAIRS_FINDINGS.md` | Cubase's MIDI and DAWproject exports compared |
-| `docs/plans/mirror-mode.md`, "Step 0 results" | How Cubase writes the file on save |
+| `docs/plans/0.4.0/cubase-import.md` | The investigation record and decisions (phases 1 to 4) |
+| `docs/investigation/DAWPROJECT_DITTY_FINDINGS.md`, `docs/investigation/DAWPROJECT_OTHER_PAIRS_FINDINGS.md` | Cubase's MIDI and DAWproject exports compared |
+| `docs/plans/0.5.0/mirror-mode.md`, "Step 0 results" | How Cubase writes the file on save |
 | Checks run for this document | Read-only Python against the fixtures with `cpr_format`. They are flagged "(check, 2026-11-22)" |
 
 ### Fixtures
@@ -654,7 +654,7 @@ These findings are from this document's checks on BBCSO (check, 2026-11-22). The
 
 ## 5. How Cubase writes the file on save
 
-Source: `docs/plans/mirror-mode.md`, "Step 0 results". This was an owner-run log on the owner's MacBook (2026-11-22), with each folder polled every 50 ms. The Cubase version wasn't recorded.
+Source: `docs/plans/0.5.0/mirror-mode.md`, "Step 0 results". This was an owner-run log on the owner's MacBook (2026-11-22), with each folder polled every 50 ms. The Cubase version wasn't recorded.
 
 | Observation | Detail | Label |
 | --- | --- | --- |

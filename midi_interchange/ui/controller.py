@@ -52,7 +52,7 @@ class Controller(QObject):
         self.controller_overlay = False              # Lane (False) or Overlay
         self.controller_joined = False               # Steps (False) or Joined lines
         self._clip_controllers: dict[str, tuple] = {}
-        self.mirroring = False         # mirror mode: every edit is refused (docs/plans/mirror-mode.md)
+        self.mirroring = False         # mirror mode: every edit is refused (docs/plans/0.5.0/mirror-mode.md)
         self._file_ms: dict[str, tuple[bool, bool]] = {}   # mirroring: each track's (muted, soloed) as the file last saved them
         self.file_drag_active = False  # transient native drag-out; never checkpoint mid-drag
         self._undo: list[tuple[dict, str | None]] = []

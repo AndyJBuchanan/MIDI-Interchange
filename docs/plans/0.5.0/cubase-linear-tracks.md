@@ -4,11 +4,11 @@ Status: **built** (2026-11-23), on `feature/cubase-linear-tracks`. Manual checkl
 
 ## The problem
 
-A Cubase track set to the linear (seconds) time base is skipped on import, with the warning `Track "X" uses the linear (seconds) time base; it is not imported yet`. The track's parts are never read ([import_cubase.py](../../midi_interchange/core/import_cubase.py), the time-base check in the track loop). A project made only of linear tracks fails with "no supported MIDI parts or markers". Cubase's own MIDI export does include them.
+A Cubase track set to the linear (seconds) time base is skipped on import, with the warning `Track "X" uses the linear (seconds) time base; it is not imported yet`. The track's parts are never read ([import_cubase.py](../../../midi_interchange/core/import_cubase.py), the time-base check in the track loop). A project made only of linear tracks fails with "no supported MIDI parts or markers". Cubase's own MIDI export does include them.
 
 ## What is known
 
-Details and evidence are in [CUBASE_FILE_FORMAT.md, sections 4.2 and 4.7](../formats/CUBASE_FILE_FORMAT.md).
+Details and evidence are in [CUBASE_FILE_FORMAT.md, sections 4.2 and 4.7](../../investigation/formats/CUBASE_FILE_FORMAT.md).
 
 - **Layout.** A linear part differs from a musical one only in its node header: `u32 1 · f64 1.0` replaces the tempo and signature references. The part event's start, length and offset, and the events' positions and note lengths, are in **seconds** (c26). **VERIFIED**, but only on c26, so the reader never exercised it on a second file until d8 baseline.
 - **What Cubase's export does.** It writes a linear track as an ordinary track: each stored time in seconds is converted to ticks through the project's tempo map **as the project stands when it is saved**. Nothing marks the track as linear.

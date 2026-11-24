@@ -88,7 +88,7 @@ Cubase-exported MIDI is the performed-MIDI ground truth. XML fidelity checks
 diagnose the reader and do not supersede that reference. We do not repair
 Cubase's DAWproject export or silently infer missing processing.
 
-The [other-pair investigation](../DAWPROJECT_OTHER_PAIRS_FINDINGS.md) checks indy
+The [other-pair investigation](../../investigation/DAWPROJECT_OTHER_PAIRS_FINDINGS.md) checks indy
 and GA against serialized MIDI, including explicit diagnostic reference windows.
 It explains the earlier apparent offsets/tempo mismatch and records the remaining
 missing drums, extra kit notes, pitch transpose and note-tail discrepancy.
@@ -114,7 +114,7 @@ Other differences include extra material, timing, note lengths and mute state;
 the report preserves these discrepancies rather than normalising them away.
 They need studio investigation before claiming full paired-export equivalence.
 
-The [Ditty investigation](../DAWPROJECT_DITTY_FINDINGS.md) now traces differences
+The [Ditty investigation](../../investigation/DAWPROJECT_DITTY_FINDINGS.md) now traces differences
 through serialized app output and raw XML: missing rendered processing and
 controllers, duplicate/extra source notes, clip-tail policy, and small timing
 rounding differences. Its independent XML regression matches all 1,292 output
@@ -122,7 +122,7 @@ note events under the current clip-window policy.
 
 ## Manual verification
 
-The hand checks are in [TEST_CHECKLIST section 8m](../TEST_CHECKLIST.md#8m-dawproject-import-feature-direct-daw-import-dawproject). They are partially done; the rest is deferred by agreement (2026-11-14).
+The hand checks are in [TEST_CHECKLIST section 8m](../../development/TEST_CHECKLIST.md#8m-dawproject-import-feature-direct-daw-import-dawproject). They are partially done; the rest is deferred by agreement (2026-11-14).
 
 ## Automated verification
 

@@ -4,7 +4,7 @@ import os
 import sys
 
 # The app version comes from midi_interchange/__init__.py (its digits-only check runs on import).
-# See docs/RELEASING.md before changing it.
+# See the release skill (.claude/skills/release/SKILL.md) before changing it.
 sys.path.insert(0, SPECPATH)
 from midi_interchange import __version__ as VERSION
 

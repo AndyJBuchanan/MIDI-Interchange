@@ -84,7 +84,7 @@ The Cubase and Reason readers are checked against each DAW's own MIDI export of 
 - **Linear time base:** a Cubase track set to the linear (seconds) time base comes in as an ordinary track, its positions converted to ticks at the project's tempo as saved, as Cubase's own MIDI export does; a note in Source Info says which tracks. It is not rescaled if you change the project's tempo later, but mirror mode converts again on each save.
 - **Approximations:** Cubase tempo ramps become a tempo step every beat, as Cubase's own MIDI export does. Folders are flattened, Reason's mixer mute and solo aren't read, and a Reason clip's hidden notes and loop structure can't be brought back once written out.
 
-Details, evidence and decisions: the [Cubase](docs/plans/cubase-import.md), [Reason](docs/plans/reason-import.md) and [DAWproject](docs/plans/dawproject-import.md) plans.
+Details, evidence and decisions: the [Cubase](docs/plans/0.4.0/cubase-import.md), [Reason](docs/plans/0.4.0/reason-import.md) and [DAWproject](docs/plans/0.4.0/dawproject-import.md) plans.
 
 ![Dragging a clip in, with the landing preview](docs/images/02-drag-in.png)
 
@@ -282,7 +282,7 @@ Only one instance runs at a time. Opening MIDI files from Finder/Explorer or ano
 
 ## Works with
 
-Tested by hand on macOS (2026-11-09 and 2026-11-10). Drag and drop works as far as each app allows. Opening Cubase 15/16 and Reason 13/14 projects directly was checked by hand on macOS on 2026-11-16 (see [Open DAW projects directly](#open-daw-projects-directly)). On Windows the app builds and its tests pass, but drag and drop with DAWs hasn't been tried yet. Details, the clipboard investigation and open issues are in [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md).
+Tested by hand on macOS (2026-11-09 and 2026-11-10). Drag and drop works as far as each app allows. Opening Cubase 15/16 and Reason 13/14 projects directly was checked by hand on macOS on 2026-11-16 (see [Open DAW projects directly](#open-daw-projects-directly)). On Windows the app builds and its tests pass, but drag and drop with DAWs hasn't been tried yet. Details, the clipboard investigation and open issues are in [docs/investigation/INTEROP_FINDINGS.md](docs/investigation/INTEROP_FINDINGS.md).
 
 Key: ✓ works · ◐ works within limits (see notes) · — the app doesn't support it · ☐ not tested or not yet confirmed
 
@@ -307,7 +307,7 @@ For each app check: does the drop import at all (if not, note the formats listed
 
 ## Known limitations
 
-- **Reason automation lane:** importing a channel-overridden range can create an unwanted **Controller #254** automation lane, although the channel override works. Delete the unwanted lane in Reason. Its cause is unresolved; see [the findings](docs/INTEROP_FINDINGS.md#reason-unexpected-automation-lane-after-channel-override-2026-11-13).
+- **Reason automation lane:** importing a channel-overridden range can create an unwanted **Controller #254** automation lane, although the channel override works. Delete the unwanted lane in Reason. Its cause is unresolved; see [the findings](docs/investigation/INTEROP_FINDINGS.md#reason-unexpected-automation-lane-after-channel-override-2026-11-13).
 
 - **Drag and drop depends on the other app.** File URLs and any data starting with `MThd` are handled. Qt can't receive **macOS file promises** or **Windows virtual files**; no app tested so far needed them. If a drop carries no usable MIDI, the app lists the formats it was offered, which helps a lot in a bug report. Drag-out offers temp files (in `$TMPDIR/MIDI Interchange Drag`, pruned after 24 h).
 - **Mixed channels:** a clip moved onto another track keeps its own MIDI channel(s), so a track can end up mixing channels (its header lists them all). MIDI Interchange exports it as one track, but some importers split it: **Reason 14** turns it into one track per channel. To get one track there, use the track colour box’s export-channel override, or assemble clips that share a channel.
@@ -330,16 +330,16 @@ python3.12 -m venv .venv
 ```
 
 Run the tests with `.venv/bin/python -m pytest -q`. The GUI tests use Qt's offscreen platform.
-For Windows commands, a new machine, VS Code setup or troubleshooting, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+For Windows commands, a new machine, VS Code setup or troubleshooting, see [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md).
 
 ## Documentation
 
-- [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
-- [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) covers how the spec was interpreted: status, decisions, risks, known gaps and the to-do list.
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code. **Before committing from a new clone**, read its section on setting each clone's commit identity and GitHub login.
-- [docs/INTEROP_FINDINGS.md](docs/INTEROP_FINDINGS.md) has the app-by-app drag test results, the clipboard investigation and open interop issues.
-- [docs/TEST_CHECKLIST.md](docs/TEST_CHECKLIST.md) is the manual test checklist, one section per feature plus a regression pass.
-- [docs/RELEASING.md](docs/RELEASING.md) explains the version number, tag naming, and building and publishing a release. Release notes are in [docs/releases/](docs/releases/).
+- [docs/design/DESIGN_BRIEF.md](docs/design/DESIGN_BRIEF.md) is the original project spec, kept verbatim.
+- [docs/design/DESIGN_NOTES.md](docs/design/DESIGN_NOTES.md) covers how the spec was interpreted: status, decisions, risks, known gaps and the to-do list.
+- [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md) explains how to set up on a new machine (macOS or Windows), run, test, debug and build, including in VS Code. **Before committing from a new clone**, read its section on setting each clone's commit identity and GitHub login.
+- [docs/investigation/INTEROP_FINDINGS.md](docs/investigation/INTEROP_FINDINGS.md) has the app-by-app drag test results, the clipboard investigation and open interop issues.
+- [docs/development/TEST_CHECKLIST.md](docs/development/TEST_CHECKLIST.md) is the manual test checklist, one section per feature plus a regression pass.
+- [.claude/skills/release/SKILL.md](.claude/skills/release/SKILL.md) explains the version number, tag naming, and building and publishing a release. [docs/development/RELEASE_HISTORY.md](docs/development/RELEASE_HISTORY.md) lists past releases, and release notes are in [docs/releases/](docs/releases).
 
 ## Architecture
 
@@ -389,5 +389,5 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1   # → dist\
 
 Both scripts use PyInstaller with `midi_interchange.spec`. The app icon files in `assets/icon/` are made from the master artwork `assets/icon/icon.png` (1024 px, transparent corners) by `tools/make_icons.py`; rerun it after changing the master.
 
-- **macOS:** when the git-ignored `scripts/signing.local.env` is set up, the app and DMG are signed with Developer ID and the hardened runtime, notarised by Apple and stapled. Verified for v0.2.0-pre (2026-11-10): Gatekeeper reports "Notarized Developer ID". Without that file the build falls back to ad-hoc signing. Setup is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#macos-signing-and-notarisation).
-- **Windows:** builds a one-folder app, a portable zip and an installer (Inno Setup: per-user install with no admin prompt, Start-menu shortcut, uninstaller, *Open with* for `.mid`). Verified on 2026-11-09 (Windows 11 x64, Python 3.12.10): the app runs from the zip and after a silent install, which also uninstalls cleanly. For v0.2.0-pre (2026-11-10) the full test suite passes on Windows too. It is **not code-signed** yet, so SmartScreen warns on download. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#windows-build).
+- **macOS:** when the git-ignored `scripts/signing.local.env` is set up, the app and DMG are signed with Developer ID and the hardened runtime, notarised by Apple and stapled. Verified for v0.2.0-pre (2026-11-10): Gatekeeper reports "Notarized Developer ID". Without that file the build falls back to ad-hoc signing. Setup is in [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md#macos-signing-and-notarisation).
+- **Windows:** builds a one-folder app, a portable zip and an installer (Inno Setup: per-user install with no admin prompt, Start-menu shortcut, uninstaller, *Open with* for `.mid`). Verified on 2026-11-09 (Windows 11 x64, Python 3.12.10): the app runs from the zip and after a silent install, which also uninstalls cleanly. For v0.2.0-pre (2026-11-10) the full test suite passes on Windows too. It is **not code-signed** yet, so SmartScreen warns on download. See [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md#windows-build).

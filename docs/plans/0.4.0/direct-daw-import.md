@@ -7,9 +7,9 @@ deferred and does not block this milestone. Native-reader feasibility and order
 remain to be scoped for the other DAWs. See [the implementation](dawproject-import.md).
 **Cubase is the next native reader** (agreed 2026-11-14); see [the Cubase plan](cubase-import.md). Reason follows after a short feasibility probe.
 
-Branch: `feature/direct-daw-import`, created from `release/0.4.0`. Its PR will target `release/0.4.0`, following [the branching rules](../RELEASING.md#branches).
+Branch: `feature/direct-daw-import`, created from `release/0.4.0`. Its PR will target `release/0.4.0`, following [the branching rules](../../../AGENTS.md#branches).
 
-The scope and rules are in the [roadmap entry](../ROADMAP.md) ("Investigate direct DAW project import"). They aren't repeated here. In short: drop a saved project in, get the current arrangement as MIDI through the normal import, preserve track and clip mute, and never modify the project.
+The scope and rules are in the [roadmap entry](../../ROADMAP.md) ("Investigate direct DAW project import"). They aren't repeated here. In short: drop a saved project in, get the current arrangement as MIDI through the normal import, preserve track and clip mute, and never modify the project.
 
 Agreed target DAWs: **Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio**. FL Studio support is subject to native-format feasibility investigation. Studio One is deferred because it is not currently available for testing. Bitwig, Ableton and FL Studio native formats still need investigation; their absence from the initial research below is not a scope exclusion. DAWproject is the first new reader, primarily to validate the shared importer design, and also useful as a format in its own right.
 
@@ -138,7 +138,7 @@ Everything below is from web sources and unverified until your fixtures confirm 
 - **Pattern devices.** Redrum, Matrix and other pattern-based devices hold their own patterns in the rack, not as notes on the sequencer. [ReasonTalk](https://forum.reasontalk.com/viewtopic.php?t=7524214) confirms pattern lanes must be converted to notes before other DAWs can use them. Without that conversion, those notes aren't in the sequencer data at all. We'd report them as skipped, not decode device patterns. That's an arranger's job, not a palette's.
 - **Players** (Reason's MIDI-effect devices) generate notes at playback, so they're out of scope in the same way.
 - **Clean failure for encrypted files.** The reader should detect an encrypted, pre-12.6 song and say "saved by an older Reason; re-save it in Reason 12.6 or later". It must not half-import.
-- **The known Reason quirk** with Controller #254 on import ([INTEROP_FINDINGS](../INTEROP_FINDINGS.md)) is about Reason reading our MIDI, not us reading Reason. It doesn't apply here.
+- **The known Reason quirk** with Controller #254 on import ([INTEROP_FINDINGS](../../investigation/INTEROP_FINDINGS.md)) is about Reason reading our MIDI, not us reading Reason. It doesn't apply here.
 
 ## DAWproject (`.dawproject`)
 

@@ -2,7 +2,7 @@
 later), read-only.
 
 Decoding and playback rules: reason_format. Format findings, evidence and
-decisions: docs/plans/reason-import.md. Returns the same (Source, tracks)
+decisions: docs/plans/0.4.0/reason-import.md. Returns the same (Source, tracks)
 result as the other readers.
 
 Each note clip becomes one workspace clip per visible stretch (a clip

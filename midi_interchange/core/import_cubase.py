@@ -1,7 +1,7 @@
 """Read the MIDI arrangement of a Cubase 15/16 project (.cpr), read-only.
 
 Decoding: cpr_format. Format findings, evidence and decisions:
-docs/plans/cubase-import.md. Returns the same (Source, tracks) result as the
+docs/plans/0.4.0/cubase-import.md. Returns the same (Source, tracks) result as the
 other readers. Material the reader cannot represent is reported in the
 source warnings; malformed or unsupported projects fail before the workspace
 changes.

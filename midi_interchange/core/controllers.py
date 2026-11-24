@@ -1,4 +1,4 @@
-"""Controller data as a displayable line (docs/plans/controller-display.md).
+"""Controller data as a displayable line (docs/plans/0.5.0/controller-display.md).
 
 Pure, no Qt, display only: nothing here changes a clip, an import or an export.
 A controller is named by a short key: ``"pb"`` (pitch bend), ``"at"`` (channel

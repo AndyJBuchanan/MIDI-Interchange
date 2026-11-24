@@ -1,7 +1,7 @@
 """Native Reason song (.reason) reader: synthetic songs through the reader and
 registry, failure handling and sessions; the local probe songs through the
 app's exporter against Reason's own MIDI exports when present. Decoding:
-test_reason_format.py; findings: docs/plans/reason-import.md."""
+test_reason_format.py; findings: docs/plans/0.4.0/reason-import.md."""
 import glob
 import hashlib
 import io

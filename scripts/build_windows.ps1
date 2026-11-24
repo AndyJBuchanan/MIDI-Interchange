@@ -11,7 +11,7 @@
 #   SKIP_INSTALLER=1   build the app and zip only
 #
 # The build is NOT code-signed (no Windows certificate yet): SmartScreen will warn on
-# machines that download it. See docs/DEVELOPMENT.md, "Windows build".
+# machines that download it. See docs/development/DEVELOPMENT.md, "Windows build".
 #
 # Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less files as ANSI.
 $ErrorActionPreference = "Stop"

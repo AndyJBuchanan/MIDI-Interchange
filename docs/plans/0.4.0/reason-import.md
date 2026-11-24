@@ -11,7 +11,7 @@ encrypted payload and are out of scope (see [Phase 0 result](#phase-0-result-go)
 desk study below was written before any file was examined; where it conflicts
 with the probe, the probe wins. Work is on `feature/direct-daw-import-reason`.
 
-The scope and rules come from the [roadmap entry](../ROADMAP.md) and the
+The scope and rules come from the [roadmap entry](../../ROADMAP.md) and the
 [direct DAW import plan](direct-daw-import.md): read the saved song, import the
 current arrangement through the normal reader registry, keep track and clip
 mute, never modify the file. The Cubase reader ([plan](cubase-import.md)) is
@@ -33,7 +33,7 @@ the model for method, fixtures and evidence.
   - Our own capture points the other way for current versions: Reason 14's
     **clipboard** payload is high-entropy (7.6–7.9 bits/byte), doesn't
     decompress with any common codec, and looks encrypted
-    ([INTEROP_FINDINGS](../INTEROP_FINDINGS.md#reason-14-proprietary-compressed-or-encrypted)).
+    ([INTEROP_FINDINGS](../../investigation/INTEROP_FINDINGS.md#reason-14-proprietary-compressed-or-encrypted)).
     Song files may be protected the same way.
   - **Rule:** if song files are encrypted, stop. We study files we saved, but
     we do not break encryption (fragile, and a licence concern). Reason then
@@ -112,7 +112,7 @@ velocity, length). The rules are in `played_notes()`. Every Reason 13 and
   alternated between the pages-1-5 set (index 6) and the pages-0,7-10 set (index
   11)); every slot in the 104 fixtures checked has a valid CRC and the higher slot
   names an intact copy in all 36 two-copy files. Full evidence:
-  [REASON_FILE_FORMAT.md](../formats/REASON_FILE_FORMAT.md), section 7. Still
+  [REASON_FILE_FORMAT.md](../../investigation/formats/REASON_FILE_FORMAT.md), section 7. Still
   unconfirmed: that Reason itself reads the generations, and what it does when the
   newer slot is damaged (experiments in section 7.6). The reader falls back to the
   next slot, then to the highest page, and says so in its notes.
@@ -308,7 +308,7 @@ Reason export, imported and exported by the app, against that export).
 
 ### Next
 
-- The user's checks: [TEST_CHECKLIST 8o](../TEST_CHECKLIST.md).
+- The user's checks: [TEST_CHECKLIST 8o](../../development/TEST_CHECKLIST.md).
 
 ## Phase 0 result: GO
 
@@ -318,7 +318,7 @@ note). Since the samples tidy-up (2026-11-16) the r-series is committed in
 `samples/reason-probe/`, the real songs with Reason exports in
 `samples/reason-check/` (Oct08, 58 MB, in the local-only `samples/local/`),
 and the other probe songs are archived outside the repo; see
-[samples/README.md](../../samples/README.md).
+[samples/README.md](../../../samples/README.md).
 
 - **Split by the BODY magic, not by file extension.** The container is plain IFF
   in every version, but the song's `BODY` chunk begins with a 128-byte plain
@@ -438,4 +438,4 @@ marker after the last note), as for Cubase.
 - [Reason 13 manual: Sequencer Functions](https://docs.reasonstudios.com/reason13/sequencer-functions) (note lanes, clip mute, pattern lanes, Blocks, Transport track)
 - [Archive Team: Propellerhead Reason Project File](http://fileformats.archiveteam.org/wiki/Propellerhead_Reason_Project_File)
 - Encryption change: KVR thread cited in the [direct DAW import plan](direct-daw-import.md#reason-reason)
-- Our clipboard capture: [INTEROP_FINDINGS](../INTEROP_FINDINGS.md#reason-14-proprietary-compressed-or-encrypted)
+- Our clipboard capture: [INTEROP_FINDINGS](../../investigation/INTEROP_FINDINGS.md#reason-14-proprietary-compressed-or-encrypted)

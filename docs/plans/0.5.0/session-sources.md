@@ -31,7 +31,7 @@ Source details (file, path, format and version, import time, tempo, warnings suc
 
 ### The solo
 
-- One undo step, like any other mute or solo action. Undo restores the previous solo set, and the mute states that solo overrode, through the existing rules (see [mute-solo.md](mute-solo.md)).
+- One undo step, like any other mute or solo action. Undo restores the previous solo set, and the mute states that solo overrode, through the existing rules (see [mute-solo.md](../0.2.2/mute-solo.md)).
 - If the solo set is already exactly those tracks, nothing changes and no undo step is made. The dialog still closes.
 - Unlocked ranges follow the new solo result, as they do for any solo change.
 - A muted track that's part of the source's set is soloed and exports, as soloing a muted track does today.
@@ -50,7 +50,7 @@ The per-track **Source Info** dialog stays exactly as it is, including what it s
 
 ## Tests (headless)
 
-All use the shared `app` and `win` fixtures (see [CLAUDE.md](../../CLAUDE.md)).
+All use the shared `app` and `win` fixtures (see [CLAUDE.md](../../../CLAUDE.md)).
 
 - **The (i):** it's in the title band, right of the count text and not overlapping M or S at narrow and wide panel widths; its tooltip is right; clicking it opens `SourcesDialog`.
 - **Dialog content:** every source in import order; details match Source Info's for the same source; **Used by** lists the right tracks and counts, including a clip moved to another track; a clipless tempo source reads "No clips (kept for its tempo map)"; the empty workspace shows the message.

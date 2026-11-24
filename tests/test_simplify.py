@@ -1,4 +1,4 @@
-"""Simplify controller data on export (docs/plans/simplify-controller-data.md)."""
+"""Simplify controller data on export (docs/plans/0.5.0/simplify-controller-data.md)."""
 import random
 from fractions import Fraction as F
 from pathlib import Path

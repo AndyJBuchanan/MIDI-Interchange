@@ -1,4 +1,4 @@
-"""Simplify controller data on export (docs/plans/simplify-controller-data.md).
+"""Simplify controller data on export (docs/plans/0.5.0/simplify-controller-data.md).
 
 A pure post-pass over finished output tracks. Dense curves (a value every
 1/32 beat) become the few points a DAW needs to draw the same line:

@@ -752,7 +752,7 @@ class MainWindow(QMainWindow):
         return os.path.join(folder, "mirror-log.txt")
 
     def _mirror_log_write(self, line: str) -> None:
-        """The diagnostic log (docs/plans/mirror-mode.md): one line at a time, flushed, so a crash keeps it."""
+        """The diagnostic log (docs/plans/0.5.0/mirror-mode.md): one line at a time, flushed, so a crash keeps it."""
         if self._mirror_log is None:
             return
         try:

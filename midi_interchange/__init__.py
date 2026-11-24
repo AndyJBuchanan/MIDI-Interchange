@@ -1,7 +1,7 @@
 """MIDI Interchange."""
 import re as _re
 
-# Single source of the app version. See docs/RELEASING.md before changing it.
+# Single source of the app version. See the release skill (.claude/skills/release/SKILL.md) before changing it.
 # Shown in the About box. midi_interchange.spec reads it for the macOS Info.plist, the Windows exe
 # version resource, the Windows installer and every artifact file name (build_macos.sh reads it back
 # from Info.plist; build_windows.ps1 reads this line with a regex, so keep it a plain
@@ -12,4 +12,4 @@ __version__ = "0.5.0"
 
 if not _re.fullmatch(r"\d+\.\d+\.\d+", __version__):
     raise SystemExit(f'midi_interchange/__init__.py: __version__ must be MAJOR.MINOR.PATCH digits only, got "{__version__}". '
-                     "Put labels like -pre on the git tag, not here (docs/RELEASING.md).")
+                     "Put labels like -pre on the git tag, not here (release skill).")

@@ -2,7 +2,7 @@
 """Read-only research inspector for Cubase .cpr project files.
 
 Not part of the app. Used to reverse-engineer the native format from project
-files we saved ourselves (see docs/plans/cubase-import.md). It never writes to
+files we saved ourselves (see docs/plans/0.4.0/cubase-import.md). It never writes to
 the input files.
 
 Usage:

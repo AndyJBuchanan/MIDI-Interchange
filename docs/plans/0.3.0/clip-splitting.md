@@ -2,7 +2,7 @@
 
 Status: **implemented; manual verification passed** (2026-11-14). The intermittent cursor-switching issue predates this feature and is recorded in ROADMAP for later investigation.
 
-Branch: `feature/clip-splitting`, created from the updated `release/0.3.0`. The eventual PR targets `release/0.3.0`, following [the branching rules](../RELEASING.md#branches).
+Branch: `feature/clip-splitting`, created from the updated `release/0.3.0`. The eventual PR targets `release/0.3.0`, following [the branching rules](../../../AGENTS.md#branches).
 
 Split one clip into two adjacent clips on the same track, using shared MIDI events and the existing edge trims. Both pieces stay in place. One Undo restores the original clip.
 

@@ -1,6 +1,13 @@
+---
+name: release
+description: Start, build, publish and merge a MIDI Interchange release - create a new release/X.Y.Z branch and bump the version, version number rules, the macOS and Windows builds, tagging, the GitHub release and the merge into main. Use when the owner asks to create or start a release branch, or to prepare, build, publish or check a release, or asks about version numbers or tag names.
+---
+
 # Releasing
 
-How to set the version, build the end-user downloads on both platforms and publish a GitHub release. Machine setup (Python, the signing certificate, notarisation, Inno Setup, the `gh` login) is in [DEVELOPMENT.md](DEVELOPMENT.md).
+Branch rules (release branches, feature branches, where docs go) are in [AGENTS.md](../../../AGENTS.md#branches). This skill covers the version number and the release checklist. Release history is recorded in [RELEASE_HISTORY.md](../../../docs/development/RELEASE_HISTORY.md): add the row in step 6.
+
+How to set the version, build the end-user downloads on both platforms and publish a GitHub release. Machine setup (Python, the signing certificate, notarisation, Inno Setup, the `gh` login) is in [DEVELOPMENT.md](../../../docs/development/DEVELOPMENT.md).
 
 Users download the app; they don't build it. You can build everything on your own machines. Signing with your own Apple Developer ID is optional (without it the Mac app is ad-hoc signed and Gatekeeper warns), and publishing a GitHub release needs write access to the repository you publish to (your fork, or the main repository if you maintain it). Each release ships three files:
 
@@ -9,22 +16,6 @@ Users download the app; they don't build it. You can build everything on your ow
 | `MIDI-Interchange-<ver>-macOS-arm64.dmg` | macOS 15+ on Apple silicon (see below) | a Mac | Developer ID signed, notarised, stapled |
 | `MIDI-Interchange-<ver>-Windows-x64-Setup.exe` | Windows 10/11 x64 | Windows | Installer. **Recommended** for Windows users |
 | `MIDI-Interchange-<ver>-Windows-x64.zip` | Windows 10/11 x64 | Windows | Portable: extract it and run the exe |
-
-## Branches
-
-From 0.3.0, each release is assembled on its own `release/X.Y.Z` branch. `main` only moves when a release has been published, so `main` and its README always describe the app people can download.
-
-- **`main` is the latest published release.** Code reaches it only by merging a published release branch.
-- **Feature branches** (`feature/<name>`, one feature each; a large feature's parts as `feature/<name>-<part>`; small fixes as `fix/<name>`) start from the current release branch, not `main`. Pull it first. A branch started from `main` misses the docs the release branch has changed since (README, ROADMAP, TEST_CHECKLIST) and its PR conflicts. This was agreed 2026-11-14, after `feature/timeline-management` was started from `main` and had to be merged with `release/0.3.0` by hand.
-- **Features merge by pull request** into the release branch, not by a straight merge. The PR's base is `release/X.Y.Z`, not `main`.
-- **Create `release/X.Y.Z` early**, from `main`, before the first feature for that release is started, so features have a branch to start from. Merge further features into it as they're finished, so they're tested together as you go rather than all at the end. The first commit on the branch bumps `__version__` (see below).
-- **Merge a feature only once you mean to ship it in that release.** Taking a feature back out means reverting its merge.
-- **Release work happens on the release branch:** release notes, the build, the tag, then the checksums and the release history row (the checklist below).
-- **After publishing**, merge the release branch into `main` by pull request with a merge commit, not a squash or rebase, so the tagged commit is part of `main`'s history. Keep the release branch: the repository rules don't allow branch deletion, and the branch stays as a record.
-- **Fixes to a published release** go on a new `release/X.Y.Z+1` branch made from that release's tag, and follow the same steps.
-- **Docs go on the release branch too**, not straight to `main`: README fixes, roadmap, interop findings and test checklist changes. Feature plans and roadmap entries go there before building starts: a plan is written and agreed on the release branch, and the feature branch is made from it (agreed 2026-11-18). Once the feature branch exists, that feature's own docs (README lines, its test checklist section, DEVELOPMENT.md notes, interop findings, the roadmap removal and the plan's "built" status) go on the feature branch and merge with the code (agreed 2026-11-20). The feature's merge carries all of them into the release branch. Docs changed after the feature has merged go on the release branch. Ask the owner when a change affects another feature's docs. Changing docs on `main` while a release branch is open causes the same conflicts.
-
-`main` was ahead of the published release when this started: it already held the track export channel (PR #11) and a bump to 0.2.3, neither published. Both went into `release/0.3.0`.
 
 **The minimum macOS version comes from the Python used to build.** A Homebrew Python 3.12 is built for the host macOS, and the bundled Python framework then requires that version. v0.1.0-pre was built on macOS 26 with Homebrew Python, which gave a minimum of **macOS 15**; the bundled Qt needs 14.4. Check after each build:
 
@@ -36,7 +27,7 @@ To support older Macs, build with the python.org macOS installer, whose framewor
 
 ## Version numbers
 
-**There's one place to change: the `__version__ = "x.y.z"` line in [`midi_interchange/__init__.py`](../midi_interchange/__init__.py).** The About box shows it too.
+**There's one place to change: the `__version__ = "x.y.z"` line in [`midi_interchange/__init__.py`](../../../midi_interchange/__init__.py).** The About box shows it too.
 
 Everything else comes from that line:
 
@@ -56,6 +47,16 @@ Rules:
 - If you want two pre-releases of the same version (`v0.2.0-beta.1`, then `v0.2.0-beta.2`), the downloads would have the same file names. Bump `PATCH` instead, or attach the second set to its own release.
 - Never change the `AppId` GUID in `scripts/installer.iss`; it isn't part of versioning.
 
+## Start a release branch
+
+Do this when the owner asks for a new release branch (for example "create the 0.6.0 release branch"). Branch rules are in [AGENTS.md](../../../AGENTS.md#branches).
+
+1. Check no earlier release branch is still open: the previous release must be published and merged into `main`. If it isn't, tell the owner and stop.
+2. `git switch main && git pull`, and check the tree is clean. Run `git status --short` and stage by name later, never `git add -A`.
+3. `git switch -c release/<ver>`, where `<ver>` is `MAJOR.MINOR.PATCH` digits only (see Version numbers below).
+4. First commit: set `__version__ = "<ver>"` in `midi_interchange/__init__.py` and commit it with a message like `Bump version to <ver>`. Commit only when the owner has said to.
+5. Push the branch only when the owner asks. Features then start from it.
+
 ## Release checklist
 
 ### 1. Prepare (any machine)
@@ -74,13 +75,13 @@ git switch release/<ver> && git pull && git status --short     # must be clean, 
 scripts/build_macos.sh
 ```
 
-This section assumes you've set up signing and notarisation ([DEVELOPMENT.md](DEVELOPMENT.md#macos-signing-and-notarisation)). Without it the script still builds, with ad-hoc signing and a warning; that's fine for your own machine but Gatekeeper warns other users, so skip the notarisation checks below. For a release you ship, the build is only usable if the output shows the notary JSON with `"status":"Accepted"`, the stapling and validation lines, and `source=Notarized Developer ID` for both the DMG and the app. Run without `SKIP_NOTARIZE`. Copy the printed SHA-256 into the release notes.
+This section assumes you've set up signing and notarisation ([DEVELOPMENT.md](../../../docs/development/DEVELOPMENT.md#macos-signing-and-notarisation)). Without it the script still builds, with ad-hoc signing and a warning; that's fine for your own machine but Gatekeeper warns other users, so skip the notarisation checks below. For a release you ship, the build is only usable if the output shows the notary JSON with `"status":"Accepted"`, the stapling and validation lines, and `source=Notarized Developer ID` for both the DMG and the app. Run without `SKIP_NOTARIZE`. Copy the printed SHA-256 into the release notes.
 
 Quick check: mount the DMG, drag the app to a scratch folder and launch it. Finder ▸ Get Info should show the new version.
 
 ### 3. Build on Windows
 
-Use a clone made from GitHub, not a copied working tree; see DEVELOPMENT.md, "Get the code".
+Use a clone made from GitHub, not a copied working tree; see [DEVELOPMENT.md, Get the code](../../../docs/development/DEVELOPMENT.md#get-the-code).
 
 ```powershell
 git switch release/<ver>; git pull; git status --short
@@ -89,7 +90,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 
 The output must include the zip, the `Installer:` line and two SHA-256 lines. `exe version` must show the new version. Install from the Setup exe and launch it from the Start menu. Then check *Settings ▸ Apps* shows the new version, and that the zip's exe runs after you extract it.
 
-Windows is only tested at release time, so do the hand tests now: section 11 of [TEST_CHECKLIST.md](TEST_CHECKLIST.md) (Alt for Option, Ctrl for ⌘), plus a quick drag in and out with the DAWs you use on Windows. Record results in the README interop table.
+Windows is only tested at release time, so do the hand tests now: section 11 of [TEST_CHECKLIST.md](../../../docs/development/TEST_CHECKLIST.md) (Alt for Option, Ctrl for ⌘), plus a quick drag in and out with the DAWs you use on Windows. Record results in the README interop table.
 
 ### 4. Collect the files on one machine
 
@@ -132,19 +133,8 @@ gh release upload v<ver>[-label] -R <owner>/MIDI-Interchange --clobber <file>
 
 ### 6. Merge the release into `main`
 
-Commit the release notes with their checksums, and the release history row below, on the release branch and push. Then open a pull request from `release/<ver>` into `main`, and merge it with a merge commit. Don't delete the release branch (the repository rules forbid it):
+Commit the release notes with their checksums, and the release history row ([RELEASE_HISTORY.md](../../../docs/development/RELEASE_HISTORY.md)), on the release branch and push. Then open a pull request from `release/<ver>` into `main`, and merge it with a merge commit. Don't delete the release branch (the repository rules forbid it):
 
 ```bash
 gh pr create -R <owner>/MIDI-Interchange --base main --head release/<ver> --title "Release <ver>" --body "Published as v<ver>[-label]."
 ```
-
-## Release history
-
-| Tag | Version | Commit | Notes |
-|---|---|---|---|
-| `v0.5.0-pre` | 0.5.0 | `34c82cc` (published 2026-11-23) | Mirror mode, Cubase disabled tracks, linear time-base tracks and active track versions, the Reason current-copy fix, controller display, simplify controller data on export, the session sources dialog. Both platforms built from the tagged commit. The Windows tests were fixed on the release branch first (`b8a7ac2`, test only). |
-| `v0.4.0-pre` | 0.4.0 | `fca8e29` (published 2026-11-16) | Open Cubase, Reason and DAWproject projects directly, clip mute and the M key, Z to zoom to fit. Both platform builds installed and smoke-tested from the tagged commit. |
-| `v0.3.0-pre` | 0.3.0 | `60f9f3b` (published 2026-11-14) | Session persistence and single-instance file handoff, track export-channel overrides, tempo/marker UI, clip splitting and contextual Shift move/copy. Both platform builds installed and smoke-tested. |
-| `v0.2.2-pre` | 0.2.2 | `8a6ddbf` (published 2026-11-12) | Both platforms built from the tagged commit. Clip trims, About box, drag-in auto-scroll, mute/solo with range locks, range file names. 0.2.1 was never released. |
-| `v0.2.0-pre` | 0.2.0 | `7145b12` (published 2026-11-10) | Both platforms built from the tagged commit. The Windows tests were fixed on main first (PR #3, test helper only). |
-| `v0.1.0-pre` | 0.1.0 | `9092edb` (published 2026-11-09) | First public pre-release. The Windows files were built from the Windows working copy before the commit authors were rewritten. Their code is identical to the tagged commit apart from the macOS-only "⌥-drag" hint text. |

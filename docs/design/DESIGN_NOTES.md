@@ -18,7 +18,7 @@ Muted clips, lanes and Block placements are kept as muted clips. Songs saved
 by Reason 12.6 and earlier are encrypted and refused with a re-save message;
 we do not break the encryption. No session schema change: `reason` is a new
 input format value. Evidence, decisions and limitations:
-[Reason plan](plans/reason-import.md).
+[Reason plan](../plans/0.4.0/reason-import.md).
 
 ## Native Cubase reader (2026-11-15)
 
@@ -37,7 +37,7 @@ parts, chord track, inserts) is reported, not rendered. Two exceptions,
 because Cubase's own MIDI export applies them: notes muted in the editors
 are left out, and the track transpose (MIDI Modifiers) is applied, with the
 value kept on `Track.source_transpose` (session schema 5).
-Evidence, decisions and limitations: [Cubase plan](plans/cubase-import.md).
+Evidence, decisions and limitations: [Cubase plan](../plans/0.4.0/cubase-import.md).
 
 ## DAWproject importer (2026-11-14)
 
@@ -49,11 +49,11 @@ format/version fields and clip mute are persisted in session schema 3, with
 schema-1/2 upgrades. Clip mute is a separate export gate, independent of track
 solo and range inclusion, with an undoable context-menu toggle. Unsupported media
 and automation are diagnosed; tempo ramps fail explicitly. Supported scope,
-fixture comparisons and manual checks: [DAWproject importer](plans/dawproject-import.md).
+fixture comparisons and manual checks: [DAWproject importer](../plans/0.4.0/dawproject-import.md).
 
 ## Why MIDI Interchange
 
-The brief's aim is to remove the friction of moving MIDI between applications. Hand testing on macOS keeps confirming that the friction is real: each app supports a different, often one-way, subset of MIDI drag-and-drop, and there is no shared MIDI clipboard. Detail is in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md).
+The brief's aim is to remove the friction of moving MIDI between applications. Hand testing on macOS keeps confirming that the friction is real: each app supports a different, often one-way, subset of MIDI drag-and-drop, and there is no shared MIDI clipboard. Detail is in [INTEROP_FINDINGS.md](../investigation/INTEROP_FINDINGS.md).
 
 - **Logic Pro** accepts dragged MIDI but doesn't drag MIDI out.
 - **Cubase 16** drags only one MIDI part at a time from its Project window, however many are selected, to any destination: the desktop, MIDI Interchange or a VST plugin it hosts. Dragged parts also lose their position.
@@ -68,15 +68,15 @@ Plain MIDI files via file URLs are the one route that works almost everywhere. M
 | Milestone | Status |
 |---|---|
 | M1 Functional vertical slice | **Done.** Every M1 bullet works in the GUI, and the brief's success criterion is covered by a headless GUI test (`tests/test_ui.py::test_full_workflow`). |
-| M2 Interchange | **Partly done.** Drag-in accepts file URLs and raw MThd data; drag-out offers file URLs to temp files; individual-track export and source provenance are done. Native file promises and virtual files are **not** done (see Risks). Even so, hand tests on macOS (2026-11-09) show drag in and out working with Cubase 16, Scaler 3, Staccato.ai and Reason 14 (Reason drag-out confirmed 2026-11-10); drag-in with RapidComposer 6 (drag-out not yet confirmed); and drag-out to Logic Pro, which can't drag MIDI out. Cubase drags out only one clip at a time, even to the Finder (a Cubase limitation). Details in [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md). Clipboard import was investigated and isn't viable for those DAWs. |
+| M2 Interchange | **Partly done.** Drag-in accepts file URLs and raw MThd data; drag-out offers file URLs to temp files; individual-track export and source provenance are done. Native file promises and virtual files are **not** done (see Risks). Even so, hand tests on macOS (2026-11-09) show drag in and out working with Cubase 16, Scaler 3, Staccato.ai and Reason 14 (Reason drag-out confirmed 2026-11-10); drag-in with RapidComposer 6 (drag-out not yet confirmed); and drag-out to Logic Pro, which can't drag MIDI out. Cubase drags out only one clip at a time, even to the Finder (a Cubase limitation). Details in [INTEROP_FINDINGS.md](../investigation/INTEROP_FINDINGS.md). Clipboard import was investigated and isn't viable for those DAWs. |
 | M3 Advanced ranges | **Mostly done.** Multiple named ranges, resize and move, concatenation, separate-range export, per-range track selection, the boundary policy and whole-output trim are done. Per-track trim and per-range drag handles are **not** done. |
-| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, Developer ID signed, hardened runtime). They're notarised and stapled, and Gatekeeper accepts them. On Windows, the one-folder build, zip and Inno Setup installer build and launch (x64, 2026-11-09), but aren't code-signed. Workspace persistence and single-instance file handoff are implemented; studio verification is pending. See [the plan](plans/session-persistence.md). |
+| M4 Polish and packaging | **Partly done.** Undo/redo and keyboard shortcuts are done. The macOS `.app` and DMG build and launch (arm64, Developer ID signed, hardened runtime). They're notarised and stapled, and Gatekeeper accepts them. On Windows, the one-folder build, zip and Inno Setup installer build and launch (x64, 2026-11-09), but aren't code-signed. Workspace persistence and single-instance file handoff are implemented; studio verification is pending. See [the plan](../plans/0.3.0/session-persistence.md). |
 
 User priority, given with the brief: the timeline is the primary UI element and must work early and well. It was built in M1, not deferred.
 
 ## Direct DAW import direction (2026-11-14)
 
-Target DAWs are Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio. FL Studio support is subject to native-format feasibility investigation. Studio One is deferred because it is not currently available for testing. DAWproject is the first new reader, primarily to validate a pluggable importer model alongside the existing MIDI reader, while also supporting received DAWproject files. Native-reader order and implementation details remain open. See [the investigation plan](plans/direct-daw-import.md).
+Target DAWs are Cubase, Reason, Logic, Reaper, Bitwig, Ableton and FL Studio. FL Studio support is subject to native-format feasibility investigation. Studio One is deferred because it is not currently available for testing. DAWproject is the first new reader, primarily to validate a pluggable importer model alongside the existing MIDI reader, while also supporting received DAWproject files. Native-reader order and implementation details remain open. See [the investigation plan](../plans/0.4.0/direct-daw-import.md).
 
 **Source storage policy (pre-importer consolidation implemented):** persist provenance fields and any other metadata derived from an input that is not represented directly in the musical model. `Source` retains its explicit metadata fields (names, app/path, import time, SMF format, PPQ, song, warnings and tempo map) and now stores `byte_size` independently. The reserved `raw` bytes field defaults to empty; new MIDI imports do not populate it. Source Info and tooltips use one source summary, including an unknown-size fallback. Wrapped drops carry their original input size through the payload rather than measuring the extracted MIDI. The musical model remains self-contained.
 
@@ -141,10 +141,10 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
   - the key signature
   - The tempo and time signature in effect at `s` are written at the segment start.
   - SysEx and poly aftertouch are **not** carried.
-- **Clip edge trims** (built 2026-11-11, [plans/clip-edge-trims.md](plans/clip-edge-trims.md)): a `Clip` keeps `events` and `length` as its full extent and has `trim_start`/`trim_end` (clip time); `start`/`end` are the visible edges and `set_start` positions a clip by its visible start. Exports apply trims with the range edge rules, from the same code (`clip_window` and `_extract_clips` in `core/export_smf.py`): each clip's window is the segment cut to its trims, `partial_notes` governs notes that started before a trimmed start, notes are released at a trimmed end, settings in force are written at the window start, and lyrics/text/markers outside the trims are dropped. A whole export writes untrimmed clips byte-exact and sends only trimmed clips through that code. Channel badges and Source Info use `visible_msgs`, the same code. Replace on drop compares visible edges (`Placement.compare_full_extent` compares full extents; not in the UI).
+- **Clip edge trims** (built 2026-11-11, [plans/clip-edge-trims.md](../plans/0.2.2/clip-edge-trims.md)): a `Clip` keeps `events` and `length` as its full extent and has `trim_start`/`trim_end` (clip time); `start`/`end` are the visible edges and `set_start` positions a clip by its visible start. Exports apply trims with the range edge rules, from the same code (`clip_window` and `_extract_clips` in `core/export_smf.py`): each clip's window is the segment cut to its trims, `partial_notes` governs notes that started before a trimmed start, notes are released at a trimmed end, settings in force are written at the window start, and lyrics/text/markers outside the trims are dropped. A whole export writes untrimmed clips byte-exact and sends only trimmed clips through that code. Channel badges and Source Info use `visible_msgs`, the same code. Replace on drop compares visible edges (`Placement.compare_full_extent` compares full extents; not in the UI).
 - **Trim** applies to the whole output only. It moves every track by the same amount, so alignment is never broken.
 - Output is format 1: a conductor track first (named after the song when every exported clip comes from one song, else unnamed), then the exported tracks in panel order.
-- **Clip splitting** uses shared events and independent trim windows, with one undo step. Cmd/Ctrl-click splits at the preview; Shift bypasses snap. Both halves can be extended to the original full extent. Export uses the existing edge rules, releasing and restarting crossing notes; synthetic cut releases precede same-time retriggers. See [the plan](plans/clip-splitting.md).
+- **Clip splitting** uses shared events and independent trim windows, with one undo step. Cmd/Ctrl-click splits at the preview; Shift bypasses snap. Both halves can be extended to the original full extent. Export uses the existing edge rules, releasing and restarting crossing notes; synthetic cut releases precede same-time retriggers. See [the plan](../plans/0.3.0/clip-splitting.md).
 - Building an export never changes the workspace (tested).
 
 ### Packaging and distribution
@@ -196,22 +196,22 @@ Full details are in the module docstring of `core/export_smf.py` and in the READ
 
 1. **Native drag-in (M2).** Qt can't receive macOS file promises (`NSFilePromiseReceiver`) or Windows virtual files (`CFSTR_FILEDESCRIPTOR`/`CFSTR_FILECONTENTS`). DAWs that drag clips this way will need PyObjC and pywin32/ctypes adapters. As a probe for now, when a drop has no usable MIDI the app lists the MIME formats it was offered.
 2. **Native drag-out (M2).** Drag-out offers only file URLs, pointing at temp files in `$TMPDIR/MIDI Interchange Drag/<per-drag dir>`. Those files are pruned after 24 h at startup. A destination that needs promises or the data inline won't accept them.
-3. **DAW interop is only partly tested.** On macOS, plain file-URL drags work with Cubase 16, Reason 14, RapidComposer 6, Scaler 3, Staccato.ai and Logic Pro in the directions each app supports; no native promise support was needed. Cubase drags out only one clip at a time (its limitation, confirmed with the Finder); drag-out to Reason works (2026-11-10), drag-out to RapidComposer isn't confirmed. Synthesizer V hasn't been tested (Omnivocal is out of scope for drag tests: it takes its MIDI from Cubase, not by drag and drop), and nothing has been tested on Windows. See [INTEROP_FINDINGS.md](INTEROP_FINDINGS.md). Results go in the README checklist; don't claim compatibility for a target until it's ticked.
+3. **DAW interop is only partly tested.** On macOS, plain file-URL drags work with Cubase 16, Reason 14, RapidComposer 6, Scaler 3, Staccato.ai and Logic Pro in the directions each app supports; no native promise support was needed. Cubase drags out only one clip at a time (its limitation, confirmed with the Finder); drag-out to Reason works (2026-11-10), drag-out to RapidComposer isn't confirmed. Synthesizer V hasn't been tested (Omnivocal is out of scope for drag tests: it takes its MIDI from Cubase, not by drag and drop), and nothing has been tested on Windows. See [INTEROP_FINDINGS.md](../investigation/INTEROP_FINDINGS.md). Results go in the README checklist; don't claim compatibility for a target until it's ticked.
 4. **Per-track auto-trim.** `Track.auto_trim` exists in the model but the exporter ignores it.
 5. **Per-range drag handles.** Not built; the drag tile exports the current mode and selection.
-6. **Workspace persistence.** Implemented as one self-contained, schema-versioned session, saved on exit and after the idle checkpoint gate. QSettings keeps the internal enable switch separately. Incompatible/damaged sessions are preserved and skipped; undo history starts fresh. Studio verification is pending ([plan](plans/session-persistence.md)).
+6. **Workspace persistence.** Implemented as one self-contained, schema-versioned session, saved on exit and after the idle checkpoint gate. QSettings keeps the internal enable switch separately. Incompatible/damaged sessions are preserved and skipped; undo history starts fresh. Studio verification is pending ([plan](../plans/0.3.0/session-persistence.md)).
 7. **Packaging.**
    - **macOS:** the DMG is Developer ID signed, notarised and stapled, using a git-ignored local config.
    - **Still missing:** an Intel or universal2 build (arm64 only for now) and stapling the app inside the DMG.
    - **App icon (2026-11-11, first draft):** the master is `assets/icon/icon.png` (1024 px RGBA, transparent around the rounded square); `tools/make_icons.py` (needs Pillow and numpy, not in the requirements) makes the `.icns`, `.ico` and window PNGs, which are committed so the builds don't need Pillow. New artwork drawn on black goes through `--import`, which makes the outside transparent, crops and centres it and writes the master. Windows icons fill the canvas; the macOS one follows Apple's 824-in-1024 grid, and macOS 26 shows it at the normal size without a grey frame.
    - **Size:** about 100 MB, because Qt plugins pull in QML/Quick, VirtualKeyboard and Pdf despite the spec's exclude list. Trimming those plugins could save a lot.
    - **Windows:** builds and launches on Windows 11 x64. It's unsigned, so SmartScreen warns. The Inno Setup installer (`scripts/installer.iss`) registers the app under *Open with* for MIDI files but deliberately doesn't claim the default handler. Single-instance file handoff is now implemented; the packaged Explorer association still needs Windows studio verification. Drag-in/drag-out against DAWs isn't tested yet. User-facing shortcut hints are platform-aware (`⌘`/`⌥` on macOS, `Ctrl+`/`Alt+` elsewhere); keep any new ones that way.
-9. **Mixed channels after clip moves.** Original channels remain the default, so a track can export several channels. A track-level export override is built on `feature/track-export-channel` (studio checks passed): choose Original channels or 1–16 through the header colour box. It maps all exported channel messages from every clip without rewriting source events. **Seen in practice (2026-11-10):** Reason 14 splits a multi-channel track into one track per channel on import (INTEROP_FINDINGS). See [the plan](plans/track-export-channel.md).
+9. **Mixed channels after clip moves.** Original channels remain the default, so a track can export several channels. A track-level export override is built on `feature/track-export-channel` (studio checks passed): choose Original channels or 1–16 through the header colour box. It maps all exported channel messages from every clip without rewriting source events. **Seen in practice (2026-11-10):** Reason 14 splits a multi-channel track into one track per channel on import (INTEROP_FINDINGS). See [the plan](../plans/0.3.0/track-export-channel.md).
 10. **Clipboard import.** Not built, and not planned: Cubase puts only an in-process pointer on the clipboard, Reason an encrypted blob, and Logic a text listing of regions with no notes. The only public convention found is `public.midi-audio` (Pro Tools, Sibelius), worth revisiting after a capture from either (INTEROP_FINDINGS.md).
 
 ## To do
 
-All outstanding work, agreed or not, is listed in [ROADMAP.md](ROADMAP.md).
+All outstanding work, agreed or not, is listed in [ROADMAP.md](../ROADMAP.md).
 
 ## Issues found and fixed during development
 
@@ -247,9 +247,9 @@ notes already in the DAWproject. Our clip-window policy also shortens note tails
 that Cubase MIDI allows beyond part ends; preserve that explicit policy until
 its interaction with user trims, loops and ranges is agreed. Do not infer MIDI
 insert output or silently deduplicate source notes to match one reference.
-Evidence and follow-up: [Ditty findings](DAWPROJECT_DITTY_FINDINGS.md).
+Evidence and follow-up: [Ditty findings](../investigation/DAWPROJECT_DITTY_FINDINGS.md).
 
-The [indy and GA comparison](DAWPROJECT_OTHER_PAIRS_FINDINGS.md) confirms that
+The [indy and GA comparison](../investigation/DAWPROJECT_OTHER_PAIRS_FINDINGS.md) confirms that
 export scope explains much of the apparent offset/tempo discrepancy. Cubase MIDI
 is the ground truth for performed output; XML fidelity checks only localize
 errors. Missing drums, extra kit notes, Prologue's two-octave pitch difference

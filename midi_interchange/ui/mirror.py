@@ -1,4 +1,4 @@
-"""Mirror mode: watch one file and re-read it when it has been saved (docs/plans/mirror-mode.md).
+"""Mirror mode: watch one file and re-read it when it has been saved (docs/plans/0.5.0/mirror-mode.md).
 
 Polling, not QFileSystemWatcher: a save by temp file and rename drops a file watch,
 and one os.stat four times a second costs nothing. The signature (inode, size, mtime)

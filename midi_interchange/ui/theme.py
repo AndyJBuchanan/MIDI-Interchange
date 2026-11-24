@@ -52,7 +52,7 @@ def mix(a: QColor, b: QColor, amount: float) -> QColor:
                   round(a.blue() + (b.blue() - a.blue()) * amount))
 
 
-# Mirror mode (docs/plans/mirror-mode.md): cyan, clear of the amber ACCENT, the red SOLO and the light-blue TEMPO_COL.
+# Mirror mode (docs/plans/0.5.0/mirror-mode.md): cyan, clear of the amber ACCENT, the red SOLO and the light-blue TEMPO_COL.
 MIRROR = QColor("#1fc3e0")
 MIRROR_TEXT = QColor("#0b1d22")                  # on the banner
 MIRROR_TINT = 0.12                               # chrome backgrounds mixed this far toward MIRROR

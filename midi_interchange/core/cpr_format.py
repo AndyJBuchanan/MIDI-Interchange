@@ -2,7 +2,7 @@
 
 Pure format decoding, no workspace model: import_cubase maps it onto the
 model, and tools/cpr_inspect.py is the research CLI. Findings and evidence:
-docs/plans/cubase-import.md. Input files are only read.
+docs/plans/0.4.0/cubase-import.md. Input files are only read.
 
 Format notes (phase 1 findings; details in the plan):
 

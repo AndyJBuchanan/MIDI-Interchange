@@ -1,6 +1,6 @@
 """Native Cubase project (.cpr) reader: tier fixtures, real projects, registry,
 failure handling and sessions. Format evidence: test_cpr_inspect.py and
-docs/plans/cubase-import.md."""
+docs/plans/0.4.0/cubase-import.md."""
 import json
 from fractions import Fraction as F
 from pathlib import Path
@@ -313,7 +313,7 @@ def test_real_projects_match_dawproject_counts(name, version, offset, notes_, mu
 
 def test_release_velocity_zero_is_kept():
     """OffV is (v - 1) / 126, which can't hold 0. Cubase stores OffV 0.0 with a 0 tail byte for a
-    release of 0 and exports it as velocity 0 (docs/formats/CUBASE_FILE_FORMAT.md, 6.2). In Ditty the
+    release of 0 and exports it as velocity 0 (docs/investigation/formats/CUBASE_FILE_FORMAT.md, 6.2). In Ditty the
     release values are 100, 64 and 0, matching the tail byte on every note."""
     from collections import Counter
     _, tracks, _ = read(SETS / 'Ditty-04-Macbook.cpr')
@@ -539,7 +539,7 @@ def test_verify_drum_track_is_a_track_and_lyric_project_imports():
 
 
 # ---------------------------------------------------------------- disabled and hidden tracks
-# docs/plans/cubase-disabled-tracks.md; format: CUBASE_FILE_FORMAT.md section 4.3
+# docs/plans/0.5.0/cubase-disabled-tracks.md; format: CUBASE_FILE_FORMAT.md section 4.3
 
 DT = PHASES / 'DTracks'
 DISABLED_B = 'Track "Pianoteq 9 B" is disabled in Cubase; not imported'

@@ -1,7 +1,7 @@
 """Regression evidence for the Cubase .cpr research inspector (phases 1-2).
 
 tools/cpr_inspect.py is a research tool, not app code. These tests pin the
-format findings recorded in docs/plans/cubase-import.md against the committed
+format findings recorded in docs/plans/0.4.0/cubase-import.md against the committed
 fixtures, so later phases build on verified decoding.
 """
 import math
@@ -84,7 +84,7 @@ def test_class_refs_are_declaration_offsets():
 
 
 # Realistic projects: part and stored-note counts equal the DAWproject
-# exports (docs/plans/dawproject-import.md, Paired-export evidence).
+# exports (docs/plans/0.4.0/dawproject-import.md, Paired-export evidence).
 @pytest.mark.parametrize('name, magic, parts, notes, controllers, bends', [
     ('Ditty-04-Macbook', 'RIFF', 176, 1501, 1161, 16),
     ('GA & Padshop 2-(alt instr 2)-01', 'RIFF', 182, 6435, 0, 0),

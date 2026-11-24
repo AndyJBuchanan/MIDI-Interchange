@@ -8,7 +8,7 @@ Raised during the mirror-mode checklist: a track disabled in Cubase (Disable Tra
 
 ## What is known
 
-The full findings, with offsets and the evidence behind each, are in [CUBASE_FILE_FORMAT.md, section 4.3](../formats/CUBASE_FILE_FORMAT.md). In short:
+The full findings, with offsets and the evidence behind each, are in [CUBASE_FILE_FORMAT.md, section 4.3](../../investigation/formats/CUBASE_FILE_FORMAT.md). In short:
 
 - **Disabled** is the property `noit` (on disk `6e 6f 69 74 00 01` + i64; `cf._props` key `'tion'`) in the track event's property list, with the value **1**. It is the same for instrument, drum, MIDI and audio tracks, and was checked against an enabled twin of the same project for all four.
 - **The test is "equals 1", not "present".** A track that was disabled and re-enabled keeps `noit` with value 0, and a track never toggled has none.

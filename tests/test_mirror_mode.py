@@ -1,4 +1,4 @@
-"""Mirror mode (docs/plans/mirror-mode.md): the watcher with a fake clock and simulated saves, the pure
+"""Mirror mode (docs/plans/0.5.0/mirror-mode.md): the watcher with a fake clock and simulated saves, the pure
 carry-over, the read-only guard, the cue, unmirror and the session. Files live in tmp_path; reads are
 synchronous (an inline executor), so nothing here waits on a thread or on real time."""
 import os
