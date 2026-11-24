@@ -338,10 +338,10 @@ def main() -> None:
     s = Shot(w)
     tl, tp, ep = w.timeline, w.track_panel, w.export_panel
     vw = tl.viewport().width()
-    s.note(QRectF(w.findChild(QToolBar).geometry()).adjusted(2, 2, -2, -2))
+    s.note(QRectF(w.findChild(QToolBar).geometry()).adjusted(2, 2, -2, -2), x=1180, y=36)
     s.note(vp_rect(w, 0, 0, vw, tl.range_top()))
     s.note(vp_rect(w, 0, tl.range_top(), vw, tl.header_h()))
-    s.note(QRectF(wrect(w, tp)).adjusted(1, tl.header_h(), -1, 0))
+    s.note(QRectF(wrect(w, tp)).adjusted(1, 1, -1, 0), x=162, y=89)
     s.note(vp_rect(w, 0, tl.header_h(), vw, tl.lane_top(4)), x=bar_x(w, 3) + 6, y=vp_rect(w, 0, tl.header_h(), 0, 0).top() + 14)
     s.note(wrect(w, ep).adjusted(2, 2, -2, -2))
     s.save("01-window.png")
@@ -504,6 +504,68 @@ def main() -> None:
     w.close()
     compose(parts).save(os.path.join(OUT, "08-export-modes.png"), "PNG")
     print("wrote docs/images/08-export-modes.png")
+
+    # ---- 9. mirror mode, on a real project -----------------------------------------------------------------
+    # The pictures in 9 and 10 use real projects kept in samples/ (a Reason song and a Cubase project), so they
+    # show what the readers really produce, not the demo song above.
+    from concurrent.futures import Future
+
+    class Inline:  # a synchronous executor, so the first read is done before the picture is taken
+        def submit(self, fn, *args):
+            fut = Future()
+            fut.set_result(fn(*args))
+            return fut
+
+    reason_song = os.path.join(ROOT, "samples", "reason-check", "Day01-0-3(14).reason")
+    w = new_window(app)
+    w.resize(1280, 660)
+    assert w.start_mirror(reason_song, executor=Inline())
+    w._mirror_watcher._timer.stop()  # nothing to poll in a picture
+    w._mirror_updated = "14:32:07"
+    w._update_mirror_banner()
+    w.timeline.zoom_to_fit()
+    ctl = w.ctl
+    ctl.add_range(F(24), F(56))
+    ctl.update_range(ctl.ws.ranges[0].id, name="Verse 1")
+    ctl.add_range(F(56), F(72))
+    ctl.update_range(ctl.ws.ranges[1].id, name="Chorus 1")
+    ctl.select_range(ctl.ws.ranges[1].id)
+    ctl.set_mute(next(t.id for t in ctl.ws.tracks if t.name == "Nice Strings"), True)  # muted here, not in the file
+    w.timeline.verticalScrollBar().setValue(w.timeline.lane_h)  # start at Piano L, below the muted Guide Track
+    s = Shot(w)
+    tl, tp = w.timeline, w.track_panel
+    vw = tl.viewport().width()
+    top = vp_rect(w, 0, tl.range_top(), 0, 0).top()
+    s.note(wrect(w, w.mirror_banner).adjusted(2, 1, -2, -1), x=1160, y=65)
+    s.note(vp_rect(w, tl.x_of(24) - 3, tl.range_top(), tl.x_of(72) + 3, tl.header_h()), x=bar_x(w, 22) + 150, y=top + 12)
+    mute_y = vp_rect(w, 0, tl.header_h() + 2 * tl.lane_h, 0, 0).top()  # the Nice Strings lane
+    s.note(QRectF(46, mute_y + 4, 50, 24), x=204, y=mute_y + 16)
+    s.save("09-mirror.png")
+    w.unmirror()
+    w.close()
+
+    # ---- 10. opening real projects directly --------------------------------------------------------------------
+    def lanes(path: str, rows: int, skip: int = 0) -> QPixmap:
+        win = new_window(app)
+        win.resize(1280, 640)
+        win.import_paths([path])
+        win.timeline.zoom_to_fit()
+        win.timeline.verticalScrollBar().setValue(skip * win.timeline.lane_h)
+        QApplication.processEvents()
+        y = pos_in(win, win.timeline.viewport(), QPoint(0, 0)).y()
+        pm = win.grab().copy(QRect(0, y - 2, win.width(), win.timeline.header_h() + rows * win.timeline.lane_h))
+        win.close()
+        return pm
+
+    cubase_proj = os.path.join(ROOT, "samples", "project-sets", "Ditty-04-Macbook.cpr")
+    reason_midi = os.path.join(ROOT, "samples", "reason-check", "Day01-0-3(14).mid")
+    parts = [
+        ("A Cubase project, opened directly: every part in place, with its name, and muted parts shown as muted", lanes(cubase_proj, 4)),
+        ("A Reason song, opened directly: each clip is what Reason plays there, named as in the song", lanes(reason_song, 4, skip=1)),
+        ("For comparison, the same Reason song as Reason's own MIDI export: one long clip per track, no clip names or mutes", lanes(reason_midi, 4, skip=3)),
+    ]
+    compose(parts).save(os.path.join(OUT, "10-open-projects.png"), "PNG")
+    print("wrote docs/images/10-open-projects.png")
     print("ok")
 
 
